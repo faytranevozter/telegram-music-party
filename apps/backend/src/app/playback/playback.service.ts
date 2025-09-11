@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Queue } from '@prisma/client';
+import { Queue } from '@prisma/client/wasm';
 import { InjectBot } from 'nestjs-telegraf';
 import { PrismaService } from 'src/platform/prisma.service';
 import { Context, Telegraf } from 'telegraf';
