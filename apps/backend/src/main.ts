@@ -31,6 +31,8 @@ async function bootstrap() {
         { command: 'config', description: 'Get party config' },
     ]);
 
-    await app.listen(process.env.PORT ?? 3000);
+    await app.listen(process.env.PORT ?? 3000, () => {
+        console.log(`Backend is running on port ${process.env.PORT ?? 3000}`);
+    });
 }
 void bootstrap();
