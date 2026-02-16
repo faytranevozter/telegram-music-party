@@ -3,13 +3,25 @@ import { from, tap, switchMap, firstValueFrom } from "rxjs";
 import { io, Socket } from "socket.io-client";
 import { detect } from "detect-browser";
 import axios from "axios";
-import { load } from "@fingerprintjs/fingerprintjs";
 import { DEFAULT_PARTY_URL } from "../constants/config";
 
-const fp$ = from(load({})).pipe(
-    switchMap(async (fp) => {
-        return (await fp.get()).visitorId;
-    })
+const DEVICE_ID_KEY = "ytmp_device_id";
+
+function getDeviceId(): string {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+
+    const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+}
+
+const fp$ = from(Promise.resolve(getDeviceId())).pipe(
+    switchMap(async (id) => id)
 );
 
 Object.defineProperty(window, "onbeforeunload", {
