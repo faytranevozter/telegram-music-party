@@ -22,7 +22,7 @@ WORKDIR /app
 COPY . .
 
 # Generate Prisma Client and build
-RUN pnpm prisma generate --schema=./apps/backend/prisma/schema.prisma && \
+RUN pnpm --filter=backend prisma generate --schema=./apps/backend/prisma/schema.prisma && \
     pnpm --filter=backend build
 
 FROM node:23-alpine AS prod-deps
