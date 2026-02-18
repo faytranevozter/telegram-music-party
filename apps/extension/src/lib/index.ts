@@ -144,7 +144,7 @@ const detectSongChange = (
                 mutation.target.textContent
             ) {
                 setTimeout(
-                    () => () => {
+                    () => {
                         const playback = getPlaybackState();
                         const videoId = getVideoId();
 
