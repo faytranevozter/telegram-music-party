@@ -24,6 +24,24 @@ import { Inject } from '@nestjs/common';
 import { Song } from 'src/types/cache.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
+
+const getThreadId = (ctx: Context): number | null => {
+    const msg = ctx.msg as
+        | (Context['msg'] & {
+              is_topic_message?: boolean;
+              message_thread_id?: number;
+          })
+        | undefined;
+    if (
+        msg &&
+        msg.is_topic_message &&
+        typeof msg.message_thread_id === 'number'
+    ) {
+        return msg.message_thread_id;
+    }
+    return null;
+};
+
 @Update()
 export class PlaybackTelegramController {
     constructor(
@@ -60,6 +78,7 @@ export class PlaybackTelegramController {
         },
     ) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
@@ -82,7 +101,10 @@ export class PlaybackTelegramController {
         }
 
         // get room from current chat id
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (room) {
             await ctx.reply(
                 // `This chat is already registered. \nHere is the Room ID: \n\n<pre><code class="language-sh">${room.id}</code></pre>`,
@@ -109,6 +131,7 @@ export class PlaybackTelegramController {
         await this.playbackService.addRoom(
             roomId,
             chatId,
+            threadId,
             ctx.message?.chat.title || '',
         );
 
@@ -127,12 +150,16 @@ export class PlaybackTelegramController {
     @Command('unregister')
     async unregister(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -178,12 +205,16 @@ export class PlaybackTelegramController {
             },
     ) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -214,12 +245,16 @@ export class PlaybackTelegramController {
     @Command('play')
     async play(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -250,12 +285,16 @@ export class PlaybackTelegramController {
     @Command('pause')
     async pause(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -269,12 +308,16 @@ export class PlaybackTelegramController {
     @Command('next')
     async next(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -310,12 +353,16 @@ export class PlaybackTelegramController {
     @Command('prev')
     async prev(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -351,12 +398,16 @@ export class PlaybackTelegramController {
     @Command('mute')
     async mute(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -374,12 +425,16 @@ export class PlaybackTelegramController {
     @Command('unmute')
     async unmute(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -397,12 +452,16 @@ export class PlaybackTelegramController {
     @Command('lyrics')
     async lyrics(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -414,12 +473,16 @@ export class PlaybackTelegramController {
     @Command('volume_up')
     async volumeUp(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -437,12 +500,16 @@ export class PlaybackTelegramController {
     @Command('volume_down')
     async volumeDown(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -460,12 +527,16 @@ export class PlaybackTelegramController {
     @Command('devices')
     async devices(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getDevicesByChatId(chatId);
+        const room = await this.playbackService.getDevicesByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -496,12 +567,16 @@ export class PlaybackTelegramController {
     @Command('vote_next')
     async vote_next(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getDevicesByChatId(chatId);
+        const room = await this.playbackService.getDevicesByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -558,12 +633,16 @@ export class PlaybackTelegramController {
         },
     ) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -615,12 +694,16 @@ export class PlaybackTelegramController {
         },
     ) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -720,12 +803,16 @@ export class PlaybackTelegramController {
         },
     ) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;
@@ -907,9 +994,13 @@ export class PlaybackTelegramController {
 
         // get the room
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) return;
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.telegram.editMessageText(
                 undefined,
@@ -1074,12 +1165,16 @@ export class PlaybackTelegramController {
     @Command('queue')
     async getQueues(@Ctx() ctx: Context) {
         const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
         if (!chatId) {
             await ctx.reply('No chat id');
             return;
         }
 
-        const room = await this.playbackService.getRoomByChatId(chatId);
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
         if (!room) {
             await ctx.reply('No room found');
             return;

@@ -105,6 +105,7 @@ export class PlaybackGateway {
             // send message
             await this.playbackService.sendMessage(
                 room.chatId,
+                room.threadId,
                 `${data.browser} joined`,
             );
         }
@@ -138,6 +139,7 @@ export class PlaybackGateway {
 
         await this.playbackService.sendMessage(
             device.room.chatId,
+            device.room.threadId,
             `${device.name} leaved`,
         );
 
@@ -188,6 +190,10 @@ export class PlaybackGateway {
             return;
         }
 
-        await this.playbackService.sendMessage(room.chatId, data.message);
+        await this.playbackService.sendMessage(
+            room.chatId,
+            room.threadId,
+            data.message,
+        );
     }
 }

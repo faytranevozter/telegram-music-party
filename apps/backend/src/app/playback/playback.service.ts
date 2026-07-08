@@ -88,11 +88,17 @@ export class PlaybackService {
         return nextItem as Queue;
     }
 
-    async addRoom(roomID: string, chatId: string, name: string) {
+    async addRoom(
+        roomID: string,
+        chatId: string,
+        threadId: number | null,
+        name: string,
+    ) {
         await this.prisma.room.create({
             data: {
                 id: roomID,
                 chatId,
+                threadId,
                 name,
                 Feature: {
                     create: {},
@@ -134,10 +140,11 @@ export class PlaybackService {
         });
     }
 
-    async getRoomByChatId(chatId: string) {
+    async getRoomByChatId(chatId: string, threadId: number | null = null) {
         return this.prisma.room.findFirst({
             where: {
                 chatId,
+                threadId,
             },
             include: {
                 Feature: true,
@@ -146,10 +153,11 @@ export class PlaybackService {
         });
     }
 
-    async getDevicesByChatId(chatId: string) {
+    async getDevicesByChatId(chatId: string, threadId: number | null = null) {
         return this.prisma.room.findFirst({
             where: {
                 chatId,
+                threadId,
             },
             include: {
                 Devices: true,
@@ -232,9 +240,14 @@ export class PlaybackService {
         });
     }
 
-    async sendMessage(chatId: string, message: string) {
+    async sendMessage(
+        chatId: string,
+        threadId: number | null,
+        message: string,
+    ) {
         await this.bot.telegram.sendMessage(chatId, message, {
             parse_mode: 'Markdown',
+            ...(threadId ? { message_thread_id: threadId } : {}),
         });
     }
 }
