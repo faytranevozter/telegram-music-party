@@ -6,6 +6,7 @@ import {
     Action,
     Update,
     InlineQuery,
+    Next,
 } from 'nestjs-telegraf';
 import { Context, Markup, NarrowedContext } from 'telegraf';
 import { PlaybackGateway } from './playback.gateway';
@@ -1023,56 +1024,67 @@ export class PlaybackTelegramController {
 
     /**
      * Cache chat + topic for every message the bot receives so inline
-     * "Add to Queue" can resolve the room. Primary completion is in the
-     * queue callback (edited_message is unreliable in forum topics).
+     * "Add to Queue" can resolve the room. Must call next() so commands
+     * like /queue still run (nestjs-telegraf does not auto-continue).
      */
     @On('message')
-    async onAnyMessage(@Ctx() ctx: Context) {
-        const msg = ctx.message as
-            | {
-                  via_bot?: { id: number; is_bot?: boolean };
-                  from?: { id: number };
-                  chat?: { id: number };
-                  text?: string;
-                  message_thread_id?: number;
-              }
-            | undefined;
-        if (!msg?.from || !msg.chat) return;
+    async onAnyMessage(
+        @Ctx() ctx: Context,
+        @Next() next: () => Promise<void>,
+    ) {
+        try {
+            const msg = ctx.message as
+                | {
+                      via_bot?: { id: number; is_bot?: boolean };
+                      from?: { id: number };
+                      chat?: { id: number };
+                      text?: string;
+                      message_thread_id?: number;
+                  }
+                | undefined;
+            if (msg?.from && msg.chat) {
+                const chatId = msg.chat.id.toString();
+                const threadId = getThreadIdFromMessage(msg);
+                const userId = msg.from.id;
 
-        const chatId = msg.chat.id.toString();
-        const threadId = getThreadIdFromMessage(msg);
-        const userId = msg.from.id;
+                await this.rememberUserLocation(userId, chatId, threadId);
 
-        await this.rememberUserLocation(userId, chatId, threadId);
+                // Privacy mode may drop via_bot messages; when they do arrive,
+                // bind the pending inline result to this chat/topic.
+                if (
+                    msg.via_bot?.is_bot &&
+                    msg.via_bot.id === ctx.botInfo?.id
+                ) {
+                    await this.cacheManager.set(
+                        `recent-via:${userId}`,
+                        {
+                            chatId,
+                            threadId,
+                            text: msg.text,
+                        },
+                        60_000,
+                    );
 
-        // Privacy mode may drop via_bot messages; when they do arrive, bind
-        // the pending inline result to this chat/topic.
-        if (!msg.via_bot?.is_bot) return;
-        if (msg.via_bot.id !== ctx.botInfo?.id) return;
-
-        await this.cacheManager.set(
-            `recent-via:${userId}`,
-            {
-                chatId,
-                threadId,
-                text: msg.text,
-            },
-            60_000,
-        );
-
-        const pending = await this.cacheManager.get<{
-            inline_message_id: string;
-            videoId: string;
-            text: string;
-        }>(`pending-inline:${userId}`);
-        if (!pending?.inline_message_id) return;
-
-        await this.cacheManager.set<InlineChatLocation>(
-            `inline-loc:${pending.inline_message_id}`,
-            { chatId, threadId },
-            SONG_CACHE_TTL,
-        );
-        await this.cacheManager.delete(`pending-inline:${userId}`);
+                    const pending = await this.cacheManager.get<{
+                        inline_message_id: string;
+                        videoId: string;
+                        text: string;
+                    }>(`pending-inline:${userId}`);
+                    if (pending?.inline_message_id) {
+                        await this.cacheManager.set<InlineChatLocation>(
+                            `inline-loc:${pending.inline_message_id}`,
+                            { chatId, threadId },
+                            SONG_CACHE_TTL,
+                        );
+                        await this.cacheManager.delete(
+                            `pending-inline:${userId}`,
+                        );
+                    }
+                }
+            }
+        } finally {
+            await next();
+        }
     }
 
     private async completeAddToQueue(
