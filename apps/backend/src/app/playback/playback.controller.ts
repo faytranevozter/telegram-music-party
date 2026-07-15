@@ -21,23 +21,30 @@ import { YTMusicService } from 'src/platform/yt-music.service';
 import { formatDuration } from 'src/helpers/util';
 import { firstValueFrom } from 'rxjs';
 import { Inject } from '@nestjs/common';
-import { Song } from 'src/types/cache.type';
+import { InlineChatLocation, Song } from 'src/types/cache.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
 
+const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
 const getThreadId = (ctx: Context): number | null => {
-    // Prefer ctx.msg (message / editedMessage / callback message), then
-    // explicit editedMessage — inline "Add to Queue" finishes on edited_message,
-    // where is_topic_message is often omitted even though message_thread_id is set.
     const msg = (ctx.msg ?? ctx.editedMessage) as
         | {
-              is_topic_message?: boolean;
               message_thread_id?: number;
           }
         | undefined
         | null;
     if (msg && typeof msg.message_thread_id === 'number') {
         return msg.message_thread_id;
+    }
+    return null;
+};
+
+const getThreadIdFromMessage = (
+    message: { message_thread_id?: number } | undefined | null,
+): number | null => {
+    if (message && typeof message.message_thread_id === 'number') {
+        return message.message_thread_id;
     }
     return null;
 };
@@ -50,6 +57,20 @@ export class PlaybackTelegramController {
         private readonly playbackService: PlaybackService,
         private readonly ytmusicService: YTMusicService,
     ) {}
+
+    /** Remember where this user last interacted (chat + topic) for inline callbacks. */
+    private async rememberUserLocation(
+        userId: number | undefined,
+        chatId: string,
+        threadId: number | null,
+    ) {
+        if (!userId || !chatId) return;
+        await this.cacheManager.set<InlineChatLocation>(
+            `user-loc:${userId}`,
+            { chatId, threadId },
+            SONG_CACHE_TTL,
+        );
+    }
 
     @Start()
     async start(@Ctx() ctx: Context) {
@@ -963,25 +984,216 @@ export class PlaybackTelegramController {
         // remove from cache
         await this.cacheManager.delete(cacheKey);
 
-        // set cache for wait verifying
-        const cacheExpireTime = 15 * 60 * 1000; // 15 minutes
+        const songText = `${song.name} by ${song.artist.name}`;
         const cacheKeySong = `song:${inline_message_id}:${videoId}`;
-        await this.cacheManager.set<Song>(cacheKeySong, song, cacheExpireTime);
+        await this.cacheManager.set<Song>(cacheKeySong, song, SONG_CACHE_TTL);
+
+        // Link chat/topic from a via_bot message that may have already arrived
+        // (or will arrive next) — needed because callback_query for inline
+        // messages has no chat_id / message_thread_id.
+        const userId = ctx.from?.id;
+        if (userId) {
+            await this.cacheManager.set(
+                `pending-inline:${userId}`,
+                {
+                    inline_message_id,
+                    videoId,
+                    text: songText,
+                },
+                60_000,
+            );
+
+            const recent = await this.cacheManager.get<{
+                chatId: string;
+                threadId: number | null;
+                text?: string;
+            }>(`recent-via:${userId}`);
+            if (recent?.chatId) {
+                await this.cacheManager.set<InlineChatLocation>(
+                    `inline-loc:${inline_message_id}`,
+                    {
+                        chatId: recent.chatId,
+                        threadId: recent.threadId,
+                    },
+                    SONG_CACHE_TTL,
+                );
+            }
+        }
+    }
+
+    /**
+     * Cache chat + topic for every message the bot receives so inline
+     * "Add to Queue" can resolve the room. Primary completion is in the
+     * queue callback (edited_message is unreliable in forum topics).
+     */
+    @On('message')
+    async onAnyMessage(@Ctx() ctx: Context) {
+        const msg = ctx.message as
+            | {
+                  via_bot?: { id: number; is_bot?: boolean };
+                  from?: { id: number };
+                  chat?: { id: number };
+                  text?: string;
+                  message_thread_id?: number;
+              }
+            | undefined;
+        if (!msg?.from || !msg.chat) return;
+
+        const chatId = msg.chat.id.toString();
+        const threadId = getThreadIdFromMessage(msg);
+        const userId = msg.from.id;
+
+        await this.rememberUserLocation(userId, chatId, threadId);
+
+        // Privacy mode may drop via_bot messages; when they do arrive, bind
+        // the pending inline result to this chat/topic.
+        if (!msg.via_bot?.is_bot) return;
+        if (msg.via_bot.id !== ctx.botInfo?.id) return;
+
+        await this.cacheManager.set(
+            `recent-via:${userId}`,
+            {
+                chatId,
+                threadId,
+                text: msg.text,
+            },
+            60_000,
+        );
+
+        const pending = await this.cacheManager.get<{
+            inline_message_id: string;
+            videoId: string;
+            text: string;
+        }>(`pending-inline:${userId}`);
+        if (!pending?.inline_message_id) return;
+
+        await this.cacheManager.set<InlineChatLocation>(
+            `inline-loc:${pending.inline_message_id}`,
+            { chatId, threadId },
+            SONG_CACHE_TTL,
+        );
+        await this.cacheManager.delete(`pending-inline:${userId}`);
+    }
+
+    private async completeAddToQueue(
+        ctx: Context,
+        params: {
+            videoId: string;
+            inlineMessageId: string;
+            chatId: string;
+            threadId: number | null;
+        },
+    ) {
+        const { videoId, inlineMessageId, chatId, threadId } = params;
+        const lockKey = `adding:${inlineMessageId}:${videoId}`;
+        const already = await this.cacheManager.get(lockKey);
+        if (already) return;
+        await this.cacheManager.set(lockKey, true, 30_000);
+
+        try {
+            const room = await this.playbackService.getRoomByChatId(
+                chatId,
+                threadId,
+            );
+            if (!room) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 No party here—Music Party isn't available in this chat`,
+                );
+                return;
+            }
+
+            const roomId = room.id;
+            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
+            const queues = await this.playbackService.getQueues(roomId);
+            if (queues.length >= queueLimit) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 Queue is full. Please remove some songs before adding new ones.`,
+                );
+                return;
+            }
+
+            const cacheKey = `song:${inlineMessageId}:${videoId}`;
+            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
+            if (!cachedSong) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🔗 This link has expired. Please try generating a new one.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                );
+                return;
+            }
+
+            if (queues.find((q) => q.url === videoId)) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                );
+                return;
+            }
+
+            const songCombined = `${cachedSong.name} - ${cachedSong.artist.name} [${formatDuration(
+                cachedSong.duration || 0,
+            )}]`;
+
+            await this.playbackService.addToQueue(
+                roomId,
+                videoId,
+                songCombined,
+            );
+
+            await ctx.telegram.editMessageText(
+                undefined,
+                undefined,
+                inlineMessageId,
+                `↩️ ${songCombined
+                    .split(' - ')
+                    .map((v, k) => {
+                        if (k === 0) {
+                            return `<i>${v}</i>`;
+                        }
+                        return v;
+                    })
+                    .join(' - ')} added to the queue.`,
+                {
+                    parse_mode: 'HTML',
+                },
+            );
+
+            await this.cacheManager.delete(cacheKey);
+            await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
+            this.gateway.addToQueueCommand(roomId, videoId);
+        } finally {
+            await this.cacheManager.delete(lockKey);
+        }
     }
 
     @On('edited_message')
     async editedMessage(@Ctx() ctx: Context) {
-        if (!ctx.editedMessage?.via_bot?.is_bot) return;
-
-        const inlineKeyboard = ctx.editedMessage.reply_markup?.inline_keyboard;
+        // Do not require via_bot — forum topic edits often omit it.
+        const inlineKeyboard = ctx.editedMessage?.reply_markup?.inline_keyboard;
         if (!inlineKeyboard || inlineKeyboard?.length === 0) return;
 
         const buttons = inlineKeyboard[0];
         if (buttons.length === 0) return;
 
         const addToQueueBtn = buttons[0] as InlineKeyboardButton.CallbackButton;
-
         if (
+            !('callback_data' in addToQueueBtn) ||
             addToQueueBtn.text !== 'Verifying..' ||
             !addToQueueBtn.callback_data.startsWith('verify:')
         ) {
@@ -989,105 +1201,24 @@ export class PlaybackTelegramController {
         }
 
         const videoId = addToQueueBtn.callback_data.split(':')[2];
-
         const messageInlineID = addToQueueBtn.callback_data.split(':')[3];
-
-        // get the room
         const chatId = ctx.chat?.id.toString() || '';
         const threadId = getThreadId(ctx);
-        if (!chatId) return;
+        if (!chatId || !videoId || !messageInlineID) return;
 
-        const room = await this.playbackService.getRoomByChatId(
+        // Also refresh location cache for callback path races
+        await this.cacheManager.set<InlineChatLocation>(
+            `inline-loc:${messageInlineID}`,
+            { chatId, threadId },
+            SONG_CACHE_TTL,
+        );
+
+        await this.completeAddToQueue(ctx, {
+            videoId,
+            inlineMessageId: messageInlineID,
             chatId,
             threadId,
-        );
-        if (!room) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                messageInlineID,
-                `🚫 No party here—Music Party isn't available in this chat`,
-            );
-            return;
-        }
-
-        const roomId = room.id;
-
-        // limit the queue to 10 songs
-        const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
-        const queues = await this.playbackService.getQueues(roomId);
-        if (queues.length >= queueLimit) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                messageInlineID,
-                `🚫 Queue is full. Please remove some songs before adding new ones.`,
-            );
-            return;
-        }
-
-        // get from cache
-        const cacheKey = `song:${messageInlineID}:${videoId}`;
-        const cachedSong = await this.cacheManager.get<Song>(cacheKey);
-        if (!cachedSong) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                messageInlineID,
-                `🔗 This link has expired. Please try generating a new one.`,
-                {
-                    parse_mode: 'HTML',
-                },
-            );
-            return;
-        }
-
-        // // get the song detail
-        // const song = await this.ytmusicService.getSong(videoId);
-
-        // check song is already in queue
-        if (queues.find((q) => q.url === videoId)) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                messageInlineID,
-                `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
-                {
-                    parse_mode: 'HTML',
-                },
-            );
-            return;
-        }
-
-        const songCombined = `${cachedSong.name} - ${cachedSong.artist.name} [${formatDuration(
-            cachedSong.duration || 0,
-        )}]`;
-
-        await this.playbackService.addToQueue(roomId, videoId, songCombined);
-
-        await ctx.telegram.editMessageText(
-            undefined,
-            undefined,
-            messageInlineID,
-            `↩️ ${songCombined
-                .split(' - ')
-                .map((v, k) => {
-                    if (k === 0) {
-                        return `<i>${v}</i>`;
-                    }
-                    return v;
-                })
-                .join(' - ')} added to the queue.`,
-            {
-                parse_mode: 'HTML',
-            },
-        );
-
-        // remove from cache
-        await this.cacheManager.delete(cacheKey);
-
-        // emit add to queue
-        this.gateway.addToQueueCommand(roomId, videoId);
+        });
     }
 
     @Action(/queue:(.*)/)
@@ -1107,17 +1238,86 @@ export class PlaybackTelegramController {
             return;
         }
 
+        const callbackQuery = ctx.update.callback_query;
+        const inlineMessageId = callbackQuery.inline_message_id;
+        const callbackMessage = callbackQuery.message as
+            | {
+                  chat?: { id: number };
+                  message_thread_id?: number;
+              }
+            | undefined;
+
+        let chatId = callbackMessage?.chat?.id?.toString() || '';
+        let threadId = getThreadIdFromMessage(callbackMessage);
+
+        if (inlineMessageId) {
+            const loc = await this.cacheManager.get<InlineChatLocation>(
+                `inline-loc:${inlineMessageId}`,
+            );
+            if (loc) {
+                chatId = loc.chatId;
+                threadId = loc.threadId;
+            }
+        }
+
+        if (!chatId) {
+            const recent = await this.cacheManager.get<
+                InlineChatLocation & { text?: string }
+            >(`recent-via:${ctx.from.id}`);
+            if (recent?.chatId) {
+                chatId = recent.chatId;
+                threadId = recent.threadId;
+            }
+        }
+
+        // User's last chat/topic from any prior command/message in that room
+        if (!chatId) {
+            const userLoc = await this.cacheManager.get<InlineChatLocation>(
+                `user-loc:${ctx.from.id}`,
+            );
+            if (userLoc?.chatId) {
+                chatId = userLoc.chatId;
+                threadId = userLoc.threadId;
+            }
+        }
+
+        if (!inlineMessageId) {
+            await ctx.answerCbQuery('Missing message id');
+            return;
+        }
+
+        if (!chatId) {
+            await ctx.answerCbQuery(
+                'Open the topic and run /queue once, then try again',
+            );
+            await ctx.editMessageText(
+                `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+            );
+            return;
+        }
+
         await ctx.answerCbQuery('Adding to queue...');
 
-        await ctx.editMessageReplyMarkup({
-            inline_keyboard: [
-                [
-                    Markup.button.callback(
-                        `Verifying..`,
-                        `verify:${senderID}:${videoId}:${ctx.update.callback_query.inline_message_id}`,
-                    ),
+        try {
+            await ctx.editMessageReplyMarkup({
+                inline_keyboard: [
+                    [
+                        Markup.button.callback(
+                            `Verifying..`,
+                            `verify:${senderID}:${videoId}:${inlineMessageId}`,
+                        ),
+                    ],
                 ],
-            ],
+            });
+        } catch {
+            // markup may already be verifying; continue adding
+        }
+
+        await this.completeAddToQueue(ctx, {
+            videoId,
+            inlineMessageId,
+            chatId,
+            threadId,
         });
     }
 
@@ -1170,6 +1370,8 @@ export class PlaybackTelegramController {
             await ctx.reply('No chat id');
             return;
         }
+
+        await this.rememberUserLocation(ctx.from?.id, chatId, threadId);
 
         const room = await this.playbackService.getRoomByChatId(
             chatId,

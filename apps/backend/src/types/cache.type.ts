@@ -7,3 +7,8 @@ export interface Song {
     };
     duration: number;
 }
+
+export interface InlineChatLocation {
+    chatId: string;
+    threadId: number | null;
+}
