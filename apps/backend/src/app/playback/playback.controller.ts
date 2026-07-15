@@ -854,7 +854,7 @@ export class PlaybackTelegramController {
 
             const senderID = ctx.from.id;
 
-            const cacheExpireTime = 60 * 1000; // 1 minute
+            const cacheExpireTime = 10 * 60 * 1000; // 10 minutes
 
             const videoIds: string[] = [];
 
@@ -964,7 +964,7 @@ export class PlaybackTelegramController {
         await this.cacheManager.delete(cacheKey);
 
         // set cache for wait verifying
-        const cacheExpireTime = 60 * 1000 * 5; // 5 minute
+        const cacheExpireTime = 15 * 60 * 1000; // 15 minutes
         const cacheKeySong = `song:${inline_message_id}:${videoId}`;
         await this.cacheManager.set<Song>(cacheKeySong, song, cacheExpireTime);
     }
