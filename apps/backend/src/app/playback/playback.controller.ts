@@ -1028,10 +1028,7 @@ export class PlaybackTelegramController {
      * like /queue still run (nestjs-telegraf does not auto-continue).
      */
     @On('message')
-    async onAnyMessage(
-        @Ctx() ctx: Context,
-        @Next() next: () => Promise<void>,
-    ) {
+    async onAnyMessage(@Ctx() ctx: Context, @Next() next: () => Promise<void>) {
         try {
             const msg = ctx.message as
                 | {
@@ -1051,10 +1048,7 @@ export class PlaybackTelegramController {
 
                 // Privacy mode may drop via_bot messages; when they do arrive,
                 // bind the pending inline result to this chat/topic.
-                if (
-                    msg.via_bot?.is_bot &&
-                    msg.via_bot.id === ctx.botInfo?.id
-                ) {
+                if (msg.via_bot?.is_bot && msg.via_bot.id === ctx.botInfo?.id) {
                     await this.cacheManager.set(
                         `recent-via:${userId}`,
                         {
@@ -1097,12 +1091,17 @@ export class PlaybackTelegramController {
         },
     ) {
         const { videoId, inlineMessageId, chatId, threadId } = params;
+        const doneKey = `added:${inlineMessageId}:${videoId}`;
         const lockKey = `adding:${inlineMessageId}:${videoId}`;
-        const already = await this.cacheManager.get(lockKey);
-        if (already) return;
+
+        // Already finished by callback or a concurrent path — never overwrite success.
+        if (await this.cacheManager.get(doneKey)) return;
+        if (await this.cacheManager.get(lockKey)) return;
         await this.cacheManager.set(lockKey, true, 30_000);
 
         try {
+            if (await this.cacheManager.get(doneKey)) return;
+
             const room = await this.playbackService.getRoomByChatId(
                 chatId,
                 threadId,
@@ -1133,6 +1132,10 @@ export class PlaybackTelegramController {
             const cacheKey = `song:${inlineMessageId}:${videoId}`;
             const cachedSong = await this.cacheManager.get<Song>(cacheKey);
             if (!cachedSong) {
+                // Race: primary path already added and cleared cache — stay silent.
+                if (await this.cacheManager.get(doneKey)) return;
+                if (queues.find((q) => q.url === videoId)) return;
+
                 await ctx.telegram.editMessageText(
                     undefined,
                     undefined,
@@ -1146,6 +1149,7 @@ export class PlaybackTelegramController {
             }
 
             if (queues.find((q) => q.url === videoId)) {
+                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
                 await ctx.telegram.editMessageText(
                     undefined,
                     undefined,
@@ -1167,6 +1171,10 @@ export class PlaybackTelegramController {
                 videoId,
                 songCombined,
             );
+
+            // Mark done before clearing song cache so a concurrent path cannot
+            // rewrite the success message as "link expired".
+            await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
 
             await ctx.telegram.editMessageText(
                 undefined,
@@ -1196,7 +1204,9 @@ export class PlaybackTelegramController {
 
     @On('edited_message')
     async editedMessage(@Ctx() ctx: Context) {
-        // Do not require via_bot — forum topic edits often omit it.
+        // Only seed chat/topic location. Completing the add here races with the
+        // queue callback (non-topic groups get edited_message) and can overwrite
+        // the success text with "link expired" after the song cache is cleared.
         const inlineKeyboard = ctx.editedMessage?.reply_markup?.inline_keyboard;
         if (!inlineKeyboard || inlineKeyboard?.length === 0) return;
 
@@ -1206,31 +1216,21 @@ export class PlaybackTelegramController {
         const addToQueueBtn = buttons[0] as InlineKeyboardButton.CallbackButton;
         if (
             !('callback_data' in addToQueueBtn) ||
-            addToQueueBtn.text !== 'Verifying..' ||
             !addToQueueBtn.callback_data.startsWith('verify:')
         ) {
             return;
         }
 
-        const videoId = addToQueueBtn.callback_data.split(':')[2];
         const messageInlineID = addToQueueBtn.callback_data.split(':')[3];
         const chatId = ctx.chat?.id.toString() || '';
         const threadId = getThreadId(ctx);
-        if (!chatId || !videoId || !messageInlineID) return;
+        if (!chatId || !messageInlineID) return;
 
-        // Also refresh location cache for callback path races
         await this.cacheManager.set<InlineChatLocation>(
             `inline-loc:${messageInlineID}`,
             { chatId, threadId },
             SONG_CACHE_TTL,
         );
-
-        await this.completeAddToQueue(ctx, {
-            videoId,
-            inlineMessageId: messageInlineID,
-            chatId,
-            threadId,
-        });
     }
 
     @Action(/queue:(.*)/)
