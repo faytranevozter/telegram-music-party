@@ -1,0 +1,16 @@
+**/.git
+**/.github
+**/.turbo
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/coverage
+**/.DS_Store
+**/*.md
+!apps/backend/README.md
+apps/extension
+packages
+run.sh
+Dockerfile
