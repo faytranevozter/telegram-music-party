@@ -26,17 +26,17 @@ import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
 
 const getThreadId = (ctx: Context): number | null => {
-    const msg = ctx.msg as
-        | (Context['msg'] & {
+    // Prefer ctx.msg (message / editedMessage / callback message), then
+    // explicit editedMessage — inline "Add to Queue" finishes on edited_message,
+    // where is_topic_message is often omitted even though message_thread_id is set.
+    const msg = (ctx.msg ?? ctx.editedMessage) as
+        | {
               is_topic_message?: boolean;
               message_thread_id?: number;
-          })
-        | undefined;
-    if (
-        msg &&
-        msg.is_topic_message &&
-        typeof msg.message_thread_id === 'number'
-    ) {
+          }
+        | undefined
+        | null;
+    if (msg && typeof msg.message_thread_id === 'number') {
         return msg.message_thread_id;
     }
     return null;
