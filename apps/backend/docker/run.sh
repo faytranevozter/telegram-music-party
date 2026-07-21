@@ -4,15 +4,15 @@ set -eu
 echo "🚀 Container starting..."
 
 echo "📦 Running Prisma migrations..."
-npx prisma migrate deploy
+if [ -x "./node_modules/.bin/prisma" ]; then
+    ./node_modules/.bin/prisma migrate deploy
+elif [ -f "./node_modules/prisma/build/index.js" ]; then
+    node ./node_modules/prisma/build/index.js migrate deploy
+else
+    echo "❌ prisma CLI not found in node_modules"
+    exit 1
+fi
 echo "✅ Migration complete"
 
 echo "▶️ Starting Node app..."
-node dist/main.js &
-APP_PID=$!
-
-# Forward termination signals to Node
-trap 'echo "⚠️ SIGTERM received, shutting down..."; kill -TERM $APP_PID' TERM INT
-
-# Wait for Node process
-wait $APP_PID
+exec node dist/main.js

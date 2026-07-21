@@ -2,11 +2,9 @@ packages:
   - packages/*
   - apps/*
 onlyBuiltDependencies:
-  - '@biomejs/biome'
   - '@heroui/shared-utils'
   - '@nestjs/core'
   - '@prisma/client'
   - '@prisma/engines'
   - '@swc/core'
-  - esbuild
   - prisma
