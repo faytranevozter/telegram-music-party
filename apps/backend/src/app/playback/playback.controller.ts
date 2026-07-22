@@ -1204,15 +1204,16 @@ export class PlaybackTelegramController {
 
         await ctx.reply(
             [
-                '🎛️ Current Room Info: \n',
-                `🆔 Room: \`${room.id}\``,
+                '🎛️ Current Room Info:',
+                '',
+                `🆔 Room: <code>${room.id}</code>`,
                 `💬 Chat ID: ${room.chatId}`,
                 `🎧 Queue: ${queues.length} songs`,
                 `🖥️ Devices Count: ${room.Devices.length}`,
                 `📅 Created At: ${room.createdAt.toLocaleString()}`,
             ].join('\n'),
             {
-                parse_mode: 'MarkdownV2',
+                parse_mode: 'HTML',
             },
         );
     }
