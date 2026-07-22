@@ -25,6 +25,7 @@ import { Inject } from '@nestjs/common';
 import { InlineChatLocation, Song } from 'src/types/cache.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
+import type { Feature } from '@prisma/client';
 
 const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
@@ -114,6 +115,12 @@ const CONFIG_FIELDS = {
 const CONFIG_KEYS = Object.keys(CONFIG_FIELDS) as Array<
     keyof typeof CONFIG_FIELDS
 >;
+const NUMBER_CONFIG_KEYS = CONFIG_KEYS.filter(
+    (key) => CONFIG_FIELDS[key].type === 'number',
+);
+const NUMBER_PRESETS = [0, 1, 3, 5, 10, 25];
+
+type ConfigKey = keyof typeof CONFIG_FIELDS;
 
 @Update()
 export class PlaybackTelegramController {
@@ -174,6 +181,145 @@ export class PlaybackTelegramController {
             key,
             count,
             this.getMillisecondsUntilLocalMidnight() + 60_000,
+        );
+    }
+
+    private formatConfigValue(feature: Feature, key: ConfigKey) {
+        const value = feature[key];
+        if (typeof value === 'boolean') return value ? 'on' : 'off';
+        if (key === 'dailyPlayNextLimit' && value === 0) return 'unlimited';
+        if (key === 'dailyPlayNextLimit') return `${value}/day`;
+        return `${value}`;
+    }
+
+    private buildConfigText(feature: Feature) {
+        return [
+            '🎛️ Room Configuration',
+            '',
+            'Queue',
+            `• ${CONFIG_FIELDS.maxQueueSize.label}: ${this.formatConfigValue(feature, 'maxQueueSize')}`,
+            `• ${CONFIG_FIELDS.playNextCommand.label}: ${this.formatConfigValue(feature, 'playNextCommand')}`,
+            `• ${CONFIG_FIELDS.dailyPlayNextLimit.label}: ${this.formatConfigValue(feature, 'dailyPlayNextLimit')}`,
+            '',
+            'Playback Controls',
+            `• ${CONFIG_FIELDS.nextCommand.label}: ${this.formatConfigValue(feature, 'nextCommand')}`,
+            `• ${CONFIG_FIELDS.nextOnlyAdmin.label}: ${this.formatConfigValue(feature, 'nextOnlyAdmin')}`,
+            `• ${CONFIG_FIELDS.previousCommand.label}: ${this.formatConfigValue(feature, 'previousCommand')}`,
+            `• ${CONFIG_FIELDS.previousOnlyAdmin.label}: ${this.formatConfigValue(feature, 'previousOnlyAdmin')}`,
+            '',
+            'Audio',
+            `• ${CONFIG_FIELDS.muteCommand.label}: ${this.formatConfigValue(feature, 'muteCommand')}`,
+            `• ${CONFIG_FIELDS.unmuteCommand.label}: ${this.formatConfigValue(feature, 'unmuteCommand')}`,
+            `• ${CONFIG_FIELDS.volumeCommand.label}: ${this.formatConfigValue(feature, 'volumeCommand')}`,
+            '',
+            'Voting',
+            `• ${CONFIG_FIELDS.minimumVotes.label}: ${this.formatConfigValue(feature, 'minimumVotes')}`,
+            '',
+            'Tap a button below to change settings.',
+        ].join('\n');
+    }
+
+    private buildConfigKeyboard(feature: Feature) {
+        return Markup.inlineKeyboard([
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.playNextCommand.label}: ${this.formatConfigValue(feature, 'playNextCommand')}`,
+                    'config:toggle:playNextCommand',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.nextCommand.label}: ${this.formatConfigValue(feature, 'nextCommand')}`,
+                    'config:toggle:nextCommand',
+                ),
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.nextOnlyAdmin.label}: ${this.formatConfigValue(feature, 'nextOnlyAdmin')}`,
+                    'config:toggle:nextOnlyAdmin',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.previousCommand.label}: ${this.formatConfigValue(feature, 'previousCommand')}`,
+                    'config:toggle:previousCommand',
+                ),
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.previousOnlyAdmin.label}: ${this.formatConfigValue(feature, 'previousOnlyAdmin')}`,
+                    'config:toggle:previousOnlyAdmin',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.muteCommand.label}: ${this.formatConfigValue(feature, 'muteCommand')}`,
+                    'config:toggle:muteCommand',
+                ),
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.unmuteCommand.label}: ${this.formatConfigValue(feature, 'unmuteCommand')}`,
+                    'config:toggle:unmuteCommand',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.volumeCommand.label}: ${this.formatConfigValue(feature, 'volumeCommand')}`,
+                    'config:toggle:volumeCommand',
+                ),
+            ],
+            ...NUMBER_CONFIG_KEYS.map((key) => [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS[key].label}: ${this.formatConfigValue(feature, key)}`,
+                    `config:number:${key}`,
+                ),
+            ]),
+        ]);
+    }
+
+    private buildNumberKeyboard(key: ConfigKey) {
+        const field = CONFIG_FIELDS[key];
+        const min = field.type === 'number' ? field.min : 1;
+        return Markup.inlineKeyboard([
+            NUMBER_PRESETS.filter((value) => value >= min).map((value) =>
+                Markup.button.callback(
+                    `${value}`,
+                    `config:set:${key}:${value}`,
+                ),
+            ),
+            [Markup.button.callback('Custom', `config:custom:${key}`)],
+            [Markup.button.callback('Back', 'config:back')],
+        ]);
+    }
+
+    private getCallbackLocation(ctx: Context) {
+        const message = ctx.callbackQuery?.message as
+            | {
+                  chat?: { id: number };
+                  message_thread_id?: number;
+              }
+            | undefined;
+        const chatId = message?.chat?.id.toString() || '';
+        const threadId = getThreadIdFromMessage(message);
+        return { chatId, threadId };
+    }
+
+    private async ensureConfigAdmin(ctx: Context, chatId: string) {
+        if (!chatId) return false;
+        if (ctx.chat?.type === 'private') return true;
+        const userId = ctx.from?.id || 0;
+        const chatMember = await ctx.telegram.getChatMember(chatId, userId);
+        return ['administrator', 'creator'].includes(chatMember?.status);
+    }
+
+    private async editConfigMessage(
+        ctx: Context,
+        chatId: string,
+        threadId: number | null,
+    ) {
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        if (!room?.Feature) return;
+        await ctx.editMessageText(
+            this.buildConfigText(room.Feature),
+            this.buildConfigKeyboard(room.Feature),
         );
     }
 
@@ -797,35 +943,8 @@ export class PlaybackTelegramController {
         }
 
         await ctx.reply(
-            [
-                '🎛️ Room Configuration',
-                '',
-                'Queue',
-                `• ${CONFIG_FIELDS.maxQueueSize.label}: ${feature.maxQueueSize}`,
-                `• ${CONFIG_FIELDS.playNextCommand.label}: ${feature.playNextCommand ? 'on' : 'off'}`,
-                `• ${CONFIG_FIELDS.dailyPlayNextLimit.label}: ${feature.dailyPlayNextLimit === 0 ? 'unlimited' : `${feature.dailyPlayNextLimit}/day`}`,
-                '',
-                'Playback Controls',
-                `• ${CONFIG_FIELDS.nextCommand.label}: ${feature.nextCommand ? 'on' : 'off'}`,
-                `• ${CONFIG_FIELDS.nextOnlyAdmin.label}: ${feature.nextOnlyAdmin ? 'admin only' : 'everyone'}`,
-                `• ${CONFIG_FIELDS.previousCommand.label}: ${feature.previousCommand ? 'on' : 'off'}`,
-                `• ${CONFIG_FIELDS.previousOnlyAdmin.label}: ${feature.previousOnlyAdmin ? 'admin only' : 'everyone'}`,
-                '',
-                'Audio',
-                `• ${CONFIG_FIELDS.muteCommand.label}: ${feature.muteCommand ? 'on' : 'off'}`,
-                `• ${CONFIG_FIELDS.unmuteCommand.label}: ${feature.unmuteCommand ? 'on' : 'off'}`,
-                `• ${CONFIG_FIELDS.volumeCommand.label}: ${feature.volumeCommand ? 'on' : 'off'}`,
-                '',
-                'Voting',
-                `• ${CONFIG_FIELDS.minimumVotes.label}: ${feature.minimumVotes}`,
-                '',
-                'Usage',
-                '/set playNextCommand true',
-                '/set dailyPlayNextLimit 3',
-                '/set maxQueueSize 25',
-                '',
-                'Run /set to see all options.',
-            ].join('\n'),
+            this.buildConfigText(feature),
+            this.buildConfigKeyboard(feature),
         );
     }
 
@@ -869,24 +988,13 @@ export class PlaybackTelegramController {
         const args = ctx.message.text.split(' ').slice(1);
 
         if (args.length === 0) {
+            if (!room.Feature) {
+                await ctx.reply('No feature found');
+                return;
+            }
             await ctx.reply(
-                [
-                    '⚙️ Feature settings',
-                    '',
-                    ...CONFIG_KEYS.map((key) => {
-                        const item = CONFIG_FIELDS[key];
-                        return `• ${item.label} — ${item.help}`;
-                    }),
-                    '',
-                    'Examples',
-                    '/set playNextCommand true',
-                    '/set dailyPlayNextLimit 3',
-                    '/set maxQueueSize 25',
-                    '/set nextOnlyAdmin false',
-                    '',
-                    'Boolean values: true / false',
-                    'Number values: use a whole number',
-                ].join('\n'),
+                this.buildConfigText(room.Feature),
+                this.buildConfigKeyboard(room.Feature),
             );
             return;
         }
@@ -936,6 +1044,92 @@ export class PlaybackTelegramController {
         await this.playbackService.setFeature(room.id, command, featureValue);
 
         await ctx.reply(`Set ${field.label} to ${featureValue}`);
+    }
+
+    @Action(/config:(.*)/)
+    async updateConfig(
+        @Ctx()
+        ctx: Context<UpdateType.CallbackQueryUpdate<CallbackQuery>> &
+            Omit<Context<UpdateType>, keyof Context<UpdateType>> & {
+                match: RegExpExecArray;
+            },
+    ) {
+        const [action, rawKey, rawValue] = ctx.match[1].split(':');
+        const { chatId, threadId } = this.getCallbackLocation(ctx);
+        if (!(await this.ensureConfigAdmin(ctx, chatId))) {
+            await ctx.answerCbQuery('Admin only');
+            return;
+        }
+
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        if (!room?.Feature) {
+            await ctx.answerCbQuery('No room found');
+            return;
+        }
+
+        if (action === 'back') {
+            await ctx.answerCbQuery('Back');
+            await this.editConfigMessage(ctx, chatId, threadId);
+            return;
+        }
+
+        const key = rawKey as ConfigKey;
+        const field = CONFIG_FIELDS[key];
+        if (!field) {
+            await ctx.answerCbQuery('Unknown setting');
+            return;
+        }
+
+        if (action === 'toggle' && field.type === 'boolean') {
+            const value = !(room.Feature[key] as boolean);
+            await this.playbackService.setFeature(room.id, key, value);
+            await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
+            await this.editConfigMessage(ctx, chatId, threadId);
+            return;
+        }
+
+        if (action === 'number' && field.type === 'number') {
+            await ctx.answerCbQuery(`Choose ${field.label}`);
+            await ctx.editMessageText(
+                [
+                    `Set ${field.label}`,
+                    '',
+                    field.help,
+                    '',
+                    'Choose a preset or tap Custom.',
+                ].join('\n'),
+                this.buildNumberKeyboard(key),
+            );
+            return;
+        }
+
+        if (action === 'set' && field.type === 'number') {
+            const errMsg = validateConfigNumber(rawValue, field.min);
+            if (errMsg !== '') {
+                await ctx.answerCbQuery(errMsg);
+                return;
+            }
+            const value = parseInt(rawValue);
+            await this.playbackService.setFeature(room.id, key, value);
+            await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
+            await this.editConfigMessage(ctx, chatId, threadId);
+            return;
+        }
+
+        if (action === 'custom' && field.type === 'number') {
+            await this.cacheManager.set(
+                `config-custom:${ctx.from.id}`,
+                { chatId, threadId, key },
+                120_000,
+            );
+            await ctx.answerCbQuery('Send a number');
+            await ctx.reply(
+                `Reply with a number for ${field.label}. Send /cancel to cancel.`,
+            );
+        }
     }
 
     @Command('info')
@@ -1161,6 +1355,49 @@ export class PlaybackTelegramController {
                 const userId = msg.from.id;
 
                 await this.rememberUserLocation(userId, chatId, threadId);
+
+                const pendingConfig = await this.cacheManager.get<{
+                    chatId: string;
+                    threadId: number | null;
+                    key: ConfigKey;
+                }>(`config-custom:${userId}`);
+                if (pendingConfig && msg.text) {
+                    if (msg.text === '/cancel') {
+                        await this.cacheManager.delete(
+                            `config-custom:${userId}`,
+                        );
+                        await ctx.reply('Canceled.');
+                    } else if (pendingConfig.chatId === chatId) {
+                        const field = CONFIG_FIELDS[pendingConfig.key];
+                        const errMsg = validateConfigNumber(
+                            msg.text,
+                            field.type === 'number' ? field.min : 1,
+                        );
+                        if (errMsg !== '') {
+                            await ctx.reply(errMsg);
+                        } else {
+                            const room =
+                                await this.playbackService.getRoomByChatId(
+                                    pendingConfig.chatId,
+                                    pendingConfig.threadId,
+                                );
+                            if (room?.Feature) {
+                                const value = parseInt(msg.text);
+                                await this.playbackService.setFeature(
+                                    room.id,
+                                    pendingConfig.key,
+                                    value,
+                                );
+                                await this.cacheManager.delete(
+                                    `config-custom:${userId}`,
+                                );
+                                await ctx.reply(
+                                    `Set ${field.label} to ${value}`,
+                                );
+                            }
+                        }
+                    }
+                }
 
                 // Privacy mode may drop via_bot messages; when they do arrive,
                 // bind the pending inline result to this chat/topic.
