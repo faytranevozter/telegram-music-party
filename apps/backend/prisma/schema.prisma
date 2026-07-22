@@ -72,7 +72,7 @@ model Feature {
     volumeCommand      Boolean  @default(false)
     maxQueueSize       Int      @default(25)
     playNextCommand   Boolean  @default(false)
-    dailyPlayNextLimit Int      @default(0)
+    dailyPlayNextLimit Int      @default(3)
     createdAt          DateTime @default(now())
     updatedAt         DateTime @updatedAt
 }
