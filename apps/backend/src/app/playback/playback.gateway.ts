@@ -116,9 +116,9 @@ export class PlaybackGateway {
 
         void socket.join(room.id);
 
-        // emit join with queue
+        // emit join with queue only to the joining socket
         const queues = await this.playbackService.getQueues(room.id);
-        this.wss.to(room.id).emit('joined', queues);
+        socket.emit('joined', queues);
 
         console.log('player joined', data.id);
     }
@@ -167,17 +167,8 @@ export class PlaybackGateway {
             return;
         }
 
-        // remove from queue
-        const queue = await this.playbackService.getQueue(data.roomId);
-
-        if (queue && queue.url === data.videoId) {
-            if (queue.url === data.videoId) {
-                // delete song
-                await this.playbackService.removeQueue(
-                    data.roomId,
-                    data.videoId,
-                );
-            }
+        if (data.videoId) {
+            await this.playbackService.removeQueue(data.roomId, data.videoId);
         }
 
         // clear votes

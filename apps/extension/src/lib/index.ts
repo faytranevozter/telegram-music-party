@@ -53,6 +53,53 @@ function getQueueInstance() {
 
 type QueuePosition = "end" | "next";
 
+function extractVideoId(value: unknown): string | null {
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, any>;
+    const candidates = [
+        item.videoId,
+        item.playlistPanelVideoRenderer?.videoId,
+        item.playlistPanelVideoWrapperRenderer?.primaryRenderer
+            ?.playlistPanelVideoRenderer?.videoId,
+        item.content?.videoId,
+        item.content?.playlistPanelVideoRenderer?.videoId,
+        item.playlistItemData?.videoId,
+        item.navigationEndpoint?.watchEndpoint?.videoId,
+    ];
+    for (const id of candidates) {
+        if (typeof id === "string" && id.length > 0) return id;
+    }
+    return null;
+}
+
+function getYtQueueVideoIds(): Set<string> {
+    const ids = new Set<string>();
+    try {
+        const store = getQueueInstance()?.queue?.store?.store;
+        const items = store?.getState()?.queue?.items ?? [];
+        for (const item of items) {
+            const id = extractVideoId(item);
+            if (id) ids.add(id);
+        }
+    } catch {
+        // queue store may not be ready yet
+    }
+    const currentId = getVideoId();
+    if (currentId) ids.add(currentId);
+    return ids;
+}
+
+function getMissingQueueIds(serverQueues: Queue[]): string[] {
+    const existing = getYtQueueVideoIds();
+    const missing: string[] = [];
+    for (const item of serverQueues) {
+        if (!item.url || existing.has(item.url)) continue;
+        if (missing.includes(item.url)) continue;
+        missing.push(item.url);
+    }
+    return missing;
+}
+
 async function addQueue(videoIds: string, position: QueuePosition = "end") {
     if (videoIds.length < 1) return;
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -176,6 +223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const partyURL = config.partyUrl || DEFAULT_PARTY_URL;
     const ROOM_ID = config.roomId as string;
     let queues: Queue[] = [];
+    let hasSynced = false;
 
     console.log("Current config:", config);
 
@@ -197,16 +245,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     // handle incoming messages
     socket.on("joined", async (data: Queue[]) => {
         queues = data;
-        if (data[0]) {
+        const playback = getPlaybackState();
+        const isColdStart = !hasSynced && playback.state === "standby";
+
+        if (isColdStart && data[0]) {
             play(data[0]);
         }
+
         setTimeout(async () => {
-            await addQueue(data.map((q) => q.url).join(","));
+            const missing = getMissingQueueIds(data);
+            if (missing.length > 0) {
+                await addQueue(missing.join(","));
+            }
+            hasSynced = true;
         }, 1000);
     });
 
     // handle on leave
     socket.on("leave", async () => {
+        hasSynced = false;
         // clear local storage
         localStorage.removeItem("roomId");
 
@@ -328,7 +385,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on(
         "addToQueue",
-        async ({ videoId, position }: { videoId: string; position?: QueuePosition }) => {
+        async ({
+            videoId,
+            position,
+        }: {
+            videoId: string;
+            position?: QueuePosition;
+        }) => {
             const playback = getPlaybackState();
             console.log("addToQueue", videoId);
 
@@ -344,6 +407,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 queues.push(queue);
                 return;
             }
+
+            if (getYtQueueVideoIds().has(videoId)) return;
 
             await addQueue(videoId, position);
         },
