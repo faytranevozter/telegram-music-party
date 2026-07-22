@@ -19,7 +19,15 @@ import {
 import { PlaybackService } from './playback.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
-import { formatDuration } from 'src/helpers/util';
+import {
+    escapeHtml,
+    formatDateTime,
+    formatDuration,
+    htmlBold,
+    htmlCode,
+    htmlCodeBlock,
+    htmlItalic,
+} from 'src/helpers/util';
 import { firstValueFrom } from 'rxjs';
 import { Inject } from '@nestjs/common';
 import { InlineChatLocation, Song } from 'src/types/cache.type';
@@ -216,30 +224,34 @@ export class PlaybackTelegramController {
             : `⏭ Play Next (${remaining} left)`;
     }
 
+    private formatConfigLine(feature: Feature, key: ConfigKey) {
+        return `• ${htmlBold(CONFIG_FIELDS[key].label)}: ${escapeHtml(this.formatConfigValue(feature, key))}`;
+    }
+
     private buildConfigText(feature: Feature) {
         return [
-            '🎛️ Room Configuration',
+            `🎛️ ${htmlBold('Room Configuration')}`,
             '',
-            'Queue',
-            `• ${CONFIG_FIELDS.maxQueueSize.label}: ${this.formatConfigValue(feature, 'maxQueueSize')}`,
-            `• ${CONFIG_FIELDS.playNextCommand.label}: ${this.formatConfigValue(feature, 'playNextCommand')}`,
-            `• ${CONFIG_FIELDS.dailyPlayNextLimit.label}: ${this.formatConfigValue(feature, 'dailyPlayNextLimit')}`,
+            htmlBold('Queue'),
+            this.formatConfigLine(feature, 'maxQueueSize'),
+            this.formatConfigLine(feature, 'playNextCommand'),
+            this.formatConfigLine(feature, 'dailyPlayNextLimit'),
             '',
-            'Playback Controls',
-            `• ${CONFIG_FIELDS.nextCommand.label}: ${this.formatConfigValue(feature, 'nextCommand')}`,
-            `• ${CONFIG_FIELDS.nextOnlyAdmin.label}: ${this.formatConfigValue(feature, 'nextOnlyAdmin')}`,
-            `• ${CONFIG_FIELDS.previousCommand.label}: ${this.formatConfigValue(feature, 'previousCommand')}`,
-            `• ${CONFIG_FIELDS.previousOnlyAdmin.label}: ${this.formatConfigValue(feature, 'previousOnlyAdmin')}`,
+            htmlBold('Playback Controls'),
+            this.formatConfigLine(feature, 'nextCommand'),
+            this.formatConfigLine(feature, 'nextOnlyAdmin'),
+            this.formatConfigLine(feature, 'previousCommand'),
+            this.formatConfigLine(feature, 'previousOnlyAdmin'),
             '',
-            'Audio',
-            `• ${CONFIG_FIELDS.muteCommand.label}: ${this.formatConfigValue(feature, 'muteCommand')}`,
-            `• ${CONFIG_FIELDS.unmuteCommand.label}: ${this.formatConfigValue(feature, 'unmuteCommand')}`,
-            `• ${CONFIG_FIELDS.volumeCommand.label}: ${this.formatConfigValue(feature, 'volumeCommand')}`,
+            htmlBold('Audio'),
+            this.formatConfigLine(feature, 'muteCommand'),
+            this.formatConfigLine(feature, 'unmuteCommand'),
+            this.formatConfigLine(feature, 'volumeCommand'),
             '',
-            'Voting',
-            `• ${CONFIG_FIELDS.minimumVotes.label}: ${this.formatConfigValue(feature, 'minimumVotes')}`,
+            htmlBold('Voting'),
+            this.formatConfigLine(feature, 'minimumVotes'),
             '',
-            'Tap a button below to change settings.',
+            htmlItalic('Tap a button below to change settings.'),
         ].join('\n');
     }
 
@@ -361,28 +373,29 @@ export class PlaybackTelegramController {
             threadId,
         );
         if (!room?.Feature) return;
-        await ctx.editMessageText(
-            this.buildConfigText(room.Feature),
-            this.buildConfigKeyboard(room.Feature),
-        );
+        await ctx.editMessageText(this.buildConfigText(room.Feature), {
+            parse_mode: 'HTML',
+            ...this.buildConfigKeyboard(room.Feature),
+        });
     }
 
     @Start()
     async start(@Ctx() ctx: Context) {
-        const instructions = [
-            'Create a room by typing /register',
-            'Copy the room id',
-            'Open firefox',
-            'Download extension https://addons.mozilla.org/en-US/firefox/addon/yt-music-party/',
-            'Enable extension',
-            'Open Extension',
-            'Insert room id',
-            'Go to https://music.youtube.com',
-            'Add queue by mention @xmsc_bot followed by [music name] here',
-            'Then, run /play in the group chat to play the music from the queue',
-        ];
-
-        await ctx.reply(instructions.join('\n'));
+        await ctx.reply(
+            [
+                `🎵 ${htmlBold('Music Party')}`,
+                '',
+                '1. Run /register in your group',
+                '2. Copy the room ID',
+                '3. Install the extension',
+                '4. Open YouTube Music and paste the room ID',
+                '5. Search with @botname and add songs',
+                '6. Run /play to start',
+                '',
+                htmlItalic('Tip: use /info, /queue, and /config anytime.'),
+            ].join('\n'),
+            { parse_mode: 'HTML' },
+        );
     }
 
     @Command('register')
@@ -423,15 +436,14 @@ export class PlaybackTelegramController {
         );
         if (room) {
             await ctx.reply(
-                // `This chat is already registered. \nHere is the Room ID: \n\n<pre><code class="language-sh">${room.id}</code></pre>`,
                 [
-                    `✅ This chat is already linked to a room.\n`,
-                    `<pre><code class="language-sh">${room.id}</code></pre>\n`,
-                    `Copy above code to the music party extension 🎉`,
+                    `✅ ${htmlBold('Room already linked')}`,
+                    '',
+                    'Room ID',
+                    htmlCodeBlock(room.id),
+                    htmlItalic('Paste this into the Music Party extension.'),
                 ].join('\n'),
-                {
-                    parse_mode: 'HTML',
-                },
+                { parse_mode: 'HTML' },
             );
             return;
         }
@@ -453,13 +465,13 @@ export class PlaybackTelegramController {
 
         await ctx.reply(
             [
-                `✅ Successfully registered!\n`,
-                `<pre><code class="language-sh">${roomId}</code></pre>\n`,
-                `Copy above code to the music party extension 🎉`,
+                `✅ ${htmlBold('Room registered')}`,
+                '',
+                'Room ID',
+                htmlCodeBlock(roomId),
+                htmlItalic('Paste this into the Music Party extension.'),
             ].join('\n'),
-            {
-                parse_mode: 'HTML',
-            },
+            { parse_mode: 'HTML' },
         );
     }
 
@@ -865,18 +877,18 @@ export class PlaybackTelegramController {
 
         await ctx.reply(
             [
-                '🖥️ Connected Devices:\n',
+                `🖥️ ${htmlBold('Connected Devices')}`,
+                htmlItalic(`${room.Devices.length} device(s)`),
+                '',
                 ...room.Devices.map((d, i) =>
                     [
-                        ` <b>${i + 1}. ${d.name}</b>`,
-                        `🔑 Browser ID: <code>${d.fingerprint}</code>`,
-                        `⌚ Joined: ${d.createdAt.toLocaleString()}\n`,
+                        `${htmlBold(`${i + 1}. ${d.name}`)}`,
+                        `ID: ${htmlCode(d.fingerprint)}`,
+                        `Joined: ${escapeHtml(formatDateTime(d.createdAt))}`,
                     ].join('\n'),
-                ),
+                ).join('\n\n'),
             ].join('\n'),
-            {
-                parse_mode: 'HTML',
-            },
+            { parse_mode: 'HTML' },
         );
     }
 
@@ -986,10 +998,10 @@ export class PlaybackTelegramController {
             }
         }
 
-        await ctx.reply(
-            this.buildConfigText(feature),
-            this.buildConfigKeyboard(feature),
-        );
+        await ctx.reply(this.buildConfigText(feature), {
+            parse_mode: 'HTML',
+            ...this.buildConfigKeyboard(feature),
+        });
     }
 
     @Command('set')
@@ -1036,10 +1048,10 @@ export class PlaybackTelegramController {
                 await ctx.reply('No feature found');
                 return;
             }
-            await ctx.reply(
-                this.buildConfigText(room.Feature),
-                this.buildConfigKeyboard(room.Feature),
-            );
+            await ctx.reply(this.buildConfigText(room.Feature), {
+                parse_mode: 'HTML',
+                ...this.buildConfigKeyboard(room.Feature),
+            });
             return;
         }
 
@@ -1087,7 +1099,10 @@ export class PlaybackTelegramController {
 
         await this.playbackService.setFeature(room.id, command, featureValue);
 
-        await ctx.reply(`Set ${field.label} to ${featureValue}`);
+        await ctx.reply(
+            `✅ ${htmlBold(field.label)} set to ${htmlCode(String(featureValue))}`,
+            { parse_mode: 'HTML' },
+        );
     }
 
     @Action(/config:(.*)/)
@@ -1139,13 +1154,16 @@ export class PlaybackTelegramController {
             await ctx.answerCbQuery(`Choose ${field.label}`);
             await ctx.editMessageText(
                 [
-                    `Set ${field.label}`,
+                    `⚙️ ${htmlBold(field.label)}`,
                     '',
-                    field.help,
+                    escapeHtml(field.help),
                     '',
-                    'Choose a preset or tap Custom.',
+                    htmlItalic('Choose a preset or tap Custom.'),
                 ].join('\n'),
-                this.buildNumberKeyboard(key),
+                {
+                    parse_mode: 'HTML',
+                    ...this.buildNumberKeyboard(key),
+                },
             );
             return;
         }
@@ -1171,7 +1189,11 @@ export class PlaybackTelegramController {
             );
             await ctx.answerCbQuery('Send a number');
             await ctx.reply(
-                `Reply with a number for ${field.label}. Send /cancel to cancel.`,
+                [
+                    `✏️ Send a number for ${htmlBold(field.label)}.`,
+                    htmlItalic('Send /cancel to abort.'),
+                ].join('\n'),
+                { parse_mode: 'HTML' },
             );
         }
     }
@@ -1202,19 +1224,29 @@ export class PlaybackTelegramController {
         // load queue
         const queues = await this.playbackService.getQueues(room.id);
 
+        const playNext = room.Feature?.playNextCommand
+            ? room.Feature.dailyPlayNextLimit === 0
+                ? 'on · unlimited'
+                : `on · ${room.Feature.dailyPlayNextLimit}/day`
+            : 'off';
+
         await ctx.reply(
             [
-                '🎛️ Current Room Info:',
+                `🏠 ${htmlBold('Room Info')}`,
                 '',
-                `🆔 Room: <code>${room.id}</code>`,
-                `💬 Chat ID: ${room.chatId}`,
-                `🎧 Queue: ${queues.length} songs`,
-                `🖥️ Devices Count: ${room.Devices.length}`,
-                `📅 Created At: ${room.createdAt.toLocaleString()}`,
-            ].join('\n'),
-            {
-                parse_mode: 'HTML',
-            },
+                `Room  ${htmlCode(room.id)}`,
+                `Chat  ${htmlCode(room.chatId)}`,
+                room.threadId != null
+                    ? `Topic ${htmlCode(String(room.threadId))}`
+                    : null,
+                `Queue ${htmlBold(String(queues.length))} song(s)`,
+                `Devices ${htmlBold(String(room.Devices.length))}`,
+                `Play Next ${escapeHtml(playNext)}`,
+                `Created ${escapeHtml(formatDateTime(room.createdAt))}`,
+            ]
+                .filter(Boolean)
+                .join('\n'),
+            { parse_mode: 'HTML' },
         );
     }
 
@@ -1451,7 +1483,8 @@ export class PlaybackTelegramController {
                                     `config-custom:${userId}`,
                                 );
                                 await ctx.reply(
-                                    `Set ${field.label} to ${value}`,
+                                    `✅ ${htmlBold(field.label)} set to ${htmlCode(String(value))}`,
+                                    { parse_mode: 'HTML' },
                                 );
                             }
                         }
@@ -2015,38 +2048,30 @@ export class PlaybackTelegramController {
         const roomId = room.id;
         const data = await this.playbackService.getQueues(roomId);
 
-        // check if queue is empty
         if (!data || data.length === 0) {
             await ctx.reply(
                 [
-                    '🚫 No tracks in the queue right now.',
-                    `Don't worry—auto-queue will kick in if something's already playing.`,
+                    `🎧 ${htmlBold('Queue is empty')}`,
+                    htmlItalic('Search with the bot inline to add songs.'),
                 ].join('\n'),
+                { parse_mode: 'HTML' },
             );
             return;
         }
 
         await ctx.reply(
             [
-                `🎧 Current Queue:`,
-                `${data
-                    .map(
-                        (d, i) =>
-                            `${i + 1}. "${d.title
-                                .split(' - ')
-                                .map((v, i) => {
-                                    if (i === 0) {
-                                        return `<i>${v}</i>`;
-                                    }
-                                    return v;
-                                })
-                                .join(' - ')}"`,
-                    )
-                    .join('\n')}`,
+                `🎧 ${htmlBold('Queue')} · ${data.length} song(s)`,
+                '',
+                ...data.map((d, i) => {
+                    const [title, ...rest] = d.title.split(' - ');
+                    const suffix = rest.length
+                        ? ` — ${escapeHtml(rest.join(' - '))}`
+                        : '';
+                    return `${htmlBold(`${i + 1}.`)} ${htmlItalic(title)}${suffix}`;
+                }),
             ].join('\n'),
-            {
-                parse_mode: 'HTML',
-            },
+            { parse_mode: 'HTML' },
         );
     }
 }
