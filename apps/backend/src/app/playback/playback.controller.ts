@@ -73,6 +73,45 @@ export class PlaybackTelegramController {
         );
     }
 
+    private getLocalDateKey() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = `${now.getMonth() + 1}`.padStart(2, '0');
+        const day = `${now.getDate()}`.padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    private getMillisecondsUntilLocalMidnight() {
+        const now = new Date();
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        return midnight.getTime() - now.getTime();
+    }
+
+    private async isRoomAdmin(ctx: Context, chatId: string, userId: number) {
+        if (ctx.chat?.type === 'private') return true;
+        const chatMember = await ctx.telegram.getChatMember(chatId, userId);
+        return ['administrator', 'creator'].includes(chatMember?.status);
+    }
+
+    private async getPlayNextCount(roomId: string, userId: number) {
+        return (
+            (await this.cacheManager.get<number>(
+                `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`,
+            )) || 0
+        );
+    }
+
+    private async incrementPlayNextCount(roomId: string, userId: number) {
+        const key = `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`;
+        const count = ((await this.cacheManager.get<number>(key)) || 0) + 1;
+        await this.cacheManager.set(
+            key,
+            count,
+            this.getMillisecondsUntilLocalMidnight() + 60_000,
+        );
+    }
+
     @Start()
     async start(@Ctx() ctx: Context) {
         const instructions = [
@@ -704,6 +743,8 @@ export class PlaybackTelegramController {
                 `Unmute Command: ${feature.unmuteCommand}`,
                 `Volume Command: ${feature.volumeCommand}`,
                 `Max Queue Size: ${feature.maxQueueSize}`,
+                `Play Next Command: ${feature.playNextCommand}`,
+                `Daily Play Next Limit: ${feature.dailyPlayNextLimit}`,
             ].join('\n'),
         );
     }
@@ -757,6 +798,8 @@ export class PlaybackTelegramController {
             unmuteCommand: 'Unmute Command',
             volumeCommand: 'Volume Command',
             maxQueueSize: 'Max Queue Size',
+            playNextCommand: 'Play Next Command',
+            dailyPlayNextLimit: 'Daily Play Next Limit',
         };
 
         if (
@@ -799,13 +842,26 @@ export class PlaybackTelegramController {
 
                 break;
             }
+            case 'dailyPlayNextLimit': {
+                const errMsg = validateConfigNumber(value, 0);
+                if (errMsg !== '') {
+                    await ctx.reply(errMsg);
+                    return;
+                }
+
+                featureName = availableCommands[command];
+                featureValue = parseInt(value);
+
+                break;
+            }
             case 'nextCommand':
             case 'nextOnlyAdmin':
             case 'previousCommand':
             case 'previousOnlyAdmin':
             case 'muteCommand':
             case 'unmuteCommand':
-            case 'volumeCommand': {
+            case 'volumeCommand':
+            case 'playNextCommand': {
                 featureName = availableCommands[command];
                 featureValue = value === 'true' ? true : false;
                 break;
@@ -915,13 +971,11 @@ export class PlaybackTelegramController {
                                 message_text: `${row.name} by ${row.artist.name}`,
                             },
                             ...Markup.inlineKeyboard([
-                                // [
-                                //   Markup.button.callback(
-                                //     "Play Next",
-                                //     `play-this-next-${userID}:${row.musicID}`,
-                                //   ),
-                                // ],
                                 [
+                                    Markup.button.callback(
+                                        'Play Next',
+                                        `playnext:${senderID}:${row.videoId}`,
+                                    ),
                                     Markup.button.callback(
                                         'Add to Queue',
                                         `queue:${senderID}:${row.videoId}`,
@@ -981,9 +1035,6 @@ export class PlaybackTelegramController {
             );
             return;
         }
-
-        // remove from cache
-        await this.cacheManager.delete(cacheKey);
 
         const songText = `${song.name} by ${song.artist.name}`;
         const cacheKeySong = `song:${inline_message_id}:${videoId}`;
@@ -1202,6 +1253,151 @@ export class PlaybackTelegramController {
         }
     }
 
+    private async completePlayNext(
+        ctx: Context,
+        params: {
+            videoId: string;
+            inlineMessageId: string;
+            chatId: string;
+            threadId: number | null;
+            userId: number;
+        },
+    ) {
+        const { videoId, inlineMessageId, chatId, threadId, userId } = params;
+        const doneKey = `playnext-added:${inlineMessageId}:${videoId}`;
+        const lockKey = `playnext-adding:${inlineMessageId}:${videoId}`;
+
+        if (await this.cacheManager.get(doneKey)) return;
+        if (await this.cacheManager.get(lockKey)) return;
+        await this.cacheManager.set(lockKey, true, 30_000);
+
+        try {
+            if (await this.cacheManager.get(doneKey)) return;
+
+            const room = await this.playbackService.getRoomByChatId(
+                chatId,
+                threadId,
+            );
+            if (!room) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 No party here—Music Party isn't available in this chat`,
+                );
+                return;
+            }
+
+            if (room.Feature?.playNextCommand !== true) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 Play Next is disabled in this room.`,
+                );
+                return;
+            }
+
+            const roomId = room.id;
+            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
+            const queues = await this.playbackService.getQueues(roomId);
+            if (queues.length >= queueLimit) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 Queue is full. Please remove some songs before adding new ones.`,
+                );
+                return;
+            }
+
+            const cacheKey = `song:${inlineMessageId}:${videoId}`;
+            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
+            if (!cachedSong) {
+                if (await this.cacheManager.get(doneKey)) return;
+                if (queues.find((q) => q.url === videoId)) return;
+
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🔗 This link has expired. Please try generating a new one.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                );
+                return;
+            }
+
+            if (queues.find((q) => q.url === videoId)) {
+                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                );
+                return;
+            }
+
+            const isAdmin = await this.isRoomAdmin(ctx, chatId, userId);
+            const dailyLimit = room.Feature.dailyPlayNextLimit;
+            const playNextCount = await this.getPlayNextCount(roomId, userId);
+            if (!isAdmin && dailyLimit > 0 && playNextCount >= dailyLimit) {
+                await ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `🚫 Daily Play Next limit reached (${playNextCount}/${dailyLimit}). Try again tomorrow.`,
+                );
+                return;
+            }
+
+            const songCombined = `${cachedSong.name} - ${cachedSong.artist.name} [${formatDuration(
+                cachedSong.duration || 0,
+            )}]`;
+
+            await this.playbackService.addPlayNext(
+                roomId,
+                videoId,
+                songCombined,
+            );
+
+            if (!isAdmin) {
+                await this.incrementPlayNextCount(roomId, userId);
+            }
+
+            await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+
+            await ctx.telegram.editMessageText(
+                undefined,
+                undefined,
+                inlineMessageId,
+                `⏭️ ${songCombined
+                    .split(' - ')
+                    .map((v, k) => {
+                        if (k === 0) {
+                            return `<i>${v}</i>`;
+                        }
+                        return v;
+                    })
+                    .join(' - ')} will play next.`,
+                {
+                    parse_mode: 'HTML',
+                },
+            );
+
+            await this.cacheManager.delete(cacheKey);
+            await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
+            this.gateway.addToQueueCommand(roomId, videoId, 'next');
+        } finally {
+            await this.cacheManager.delete(lockKey);
+        }
+    }
+
     @On('edited_message')
     async editedMessage(@Ctx() ctx: Context) {
         // Only seed chat/topic location. Completing the add here races with the
@@ -1231,6 +1427,108 @@ export class PlaybackTelegramController {
             { chatId, threadId },
             SONG_CACHE_TTL,
         );
+    }
+
+    @Action(/playnext:(.*)/)
+    async playNext(
+        @Ctx()
+        ctx: Context<UpdateType.CallbackQueryUpdate<CallbackQuery>> &
+            Omit<Context<UpdateType>, keyof Context<UpdateType>> & {
+                match: RegExpExecArray;
+            },
+    ) {
+        const [senderID, videoId] = ctx.match[1].split(':');
+
+        if (!videoId || !senderID) return;
+
+        if (parseInt(senderID) !== ctx.from.id) {
+            await ctx.answerCbQuery(
+                'You are not allowed to play this song next',
+            );
+            return;
+        }
+
+        const callbackQuery = ctx.update.callback_query;
+        const inlineMessageId = callbackQuery.inline_message_id;
+        const callbackMessage = callbackQuery.message as
+            | {
+                  chat?: { id: number };
+                  message_thread_id?: number;
+              }
+            | undefined;
+
+        let chatId = callbackMessage?.chat?.id?.toString() || '';
+        let threadId = getThreadIdFromMessage(callbackMessage);
+
+        if (inlineMessageId) {
+            const loc = await this.cacheManager.get<InlineChatLocation>(
+                `inline-loc:${inlineMessageId}`,
+            );
+            if (loc) {
+                chatId = loc.chatId;
+                threadId = loc.threadId;
+            }
+        }
+
+        if (!chatId) {
+            const recent = await this.cacheManager.get<
+                InlineChatLocation & { text?: string }
+            >(`recent-via:${ctx.from.id}`);
+            if (recent?.chatId) {
+                chatId = recent.chatId;
+                threadId = recent.threadId;
+            }
+        }
+
+        if (!chatId) {
+            const userLoc = await this.cacheManager.get<InlineChatLocation>(
+                `user-loc:${ctx.from.id}`,
+            );
+            if (userLoc?.chatId) {
+                chatId = userLoc.chatId;
+                threadId = userLoc.threadId;
+            }
+        }
+
+        if (!inlineMessageId) {
+            await ctx.answerCbQuery('Missing message id');
+            return;
+        }
+
+        if (!chatId) {
+            await ctx.answerCbQuery(
+                'Open the topic and run /queue once, then try again',
+            );
+            await ctx.editMessageText(
+                `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+            );
+            return;
+        }
+
+        await ctx.answerCbQuery('Adding as next...');
+
+        try {
+            await ctx.editMessageReplyMarkup({
+                inline_keyboard: [
+                    [
+                        Markup.button.callback(
+                            `Verifying..`,
+                            `verify:${senderID}:${videoId}:${inlineMessageId}`,
+                        ),
+                    ],
+                ],
+            });
+        } catch {
+            await Promise.resolve();
+        }
+
+        await this.completePlayNext(ctx, {
+            videoId,
+            inlineMessageId,
+            chatId,
+            threadId,
+            userId: ctx.from.id,
+        });
     }
 
     @Action(/queue:(.*)/)

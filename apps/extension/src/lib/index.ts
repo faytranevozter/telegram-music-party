@@ -57,14 +57,17 @@ function getQueueInstance() {
     return (globalThis as any).queue;
 }
 
-async function addQueue(videoIds: string) {
+type QueuePosition = "end" | "next";
+
+async function addQueue(videoIds: string, position: QueuePosition = "end") {
     if (videoIds.length < 1) return;
     const app = getAppInstance();
     const queue = getQueueInstance();
     const store = queue?.queue.store.store;
     const payload = {
         queueContextParams: store.getState().queue.queueContextParams,
-        queueInsertPosition: "INSERT_AT_END",
+        queueInsertPosition:
+            position === "next" ? "INSERT_AFTER_CURRENT_VIDEO" : "INSERT_AT_END",
         videoIds: videoIds.split(","),
     };
 
@@ -79,11 +82,15 @@ async function addQueue(videoIds: string) {
             ) {
                 const queueItems = store.getState().queue.items;
                 const queueItemsLength = queueItems.length ?? 0;
+                const index =
+                    position === "next"
+                        ? Math.max(queueItemsLength - 1, 0)
+                        : queueItemsLength;
                 queue?.dispatch({
                     type: "ADD_ITEMS",
                     payload: {
                         nextQueueItemId: store.getState().queue.nextQueueItemId,
-                        index: queueItemsLength,
+                        index,
                         items: result.queueDatas
                             .map((it) =>
                                 typeof it === "object" && it && "content" in it
@@ -322,20 +329,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         resume();
     });
 
-    socket.on("addToQueue", async ({ videoId }: { videoId: string }) => {
-        const playback = getPlaybackState();
-        console.log("addToQueue", videoId);
+    socket.on(
+        "addToQueue",
+        async ({ videoId, position }: { videoId: string; position?: QueuePosition }) => {
+            const playback = getPlaybackState();
+            console.log("addToQueue", videoId);
 
-        if (playback.state == "standby") {
-            queues.push({
-                id: crypto.randomUUID(),
-                url: videoId,
-            });
-            return;
-        }
+            if (playback.state == "standby") {
+                const queue = {
+                    id: crypto.randomUUID(),
+                    url: videoId,
+                };
+                if (position === "next") {
+                    queues.unshift(queue);
+                    return;
+                }
+                queues.push(queue);
+                return;
+            }
 
-        await addQueue(videoId);
-    });
+            await addQueue(videoId, position);
+        },
+    );
 
     // detect song changes
     detectSongChange((playback, videoId) => {

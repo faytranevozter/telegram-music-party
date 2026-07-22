@@ -68,9 +68,13 @@ export class PlaybackGateway {
         this.wss.to(roomID).emit('lyrics');
     }
 
-    addToQueueCommand(roomID: string, videoId: string) {
+    addToQueueCommand(
+        roomID: string,
+        videoId: string,
+        position: 'end' | 'next' = 'end',
+    ) {
         console.log(`Emitting 'addToQueue' event to ${roomID}`);
-        this.wss.to(roomID).emit('addToQueue', { videoId });
+        this.wss.to(roomID).emit('addToQueue', { videoId, position });
     }
 
     leave(roomID: string) {

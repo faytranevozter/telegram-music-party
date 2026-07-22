@@ -21,6 +21,20 @@ export class PlaybackService {
         });
     }
 
+    async addPlayNext(roomId: string, videoId: string, title: string) {
+        const head = await this.getQueue(roomId);
+        await this.prisma.queue.create({
+            data: {
+                roomId,
+                url: videoId,
+                title: title,
+                ...(head?.createdAt
+                    ? { createdAt: new Date(head.createdAt.getTime() - 1) }
+                    : {}),
+            },
+        });
+    }
+
     async removeQueue(roomId: string, videoId: string) {
         await this.prisma.queue.deleteMany({
             where: {

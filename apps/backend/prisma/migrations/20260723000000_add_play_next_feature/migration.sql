@@ -1,0 +1,2 @@
+ALTER TABLE "Feature" ADD COLUMN     "playNextCommand" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "dailyPlayNextLimit" INTEGER NOT NULL DEFAULT 0;
