@@ -50,6 +50,71 @@ const getThreadIdFromMessage = (
     return null;
 };
 
+const CONFIG_FIELDS = {
+    minimumVotes: {
+        label: 'Minimum Votes',
+        type: 'number',
+        min: 1,
+        help: 'Votes needed for /vote_next',
+    },
+    maxQueueSize: {
+        label: 'Max Queue Size',
+        type: 'number',
+        min: 1,
+        help: 'Maximum songs waiting in queue',
+    },
+    playNextCommand: {
+        label: 'Play Next Button',
+        type: 'boolean',
+        help: 'Allow inline Play Next button',
+    },
+    dailyPlayNextLimit: {
+        label: 'Daily Play Next Limit',
+        type: 'number',
+        min: 0,
+        help: 'Per-user daily Play Next limit; 0 = unlimited',
+    },
+    nextCommand: {
+        label: 'Next Command',
+        type: 'boolean',
+        help: 'Enable /next command',
+    },
+    nextOnlyAdmin: {
+        label: 'Next Only Admin',
+        type: 'boolean',
+        help: 'Restrict /next to admins',
+    },
+    previousCommand: {
+        label: 'Previous Command',
+        type: 'boolean',
+        help: 'Enable /prev command',
+    },
+    previousOnlyAdmin: {
+        label: 'Previous Only Admin',
+        type: 'boolean',
+        help: 'Restrict /prev to admins',
+    },
+    muteCommand: {
+        label: 'Mute Command',
+        type: 'boolean',
+        help: 'Enable /mute command',
+    },
+    unmuteCommand: {
+        label: 'Unmute Command',
+        type: 'boolean',
+        help: 'Enable /unmute command',
+    },
+    volumeCommand: {
+        label: 'Volume Command',
+        type: 'boolean',
+        help: 'Enable volume commands',
+    },
+} as const;
+
+const CONFIG_KEYS = Object.keys(CONFIG_FIELDS) as Array<
+    keyof typeof CONFIG_FIELDS
+>;
+
 @Update()
 export class PlaybackTelegramController {
     constructor(
@@ -733,18 +798,33 @@ export class PlaybackTelegramController {
 
         await ctx.reply(
             [
-                '🎛️ Current Feature: \n',
-                `Minimum Votes: ${feature.minimumVotes}`,
-                `Next Command: ${feature.nextCommand}`,
-                `Next Only Admin: ${feature.nextOnlyAdmin}`,
-                `Previous Command: ${feature.previousCommand}`,
-                `Previous Only Admin: ${feature.previousOnlyAdmin}`,
-                `Mute Command: ${feature.muteCommand}`,
-                `Unmute Command: ${feature.unmuteCommand}`,
-                `Volume Command: ${feature.volumeCommand}`,
-                `Max Queue Size: ${feature.maxQueueSize}`,
-                `Play Next Command: ${feature.playNextCommand}`,
-                `Daily Play Next Limit: ${feature.dailyPlayNextLimit}`,
+                '🎛️ Room Configuration',
+                '',
+                'Queue',
+                `• ${CONFIG_FIELDS.maxQueueSize.label}: ${feature.maxQueueSize}`,
+                `• ${CONFIG_FIELDS.playNextCommand.label}: ${feature.playNextCommand ? 'on' : 'off'}`,
+                `• ${CONFIG_FIELDS.dailyPlayNextLimit.label}: ${feature.dailyPlayNextLimit === 0 ? 'unlimited' : `${feature.dailyPlayNextLimit}/day`}`,
+                '',
+                'Playback Controls',
+                `• ${CONFIG_FIELDS.nextCommand.label}: ${feature.nextCommand ? 'on' : 'off'}`,
+                `• ${CONFIG_FIELDS.nextOnlyAdmin.label}: ${feature.nextOnlyAdmin ? 'admin only' : 'everyone'}`,
+                `• ${CONFIG_FIELDS.previousCommand.label}: ${feature.previousCommand ? 'on' : 'off'}`,
+                `• ${CONFIG_FIELDS.previousOnlyAdmin.label}: ${feature.previousOnlyAdmin ? 'admin only' : 'everyone'}`,
+                '',
+                'Audio',
+                `• ${CONFIG_FIELDS.muteCommand.label}: ${feature.muteCommand ? 'on' : 'off'}`,
+                `• ${CONFIG_FIELDS.unmuteCommand.label}: ${feature.unmuteCommand ? 'on' : 'off'}`,
+                `• ${CONFIG_FIELDS.volumeCommand.label}: ${feature.volumeCommand ? 'on' : 'off'}`,
+                '',
+                'Voting',
+                `• ${CONFIG_FIELDS.minimumVotes.label}: ${feature.minimumVotes}`,
+                '',
+                'Usage',
+                '/set playNextCommand true',
+                '/set dailyPlayNextLimit 3',
+                '/set maxQueueSize 25',
+                '',
+                'Run /set to see all options.',
             ].join('\n'),
         );
     }
@@ -788,89 +868,74 @@ export class PlaybackTelegramController {
 
         const args = ctx.message.text.split(' ').slice(1);
 
-        const availableCommands = {
-            minimumVotes: 'Minimum Votes',
-            nextCommand: 'Next Command',
-            nextOnlyAdmin: 'Next Only Admin',
-            previousCommand: 'Previous Command',
-            previousOnlyAdmin: 'Previous Only Admin',
-            muteCommand: 'Mute Command',
-            unmuteCommand: 'Unmute Command',
-            volumeCommand: 'Volume Command',
-            maxQueueSize: 'Max Queue Size',
-            playNextCommand: 'Play Next Command',
-            dailyPlayNextLimit: 'Daily Play Next Limit',
-        };
-
-        if (
-            args.length < 2 ||
-            !Object.keys(availableCommands).includes(args[0])
-        ) {
+        if (args.length === 0) {
             await ctx.reply(
                 [
-                    '⚠️ Please provide a command and a value.\n',
-                    `Usage: /set <command> <value>\n`,
-                    `Available commands:\n`,
-                    // ...availableCommands.map((c) => `- ${c}`),
-                    ...Object.entries(availableCommands).map(
-                        ([key]) => `- ${key}`,
-                    ),
-                    `\nExample: /set minimumVotes 5`,
-                    `\nNote: Only admins can set the feature.`,
+                    '⚙️ Feature settings',
+                    '',
+                    ...CONFIG_KEYS.map((key) => {
+                        const item = CONFIG_FIELDS[key];
+                        return `• ${item.label} — ${item.help}`;
+                    }),
+                    '',
+                    'Examples',
+                    '/set playNextCommand true',
+                    '/set dailyPlayNextLimit 3',
+                    '/set maxQueueSize 25',
+                    '/set nextOnlyAdmin false',
+                    '',
+                    'Boolean values: true / false',
+                    'Number values: use a whole number',
                 ].join('\n'),
             );
             return;
         }
 
-        const command = args[0];
+        const command = args[0] as keyof typeof CONFIG_FIELDS;
         const value = args[1];
+        const field = CONFIG_FIELDS[command];
 
-        let featureName: string = '';
+        if (!field) {
+            await ctx.reply(
+                [
+                    '⚠️ Unknown feature key.',
+                    '',
+                    'Use /set without arguments to see the list.',
+                ].join('\n'),
+            );
+            return;
+        }
+
+        if (args.length < 2) {
+            await ctx.reply(
+                [
+                    `⚠️ Missing value for ${field.label}.`,
+                    `Usage: /set ${command} ${field.type === 'boolean' ? 'true|false' : field.min === 0 ? '0 or greater' : 'number'}`,
+                ].join('\n'),
+            );
+            return;
+        }
+
         let featureValue: boolean | number = false;
 
-        switch (command) {
-            case 'minimumVotes':
-            case 'maxQueueSize': {
-                const errMsg = validateConfigNumber(value);
-                if (errMsg !== '') {
-                    await ctx.reply(errMsg);
-                    return;
-                }
-
-                featureName = availableCommands[command];
-                featureValue = parseInt(value);
-
-                break;
+        if (field.type === 'number') {
+            const errMsg = validateConfigNumber(value, field.min);
+            if (errMsg !== '') {
+                await ctx.reply(errMsg);
+                return;
             }
-            case 'dailyPlayNextLimit': {
-                const errMsg = validateConfigNumber(value, 0);
-                if (errMsg !== '') {
-                    await ctx.reply(errMsg);
-                    return;
-                }
-
-                featureName = availableCommands[command];
-                featureValue = parseInt(value);
-
-                break;
+            featureValue = parseInt(value);
+        } else {
+            if (value !== 'true' && value !== 'false') {
+                await ctx.reply('⚠️ Boolean values must be true or false.');
+                return;
             }
-            case 'nextCommand':
-            case 'nextOnlyAdmin':
-            case 'previousCommand':
-            case 'previousOnlyAdmin':
-            case 'muteCommand':
-            case 'unmuteCommand':
-            case 'volumeCommand':
-            case 'playNextCommand': {
-                featureName = availableCommands[command];
-                featureValue = value === 'true' ? true : false;
-                break;
-            }
+            featureValue = value === 'true';
         }
 
         await this.playbackService.setFeature(room.id, command, featureValue);
 
-        await ctx.reply(`Set ${featureName} to ${featureValue}`);
+        await ctx.reply(`Set ${field.label} to ${featureValue}`);
     }
 
     @Command('info')
