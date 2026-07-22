@@ -192,6 +192,30 @@ export class PlaybackTelegramController {
         return `${value}`;
     }
 
+    private async getPlayNextRemaining(
+        room: {
+            id: string;
+            Feature: Feature | null;
+        },
+        userId: number,
+    ) {
+        const limit = room.Feature?.dailyPlayNextLimit || 0;
+        if (limit <= 0) return null;
+        const used = await this.getPlayNextCount(room.id, userId);
+        return Math.max(limit - used, 0);
+    }
+
+    private formatPlayNextLabel(
+        feature: Feature | null,
+        remaining: number | null,
+    ) {
+        if (!feature?.playNextCommand) return '⏭ Play Next';
+        if (remaining === null) return '⏭ Play Next';
+        return remaining <= 0
+            ? '⏭ Play Next (0 left)'
+            : `⏭ Play Next (${remaining} left)`;
+    }
+
     private buildConfigText(feature: Feature) {
         return [
             '🎛️ Room Configuration',
@@ -269,6 +293,26 @@ export class PlaybackTelegramController {
                     `config:number:${key}`,
                 ),
             ]),
+        ]);
+    }
+
+    private buildSongKeyboard(
+        playNextLabel: string,
+        senderID: number,
+        videoId: string,
+    ) {
+        return Markup.inlineKeyboard([
+            [
+                Markup.button.callback(
+                    playNextLabel,
+                    `playnext:${senderID}:${videoId}`,
+                ),
+                Markup.button.callback(
+                    'Add to Queue',
+                    `queue:${senderID}:${videoId}`,
+                ),
+            ],
+            [Markup.button.callback('Cancel', `cancel:${senderID}`)],
         ]);
     }
 
@@ -1229,24 +1273,11 @@ export class PlaybackTelegramController {
                                 photo_url: row.thumbnails[0].url,
                                 message_text: `${row.name} by ${row.artist.name}`,
                             },
-                            ...Markup.inlineKeyboard([
-                                [
-                                    Markup.button.callback(
-                                        '⏭ Play Next',
-                                        `playnext:${senderID}:${row.videoId}`,
-                                    ),
-                                    Markup.button.callback(
-                                        'Add to Queue',
-                                        `queue:${senderID}:${row.videoId}`,
-                                    ),
-                                ],
-                                [
-                                    Markup.button.callback(
-                                        'Cancel',
-                                        `cancel:${senderID}`,
-                                    ),
-                                ],
-                            ]),
+                            ...this.buildSongKeyboard(
+                                '⏭ Play Next',
+                                senderID,
+                                row.videoId,
+                            ),
                         }),
                     ),
                 {},
@@ -1328,6 +1359,33 @@ export class PlaybackTelegramController {
                     },
                     SONG_CACHE_TTL,
                 );
+
+                const room = await this.playbackService.getRoomByChatId(
+                    recent.chatId,
+                    recent.threadId,
+                );
+                if (room?.Feature && userId) {
+                    const remaining = await this.getPlayNextRemaining(
+                        room,
+                        userId,
+                    );
+                    const label = this.formatPlayNextLabel(
+                        room.Feature,
+                        remaining,
+                    );
+                    await this.cacheManager.set(
+                        `playnext-label:${inline_message_id}`,
+                        label,
+                        SONG_CACHE_TTL,
+                    );
+                    await ctx.telegram.editMessageReplyMarkup(
+                        undefined,
+                        undefined,
+                        inline_message_id,
+                        this.buildSongKeyboard(label, userId, videoId)
+                            .reply_markup,
+                    );
+                }
             }
         }
     }
