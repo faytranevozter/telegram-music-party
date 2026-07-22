@@ -35,37 +35,33 @@ function getAppInstance<T>() {
 }
 
 function getQueueInstance() {
-    const q = document.querySelector("#queue");
-    (globalThis as any).queue = q;
-
-    setInterval(() => {
-        (globalThis as any).queue = document.querySelector(
-            "#queue",
-        ) as Element & {
-            dispatch: (action: any) => void;
-            queue: {
+    const q = document.querySelector("#queue") as Element & {
+        dispatch: (action: any) => void;
+        queue: {
+            store: {
                 store: {
-                    store: {
-                        dispatch: (action: any) => void;
-                        getState: () => any;
-                    };
+                    dispatch: (action: any) => void;
+                    getState: () => any;
                 };
             };
         };
-    }, 300);
+    };
+    (globalThis as any).queue = q;
 
-    return (globalThis as any).queue;
+    return q;
 }
 
 type QueuePosition = "end" | "next";
 
 async function addQueue(videoIds: string, position: QueuePosition = "end") {
     if (videoIds.length < 1) return;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const app = getAppInstance();
     const queue = getQueueInstance();
     const store = queue?.queue.store.store;
+    const state = store.getState().queue;
     const payload = {
-        queueContextParams: store.getState().queue.queueContextParams,
+        queueContextParams: state.queueContextParams,
         queueInsertPosition:
             position === "next" ? "INSERT_AFTER_CURRENT_VIDEO" : "INSERT_AT_END",
         videoIds: videoIds.split(","),
@@ -80,7 +76,8 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
                 "queueDatas" in result &&
                 Array.isArray(result.queueDatas)
             ) {
-                const queueItems = store.getState().queue.items;
+                const currentState = store.getState().queue;
+                const queueItems = currentState.items;
                 const queueItemsLength = queueItems.length ?? 0;
                 const index =
                     position === "next"
@@ -89,7 +86,7 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
                 queue?.dispatch({
                     type: "ADD_ITEMS",
                     payload: {
-                        nextQueueItemId: store.getState().queue.nextQueueItemId,
+                        nextQueueItemId: currentState.nextQueueItemId,
                         index,
                         items: result.queueDatas
                             .map((it) =>
