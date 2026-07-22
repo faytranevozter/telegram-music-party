@@ -37,3 +37,38 @@ A Telegram bot that allows users to play music from different sources like Spoti
 - Prisma ORM
 - Postgre SQL
 - NestJS
+
+## Versioning & release
+
+Semver lives in `VERSION` (source of truth) and is mirrored in root + workspace `package.json` files.
+
+### Bump
+
+```bash
+# patch  1.5.4 → 1.5.5
+pnpm version:patch
+# or
+./scripts/bump-semver.sh patch
+
+# minor  1.5.4 → 1.6.0
+pnpm version:minor
+
+# major  1.5.4 → 2.0.0
+pnpm version:major
+```
+
+Commit the bumped files, then publish:
+
+```bash
+git checkout main && git pull
+# ensure VERSION is what you want
+git tag "v$(tr -d '[:space:]' < VERSION)"
+git push origin "v$(tr -d '[:space:]' < VERSION)"
+```
+
+Pushing a `v*.*.*` tag runs **Docker Publish** and pushes to GHCR:
+
+```
+ghcr.io/faytranevozter/telegram-music-party:vX.Y.Z
+ghcr.io/faytranevozter/telegram-music-party:latest
+```

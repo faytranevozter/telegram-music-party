@@ -1,11 +1,14 @@
 {
   "name": "telegram-music-party",
-  "version": "1.0.0",
+  "version": "1.5.4",
   "private": true,
   "description": "Telegram music party monorepo",
   "scripts": {
     "build": "turbo build",
-    "dev": "turbo dev"
+    "dev": "turbo dev",
+    "version:patch": "scripts/bump-semver.sh patch",
+    "version:minor": "scripts/bump-semver.sh minor",
+    "version:major": "scripts/bump-semver.sh major"
   },
   "packageManager": "pnpm@10.6.2",
   "devDependencies": {
