@@ -15,7 +15,7 @@ import {
     InlineKeyboardButton,
     InlineQueryResult,
     Update as UpdateType,
-} from 'telegraf/typings/core/types/typegram';
+} from 'telegraf/types';
 import { PlaybackService } from './playback.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
