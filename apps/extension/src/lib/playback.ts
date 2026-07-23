@@ -40,13 +40,13 @@ export function getPlaybackState(): {
 } {
     const el = document.querySelector(
         "#movie_player > div.html5-video-container > video",
-    ) as HTMLVideoElement;
+    ) as HTMLVideoElement | null;
 
     const song = document.querySelector(
         "[class='title style-scope ytmusic-player-bar']",
     )?.textContent as string;
 
-    if (el.src) {
+    if (el?.src) {
         return {
             song,
             artist: document.querySelector(artistSelector)
@@ -56,7 +56,7 @@ export function getPlaybackState(): {
         };
     }
     return {
-        el,
+        el: el as HTMLVideoElement,
         song,
         state: "standby",
         artist: "",
@@ -95,8 +95,11 @@ function isVisible(el: Element): boolean {
     ) {
         return false;
     }
+    // Prefer layout size when available; jsdom often reports 0x0 even for
+    // "visible" nodes, so fall back to computed style only.
     const rect = node.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+    if (rect.width > 0 && rect.height > 0) return true;
+    return style.display !== "none" && style.visibility !== "hidden";
 }
 
 function buttonLabel(el: Element): string {
@@ -158,7 +161,7 @@ function maybeResumeAfterDismiss() {
     if (intentionalPause) return;
     const playback = getPlaybackState();
     if (playback.state === "paused" && playback.el?.src) {
-        void playback.el.play().catch(() => undefined);
+        void playback.el.play()?.catch(() => undefined);
     }
 }
 

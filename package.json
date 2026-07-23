@@ -6,6 +6,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "test": "turbo test",
     "version:patch": "scripts/bump-semver.sh patch",
     "version:minor": "scripts/bump-semver.sh minor",
     "version:major": "scripts/bump-semver.sh major"
