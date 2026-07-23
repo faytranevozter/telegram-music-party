@@ -62,6 +62,9 @@ for pkg in "$root"/apps/*/package.json "$root"/packages/*/package.json; do
   set_package_version "$pkg"
 done
 
+# Extension package version shown in Chrome/Firefox
+set_package_version "$root/apps/extension/public/manifest.json"
+
 echo "VERSION=${next}"
 echo "Next: commit, then tag and push:"
 echo "  git tag \"v${next}\" && git push origin \"v${next}\""

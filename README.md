@@ -40,7 +40,7 @@ A Telegram bot that allows users to play music from different sources like Spoti
 
 ## Versioning & release
 
-Semver lives in `VERSION` (source of truth) and is mirrored in root + workspace `package.json` files.
+Semver lives in `VERSION` (source of truth) and is mirrored in root + workspace `package.json` files and `apps/extension/public/manifest.json`.
 
 ### Bump
 
