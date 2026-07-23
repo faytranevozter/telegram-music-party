@@ -13,6 +13,10 @@ import {
     prev,
     Queue,
     resume,
+    startContinueWatchingWatcher,
+    startIdleKeepAlive,
+    stopContinueWatchingWatcher,
+    stopIdleKeepAlive,
     toggleMute,
     volumeDown,
     volumeUp,
@@ -239,6 +243,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // initialize socket connection
     const socket = io(partyURL);
 
+    // Prevent YT "Continue watching?" via window._lact (pear-desktop approach)
+    // and fall back to auto-clicking the dialog if it still appears.
+    startIdleKeepAlive();
+    startContinueWatchingWatcher();
+
     // create leave button
     createLeaveButton(socket, config);
 
@@ -264,6 +273,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // handle on leave
     socket.on("leave", async () => {
         hasSynced = false;
+        stopIdleKeepAlive();
+        stopContinueWatchingWatcher();
         // clear local storage
         localStorage.removeItem("roomId");
 

@@ -8,6 +8,19 @@ const lyricsButtonSelector =
 const lyricsContainerSelector =
     "#contents > ytmusic-description-shelf-renderer yt-formatted-string.non-expandable.description.style-scope.ytmusic-description-shelf-renderer";
 
+const LACT_REFRESH_MS = 15 * 60 * 1000;
+const DIALOG_DEBOUNCE_MS = 250;
+
+let intentionalPause = false;
+let lactTimer: ReturnType<typeof setInterval> | null = null;
+let dialogObserver: MutationObserver | null = null;
+let dialogDebounce: ReturnType<typeof setTimeout> | null = null;
+
+const DIALOG_TEXT =
+    /continue watching|video paused|still watching|are you (still )?there|are you there/i;
+const CONFIRM_LABEL = /continue|yes|ok|resume|watch/i;
+const REJECT_LABEL = /cancel|no|dismiss|close/i;
+
 export function getVideoId(): string | null {
     const u = document
         .querySelector('[class="ytp-title-link yt-uix-sessionlink"]')
@@ -47,18 +60,110 @@ export function getPlaybackState(): {
     };
 }
 
+function refreshLact() {
+    try {
+        (window as unknown as { _lact?: number })._lact = Date.now();
+    } catch {
+        // ignore
+    }
+}
+
+export function startIdleKeepAlive() {
+    if (lactTimer) return;
+    refreshLact();
+    lactTimer = setInterval(refreshLact, LACT_REFRESH_MS);
+}
+
+export function stopIdleKeepAlive() {
+    if (lactTimer) {
+        clearInterval(lactTimer);
+        lactTimer = null;
+    }
+}
+
+export function dismissContinueWatching(): boolean {
+    const root = document.querySelector("ytmusic-app") ?? document.body;
+    const dialogs = root.querySelectorAll(
+        "tp-yt-paper-dialog, yt-confirm-dialog-renderer, [role='dialog']",
+    );
+
+    for (const dialog of Array.from(dialogs)) {
+        const text = dialog.textContent || "";
+        if (!DIALOG_TEXT.test(text)) continue;
+
+        const buttons = dialog.querySelectorAll(
+            "button, tp-yt-paper-button, [role='button'], yt-button-renderer, tp-yt-paper-button",
+        );
+        for (const btn of Array.from(buttons)) {
+            const el = btn as HTMLElement;
+            const label = (
+                el.textContent ||
+                el.getAttribute("aria-label") ||
+                ""
+            ).trim();
+            if (!CONFIRM_LABEL.test(label) || REJECT_LABEL.test(label)) {
+                continue;
+            }
+            el.click();
+            console.log("[music-party] dismissed continue-watching dialog");
+            return true;
+        }
+    }
+    return false;
+}
+
+function maybeResumeAfterDismiss() {
+    if (intentionalPause) return;
+    const playback = getPlaybackState();
+    if (playback.state === "paused" && playback.el?.src) {
+        void playback.el.play().catch(() => undefined);
+    }
+}
+
+function onDialogMutations() {
+    if (dialogDebounce) clearTimeout(dialogDebounce);
+    dialogDebounce = setTimeout(() => {
+        if (dismissContinueWatching()) {
+            maybeResumeAfterDismiss();
+        }
+    }, DIALOG_DEBOUNCE_MS);
+}
+
+export function startContinueWatchingWatcher() {
+    if (dialogObserver) return;
+    const target = document.querySelector("ytmusic-app") ?? document.body;
+    dialogObserver = new MutationObserver(onDialogMutations);
+    dialogObserver.observe(target, {
+        childList: true,
+        subtree: true,
+    });
+    onDialogMutations();
+}
+
+export function stopContinueWatchingWatcher() {
+    if (dialogDebounce) {
+        clearTimeout(dialogDebounce);
+        dialogDebounce = null;
+    }
+    dialogObserver?.disconnect();
+    dialogObserver = null;
+}
+
 export function play(queue?: Queue) {
+    intentionalPause = false;
+    dismissContinueWatching();
     const playback = getPlaybackState();
     if (queue?.url && playback.state !== "playing") {
         window.location.href = `/watch?v=${queue.url}&qid=${queue.id}`;
     }
     if (playback.state === "paused") {
-        playback.el.play();
+        void playback.el.play().catch(() => undefined);
         return;
     }
 }
 
 export function pause() {
+    intentionalPause = true;
     const VIDEO_SELECTOR = "#movie_player > div.html5-video-container > video";
     const vid = document.querySelector(VIDEO_SELECTOR) as HTMLVideoElement;
     if (vid) {
@@ -133,6 +238,8 @@ export function lyrics() {
 }
 
 export function next(queue?: Queue) {
+    intentionalPause = false;
+    dismissContinueWatching();
     if (queue?.url) {
         window.location.href = `/watch?v=${queue.url}&qid=${queue.id}`;
     }
@@ -147,6 +254,8 @@ export function next(queue?: Queue) {
 }
 
 export function prev() {
+    intentionalPause = false;
+    dismissContinueWatching();
     const PREV_SELECTOR = ".previous-button";
 
     const el = document.querySelector(PREV_SELECTOR) as HTMLButtonElement;
@@ -157,11 +266,26 @@ export function prev() {
 }
 
 export function resume() {
-    const VIDEO_SELECTOR = "play-pause-button";
-
-    const el = document.querySelector(VIDEO_SELECTOR) as HTMLButtonElement;
+    intentionalPause = false;
+    dismissContinueWatching();
+    const el =
+        (document.querySelector(
+            "#play-pause-button",
+        ) as HTMLButtonElement | null) ||
+        (document.querySelector(
+            ".play-pause-button",
+        ) as HTMLButtonElement | null) ||
+        (document.querySelector(
+            "tp-yt-paper-icon-button.play-pause-button",
+        ) as HTMLButtonElement | null);
 
     if (el) {
         el.click();
+        return;
+    }
+
+    const playback = getPlaybackState();
+    if (playback.state === "paused" && playback.el?.src) {
+        void playback.el.play().catch(() => undefined);
     }
 }
