@@ -153,6 +153,29 @@ export class PlaybackTelegramController {
         );
     }
 
+    private isMessageNotModifiedError(error: unknown) {
+        const description =
+            error && typeof error === 'object' && 'response' in error
+                ? String(
+                      (error as { response?: { description?: string } })
+                          .response?.description ?? '',
+                  )
+                : error instanceof Error
+                  ? error.message
+                  : '';
+        return description.includes('message is not modified');
+    }
+
+    /** Run a Telegram edit; ignore "message is not modified" (idempotent retries). */
+    private async safeEdit(fn: () => Promise<unknown>) {
+        try {
+            await fn();
+        } catch (error) {
+            if (this.isMessageNotModifiedError(error)) return;
+            throw error;
+        }
+    }
+
     private getLocalDateKey() {
         const now = new Date();
         const year = now.getFullYear();
@@ -216,12 +239,12 @@ export class PlaybackTelegramController {
     private formatPlayNextLabel(
         feature: Feature | null,
         remaining: number | null,
-    ) {
-        if (!feature?.playNextCommand) return '⏭ Play Next';
-        if (remaining === null) return '⏭ Play Next';
+    ): string | null {
+        if (!feature?.playNextCommand) return null;
+        if (remaining === null) return 'Play Next';
         return remaining <= 0
-            ? '⏭ Play Next (0 left)'
-            : `⏭ Play Next (${remaining} left)`;
+            ? 'Play Next (0 left)'
+            : `Play Next (${remaining} left)`;
     }
 
     private formatConfigLine(feature: Feature, key: ConfigKey) {
@@ -309,23 +332,43 @@ export class PlaybackTelegramController {
     }
 
     private buildSongKeyboard(
-        playNextLabel: string,
+        playNextLabel: string | null,
         senderID: number,
         videoId: string,
     ) {
+        const actionRow = [
+            ...(playNextLabel
+                ? [
+                      Markup.button.callback(
+                          playNextLabel,
+                          `playnext:${senderID}:${videoId}`,
+                      ),
+                  ]
+                : []),
+            Markup.button.callback(
+                'Add to Queue',
+                `queue:${senderID}:${videoId}`,
+            ),
+        ];
         return Markup.inlineKeyboard([
-            [
-                Markup.button.callback(
-                    playNextLabel,
-                    `playnext:${senderID}:${videoId}`,
-                ),
-                Markup.button.callback(
-                    'Add to Queue',
-                    `queue:${senderID}:${videoId}`,
-                ),
-            ],
+            actionRow,
             [Markup.button.callback('Cancel', `cancel:${senderID}`)],
         ]);
+    }
+
+    private async resolvePlayNextLabel(
+        chatId: string,
+        threadId: number | null,
+        userId: number,
+    ): Promise<string | null> {
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        // Hide until we know the room has Play Next enabled.
+        if (!room?.Feature) return null;
+        const remaining = await this.getPlayNextRemaining(room, userId);
+        return this.formatPlayNextLabel(room.Feature, remaining);
     }
 
     private buildNumberKeyboard(key: ConfigKey) {
@@ -373,10 +416,13 @@ export class PlaybackTelegramController {
             threadId,
         );
         if (!room?.Feature) return;
-        await ctx.editMessageText(this.buildConfigText(room.Feature), {
-            parse_mode: 'HTML',
-            ...this.buildConfigKeyboard(room.Feature),
-        });
+        const feature = room.Feature;
+        await this.safeEdit(() =>
+            ctx.editMessageText(this.buildConfigText(feature), {
+                parse_mode: 'HTML',
+                ...this.buildConfigKeyboard(feature),
+            }),
+        );
     }
 
     @Start()
@@ -567,7 +613,9 @@ export class PlaybackTelegramController {
         // emit leave
         this.gateway.leave(room.id);
 
-        await ctx.editMessageText(`You've exited the room. Bye for now! ✌️`);
+        await this.safeEdit(() =>
+            ctx.editMessageText(`You've exited the room. Bye for now! ✌️`),
+        );
     }
 
     @Command('play')
@@ -1152,18 +1200,20 @@ export class PlaybackTelegramController {
 
         if (action === 'number' && field.type === 'number') {
             await ctx.answerCbQuery(`Choose ${field.label}`);
-            await ctx.editMessageText(
-                [
-                    `⚙️ ${htmlBold(field.label)}`,
-                    '',
-                    escapeHtml(field.help),
-                    '',
-                    htmlItalic('Choose a preset or tap Custom.'),
-                ].join('\n'),
-                {
-                    parse_mode: 'HTML',
-                    ...this.buildNumberKeyboard(key),
-                },
+            await this.safeEdit(() =>
+                ctx.editMessageText(
+                    [
+                        `⚙️ ${htmlBold(field.label)}`,
+                        '',
+                        escapeHtml(field.help),
+                        '',
+                        htmlItalic('Choose a preset or tap Custom.'),
+                    ].join('\n'),
+                    {
+                        parse_mode: 'HTML',
+                        ...this.buildNumberKeyboard(key),
+                    },
+                ),
             );
             return;
         }
@@ -1268,6 +1318,20 @@ export class PlaybackTelegramController {
 
             const senderID = ctx.from.id;
 
+            // Default: no Play Next button. Show only when last known room has it enabled.
+            // chosen_inline_result / via_bot can add the button once the room is known.
+            let playNextLabel: string | null = null;
+            const userLoc = await this.cacheManager.get<InlineChatLocation>(
+                `user-loc:${senderID}`,
+            );
+            if (userLoc?.chatId) {
+                playNextLabel = await this.resolvePlayNextLabel(
+                    userLoc.chatId,
+                    userLoc.threadId,
+                    senderID,
+                );
+            }
+
             const cacheExpireTime = 10 * 60 * 1000; // 10 minutes
 
             const videoIds: string[] = [];
@@ -1307,7 +1371,7 @@ export class PlaybackTelegramController {
                                 message_text: `${row.name} by ${row.artist.name}`,
                             },
                             ...this.buildSongKeyboard(
-                                '⏭ Play Next',
+                                playNextLabel,
                                 senderID,
                                 row.videoId,
                             ),
@@ -1338,11 +1402,13 @@ export class PlaybackTelegramController {
         const cacheKey = `songs:${inlineQueryID}`;
         const cachedSongs = await this.cacheManager.get<Song[]>(cacheKey);
         if (!cachedSongs) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                inline_message_id,
-                `🔗 This link has expired. Please try generating a new one.`,
+            await this.safeEdit(() =>
+                ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inline_message_id,
+                    `🔗 This link has expired. Please try generating a new one.`,
+                ),
             );
             return;
         }
@@ -1350,11 +1416,13 @@ export class PlaybackTelegramController {
         // get the song detail
         const song = cachedSongs.find((row) => row.videoId === videoId);
         if (!song) {
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                inline_message_id,
-                `⚠️ Something went wrong with the link. Please try again or request a new one.`,
+            await this.safeEdit(() =>
+                ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inline_message_id,
+                    `⚠️ Something went wrong with the link. Please try again or request a new one.`,
+                ),
             );
             return;
         }
@@ -1393,30 +1461,31 @@ export class PlaybackTelegramController {
                     SONG_CACHE_TTL,
                 );
 
-                const room = await this.playbackService.getRoomByChatId(
-                    recent.chatId,
-                    recent.threadId,
-                );
-                if (room?.Feature && userId) {
-                    const remaining = await this.getPlayNextRemaining(
-                        room,
+                if (userId) {
+                    const label = await this.resolvePlayNextLabel(
+                        recent.chatId,
+                        recent.threadId,
                         userId,
                     );
-                    const label = this.formatPlayNextLabel(
-                        room.Feature,
-                        remaining,
-                    );
-                    await this.cacheManager.set(
-                        `playnext-label:${inline_message_id}`,
-                        label,
-                        SONG_CACHE_TTL,
-                    );
-                    await ctx.telegram.editMessageReplyMarkup(
-                        undefined,
-                        undefined,
-                        inline_message_id,
-                        this.buildSongKeyboard(label, userId, videoId)
-                            .reply_markup,
+                    if (label) {
+                        await this.cacheManager.set(
+                            `playnext-label:${inline_message_id}`,
+                            label,
+                            SONG_CACHE_TTL,
+                        );
+                    } else {
+                        await this.cacheManager.delete(
+                            `playnext-label:${inline_message_id}`,
+                        );
+                    }
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageReplyMarkup(
+                            undefined,
+                            undefined,
+                            inline_message_id,
+                            this.buildSongKeyboard(label, userId, videoId)
+                                .reply_markup,
+                        ),
                     );
                 }
             }
@@ -1518,6 +1587,36 @@ export class PlaybackTelegramController {
                         await this.cacheManager.delete(
                             `pending-inline:${userId}`,
                         );
+
+                        // Hide or refresh Play Next once the room is known.
+                        const label = await this.resolvePlayNextLabel(
+                            chatId,
+                            threadId,
+                            userId,
+                        );
+                        if (label) {
+                            await this.cacheManager.set(
+                                `playnext-label:${pending.inline_message_id}`,
+                                label,
+                                SONG_CACHE_TTL,
+                            );
+                        } else {
+                            await this.cacheManager.delete(
+                                `playnext-label:${pending.inline_message_id}`,
+                            );
+                        }
+                        await this.safeEdit(() =>
+                            ctx.telegram.editMessageReplyMarkup(
+                                undefined,
+                                undefined,
+                                pending.inline_message_id,
+                                this.buildSongKeyboard(
+                                    label,
+                                    userId,
+                                    pending.videoId,
+                                ).reply_markup,
+                            ),
+                        );
                     }
                 }
             }
@@ -1552,11 +1651,13 @@ export class PlaybackTelegramController {
                 threadId,
             );
             if (!room) {
-                await ctx.telegram.editMessageText(
-                    undefined,
-                    undefined,
-                    inlineMessageId,
-                    `🚫 No party here—Music Party isn't available in this chat`,
+                await this.safeEdit(() =>
+                    ctx.telegram.editMessageText(
+                        undefined,
+                        undefined,
+                        inlineMessageId,
+                        `🚫 No party here—Music Party isn't available in this chat`,
+                    ),
                 );
                 return;
             }
@@ -1576,28 +1677,32 @@ export class PlaybackTelegramController {
                 if (await this.cacheManager.get(doneKey)) return;
                 if (queues.find((q) => q.url === videoId)) return;
 
-                await ctx.telegram.editMessageText(
-                    undefined,
-                    undefined,
-                    inlineMessageId,
-                    `🔗 This link has expired. Please try generating a new one.`,
-                    {
-                        parse_mode: 'HTML',
-                    },
+                await this.safeEdit(() =>
+                    ctx.telegram.editMessageText(
+                        undefined,
+                        undefined,
+                        inlineMessageId,
+                        `🔗 This link has expired. Please try generating a new one.`,
+                        {
+                            parse_mode: 'HTML',
+                        },
+                    ),
                 );
                 return;
             }
 
             if (queues.find((q) => q.url === videoId)) {
                 await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-                await ctx.telegram.editMessageText(
-                    undefined,
-                    undefined,
-                    inlineMessageId,
-                    `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
-                    {
-                        parse_mode: 'HTML',
-                    },
+                await this.safeEdit(() =>
+                    ctx.telegram.editMessageText(
+                        undefined,
+                        undefined,
+                        inlineMessageId,
+                        `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
+                        {
+                            parse_mode: 'HTML',
+                        },
+                    ),
                 );
                 return;
             }
@@ -1617,22 +1722,24 @@ export class PlaybackTelegramController {
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
             await ctx.answerCbQuery('Added to Play Next');
 
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                inlineMessageId,
-                `↩️ ${songCombined
-                    .split(' - ')
-                    .map((v, k) => {
-                        if (k === 0) {
-                            return `<i>${v}</i>`;
-                        }
-                        return v;
-                    })
-                    .join(' - ')} added to the queue.`,
-                {
-                    parse_mode: 'HTML',
-                },
+            await this.safeEdit(() =>
+                ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `↩️ ${songCombined
+                        .split(' - ')
+                        .map((v, k) => {
+                            if (k === 0) {
+                                return `<i>${v}</i>`;
+                            }
+                            return v;
+                        })
+                        .join(' - ')} added to the queue.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                ),
             );
 
             await this.cacheManager.delete(cacheKey);
@@ -1669,11 +1776,13 @@ export class PlaybackTelegramController {
                 threadId,
             );
             if (!room) {
-                await ctx.telegram.editMessageText(
-                    undefined,
-                    undefined,
-                    inlineMessageId,
-                    `🚫 No party here—Music Party isn't available in this chat`,
+                await this.safeEdit(() =>
+                    ctx.telegram.editMessageText(
+                        undefined,
+                        undefined,
+                        inlineMessageId,
+                        `🚫 No party here—Music Party isn't available in this chat`,
+                    ),
                 );
                 return;
             }
@@ -1697,14 +1806,16 @@ export class PlaybackTelegramController {
                 if (await this.cacheManager.get(doneKey)) return;
                 if (queues.find((q) => q.url === videoId)) return;
 
-                await ctx.telegram.editMessageText(
-                    undefined,
-                    undefined,
-                    inlineMessageId,
-                    `🔗 This link has expired. Please try generating a new one.`,
-                    {
-                        parse_mode: 'HTML',
-                    },
+                await this.safeEdit(() =>
+                    ctx.telegram.editMessageText(
+                        undefined,
+                        undefined,
+                        inlineMessageId,
+                        `🔗 This link has expired. Please try generating a new one.`,
+                        {
+                            parse_mode: 'HTML',
+                        },
+                    ),
                 );
                 return;
             }
@@ -1742,22 +1853,24 @@ export class PlaybackTelegramController {
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
             await ctx.answerCbQuery('Added to Play Next');
 
-            await ctx.telegram.editMessageText(
-                undefined,
-                undefined,
-                inlineMessageId,
-                `⏭️ ${songCombined
-                    .split(' - ')
-                    .map((v, k) => {
-                        if (k === 0) {
-                            return `<i>${v}</i>`;
-                        }
-                        return v;
-                    })
-                    .join(' - ')} will play next.`,
-                {
-                    parse_mode: 'HTML',
-                },
+            await this.safeEdit(() =>
+                ctx.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    inlineMessageId,
+                    `⏭️ ${songCombined
+                        .split(' - ')
+                        .map((v, k) => {
+                            if (k === 0) {
+                                return `<i>${v}</i>`;
+                            }
+                            return v;
+                        })
+                        .join(' - ')} will play next.`,
+                    {
+                        parse_mode: 'HTML',
+                    },
+                ),
             );
 
             await this.cacheManager.delete(cacheKey);
@@ -1869,8 +1982,10 @@ export class PlaybackTelegramController {
             await ctx.answerCbQuery(
                 'Open the topic and run /queue once, then try again',
             );
-            await ctx.editMessageText(
-                `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+            await this.safeEdit(() =>
+                ctx.editMessageText(
+                    `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+                ),
             );
             return;
         }
@@ -1953,8 +2068,10 @@ export class PlaybackTelegramController {
             await ctx.answerCbQuery(
                 'Open the topic and run /queue once, then try again',
             );
-            await ctx.editMessageText(
-                `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+            await this.safeEdit(() =>
+                ctx.editMessageText(
+                    `🚫 Could not detect this topic. Run /queue (or any command) in the topic, then add the song again.`,
+                ),
             );
             return;
         }
@@ -1973,7 +2090,7 @@ export class PlaybackTelegramController {
                 ],
             });
         } catch {
-            // markup may already be verifying; continue adding
+            // Markup may already be verifying or message gone; still add to queue.
         }
 
         await this.completeAddToQueue(ctx, {
@@ -2002,7 +2119,7 @@ export class PlaybackTelegramController {
         }
 
         await ctx.answerCbQuery('Canceling...');
-        await ctx.editMessageText('❌ Canceled.');
+        await this.safeEdit(() => ctx.editMessageText('❌ Canceled.'));
     }
 
     @Action(/verify:(.*)/)
