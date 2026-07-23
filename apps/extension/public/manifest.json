@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "YouTube Music Party",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "description": "Control YouTube Music Party sessions from a popup: status, now playing, queue, and playback.",
     "permissions": ["activeTab", "scripting", "tabs", "storage"],
     "host_permissions": [
