@@ -27,8 +27,7 @@ async function bootstrap() {
         { command: 'devices', description: 'List all device joined' },
         { command: 'register', description: 'Register chat to party' },
         { command: 'unregister', description: 'Leave from party' },
-        { command: 'set', description: 'Set party config' },
-        { command: 'config', description: 'Get party config' },
+        { command: 'config', description: 'View & edit party config' },
     ]);
 
     await app.listen(process.env.PORT ?? 3000, () => {

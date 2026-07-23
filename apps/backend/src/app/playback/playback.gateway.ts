@@ -93,6 +93,27 @@ export class PlaybackGateway {
             return;
         }
 
+        // Only one active device per room: kick everyone else first
+        const removed = await this.playbackService.removeOtherDevices(
+            room.id,
+            data.fingerprint,
+        );
+
+        const socketsInRoom = await this.wss.in(room.id).fetchSockets();
+        for (const other of socketsInRoom) {
+            if (other.id === socket.id) continue;
+            other.emit('leave');
+            void other.leave(room.id);
+        }
+
+        for (const old of removed) {
+            await this.playbackService.sendMessage(
+                room.chatId,
+                room.threadId,
+                `${old.name} disconnected (replaced by a new device)`,
+            );
+        }
+
         // check device is already joined
         const device = await this.playbackService.getRoomDevice(
             room.id,

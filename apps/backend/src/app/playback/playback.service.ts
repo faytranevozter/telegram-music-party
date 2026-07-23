@@ -144,6 +144,17 @@ export class PlaybackService {
         });
     }
 
+    async getRoomDevices(roomId: string) {
+        return this.prisma.device.findMany({
+            where: {
+                roomId,
+            },
+            orderBy: {
+                createdAt: 'asc',
+            },
+        });
+    }
+
     async addDevice(roomId: string, fingerprint: string, name: string) {
         await this.prisma.device.create({
             data: {
@@ -152,6 +163,33 @@ export class PlaybackService {
                 fingerprint,
             },
         });
+    }
+
+    /** Keep at most one device per room (the given fingerprint). */
+    async removeOtherDevices(roomId: string, keepFingerprint: string) {
+        const removed = await this.prisma.device.findMany({
+            where: {
+                roomId,
+                NOT: {
+                    fingerprint: keepFingerprint,
+                },
+            },
+        });
+
+        if (removed.length === 0) {
+            return removed;
+        }
+
+        await this.prisma.device.deleteMany({
+            where: {
+                roomId,
+                NOT: {
+                    fingerprint: keepFingerprint,
+                },
+            },
+        });
+
+        return removed;
     }
 
     async getRoomByChatId(chatId: string, threadId: number | null = null) {

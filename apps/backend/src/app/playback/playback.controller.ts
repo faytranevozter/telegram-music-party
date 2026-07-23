@@ -928,9 +928,9 @@ export class PlaybackTelegramController {
                 `🖥️ ${htmlBold('Connected Devices')}`,
                 htmlItalic(`${room.Devices.length} device(s)`),
                 '',
-                ...room.Devices.map((d, i) =>
+                room.Devices.map((d, i) =>
                     [
-                        `${htmlBold(`${i + 1}. ${d.name}`)}`,
+                        htmlBold(`${i + 1}. ${d.name}`),
                         `ID: ${htmlCode(d.fingerprint)}`,
                         `Joined: ${escapeHtml(formatDateTime(d.createdAt))}`,
                     ].join('\n'),
@@ -1050,107 +1050,6 @@ export class PlaybackTelegramController {
             parse_mode: 'HTML',
             ...this.buildConfigKeyboard(feature),
         });
-    }
-
-    @Command('set')
-    async setFeature(
-        @Ctx()
-        ctx: Context & {
-            message: { text: string };
-        },
-    ) {
-        const chatId = ctx.chat?.id.toString() || '';
-        const threadId = getThreadId(ctx);
-        if (!chatId) {
-            await ctx.reply('No chat id');
-            return;
-        }
-
-        const room = await this.playbackService.getRoomByChatId(
-            chatId,
-            threadId,
-        );
-        if (!room) {
-            await ctx.reply('No room found');
-            return;
-        }
-
-        // only admin can do this
-        if (ctx.chat?.type !== 'private') {
-            // only admins can register & unregister
-            const userId = ctx.from?.id || 0;
-            const chatMember = await ctx.getChatMember(userId);
-            const isAdmin = ['administrator', 'creator'].includes(
-                chatMember?.status,
-            );
-            if (!isAdmin) {
-                await ctx.reply('⚠️ This feature is available for admin only.');
-                return;
-            }
-        }
-
-        const args = ctx.message.text.split(' ').slice(1);
-
-        if (args.length === 0) {
-            if (!room.Feature) {
-                await ctx.reply('No feature found');
-                return;
-            }
-            await ctx.reply(this.buildConfigText(room.Feature), {
-                parse_mode: 'HTML',
-                ...this.buildConfigKeyboard(room.Feature),
-            });
-            return;
-        }
-
-        const command = args[0] as keyof typeof CONFIG_FIELDS;
-        const value = args[1];
-        const field = CONFIG_FIELDS[command];
-
-        if (!field) {
-            await ctx.reply(
-                [
-                    '⚠️ Unknown feature key.',
-                    '',
-                    'Use /set without arguments to see the list.',
-                ].join('\n'),
-            );
-            return;
-        }
-
-        if (args.length < 2) {
-            await ctx.reply(
-                [
-                    `⚠️ Missing value for ${field.label}.`,
-                    `Usage: /set ${command} ${field.type === 'boolean' ? 'true|false' : field.min === 0 ? '0 or greater' : 'number'}`,
-                ].join('\n'),
-            );
-            return;
-        }
-
-        let featureValue: boolean | number = false;
-
-        if (field.type === 'number') {
-            const errMsg = validateConfigNumber(value, field.min);
-            if (errMsg !== '') {
-                await ctx.reply(errMsg);
-                return;
-            }
-            featureValue = parseInt(value);
-        } else {
-            if (value !== 'true' && value !== 'false') {
-                await ctx.reply('⚠️ Boolean values must be true or false.');
-                return;
-            }
-            featureValue = value === 'true';
-        }
-
-        await this.playbackService.setFeature(room.id, command, featureValue);
-
-        await ctx.reply(
-            `✅ ${htmlBold(field.label)} set to ${htmlCode(String(featureValue))}`,
-            { parse_mode: 'HTML' },
-        );
     }
 
     @Action(/config:(.*)/)
@@ -1280,23 +1179,48 @@ export class PlaybackTelegramController {
                 : `on · ${room.Feature.dailyPlayNextLimit}/day`
             : 'off';
 
-        await ctx.reply(
-            [
-                `🏠 ${htmlBold('Room Info')}`,
-                '',
-                `Room  ${htmlCode(room.id)}`,
-                `Chat  ${htmlCode(room.chatId)}`,
-                room.threadId != null
-                    ? `Topic ${htmlCode(String(room.threadId))}`
-                    : null,
-                `Queue ${htmlBold(String(queues.length))} song(s)`,
-                `Devices ${htmlBold(String(room.Devices.length))}`,
-                `Play Next ${escapeHtml(playNext)}`,
-                `Created ${escapeHtml(formatDateTime(room.createdAt))}`,
-            ]
-                .filter(Boolean)
-                .join('\n'),
-            { parse_mode: 'HTML' },
+        const rows: Array<[string, string]> = [
+            ['Room', room.id],
+            ['Chat', room.chatId],
+        ];
+        if (room.threadId != null) {
+            rows.push(['Topic', String(room.threadId)]);
+        }
+        rows.push(
+            ['Queue', `${queues.length} song(s)`],
+            ['Devices', String(room.Devices.length)],
+            ['Play Next', playNext],
+            ['Created', formatDateTime(room.createdAt)],
+        );
+
+        // Bot API 10.1+ rich HTML table (native client table UI).
+        const tableRows = rows
+            .map(
+                ([label, value]) =>
+                    `<tr><td>${escapeHtml(label)}</td><td><code>${escapeHtml(value)}</code></td></tr>`,
+            )
+            .join('');
+        const html = [
+            '<h2>🏠 Room Info</h2>',
+            `<table bordered striped><tr><th>Field</th><th>Value</th></tr>${tableRows}</table>`,
+        ].join('');
+
+        const payload: Record<string, unknown> = {
+            chat_id: chatId,
+            rich_message: {
+                html,
+                skip_entity_detection: true,
+            },
+        };
+        if (threadId != null) {
+            payload.message_thread_id = threadId;
+        }
+
+        // telegraf types do not include sendRichMessage yet
+        await ctx.telegram.callApi(
+            // @ts-expect-error sendRichMessage not in telegraf types yet
+            'sendRichMessage',
+            payload,
         );
     }
 
@@ -1744,7 +1668,12 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(roomId, videoId, 'end', songCombined);
+            this.gateway.addToQueueCommand(
+                roomId,
+                videoId,
+                'end',
+                songCombined,
+            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }
