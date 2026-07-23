@@ -1744,7 +1744,7 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(roomId, videoId);
+            this.gateway.addToQueueCommand(roomId, videoId, 'end', songCombined);
         } finally {
             await this.cacheManager.delete(lockKey);
         }
@@ -1875,7 +1875,12 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(roomId, videoId, 'next');
+            this.gateway.addToQueueCommand(
+                roomId,
+                videoId,
+                'next',
+                songCombined,
+            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }

@@ -1,20 +1,29 @@
 {
     "manifest_version": 3,
     "name": "YouTube Music Party",
-    "version": "1.6.2",
-    "description": "Control YouTube playback from a popup or keyboard shortcuts.",
+    "version": "1.7.0",
+    "description": "Control YouTube Music Party sessions from a popup: status, now playing, queue, and playback.",
     "permissions": ["activeTab", "scripting", "tabs", "storage"],
-    "host_permissions": ["https://music.youtube.com/*"],
+    "host_permissions": [
+        "https://music.youtube.com/*",
+        "https://api.github.com/*",
+        "https://github.com/*"
+    ],
     "action": {
         "default_popup": "index.html"
     },
     "content_scripts": [
         {
-        
             "matches": ["https://music.youtube.com/*"],
             "js": ["content.js"],
             "run_at": "document_start",
             "world": "MAIN"
+        },
+        {
+            "matches": ["https://music.youtube.com/*"],
+            "js": ["content-bridge.js"],
+            "run_at": "document_start",
+            "world": "ISOLATED"
         }
     ],
     "browser_specific_settings": {

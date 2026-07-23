@@ -1,11 +1,11 @@
 {
   "name": "extension",
   "private": true,
-  "version": "1.6.2",
+  "version": "1.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --config vite.config.lib.ts",
+    "build": "tsc -b && vite build && vite build --config vite.config.lib.ts && vite build --config vite.config.bridge.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

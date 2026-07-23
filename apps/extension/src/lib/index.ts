@@ -22,6 +22,12 @@ import {
     volumeUp,
 } from "./playback";
 import { createJoinButton, createLeaveButton, getDeviceId } from "./browser";
+import {
+    publishStatus,
+    setBridgeSession,
+    startMainBridge,
+    startPlaybackStatusWatchers,
+} from "./bridge-main";
 
 Object.defineProperty(window, "onbeforeunload", {
     get: () => null,
@@ -220,6 +226,8 @@ const detectSongChange = (
     }
 };
 
+startMainBridge();
+
 document.addEventListener("DOMContentLoaded", async () => {
     // get current config
     const config = getConfig();
@@ -230,6 +238,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     let hasSynced = false;
 
     console.log("Current config:", config);
+
+    setBridgeSession({
+        roomId: config.roomId,
+        partyUrl: config.partyUrl,
+        queues: [],
+        joined: false,
+        socket: null,
+    });
+    startPlaybackStatusWatchers();
 
     // if roomId or partyURL doesnot exist
     if (!config.partyUrl || !config.roomId) {
@@ -242,6 +259,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // initialize socket connection
     const socket = io(partyURL);
+    setBridgeSession({
+        socket,
+        roomId: config.roomId,
+        partyUrl: config.partyUrl,
+        queues: [],
+        joined: false,
+    });
 
     // Prevent YT "Continue watching?" via window._lact (pear-desktop approach)
     // and fall back to auto-clicking the dialog if it still appears.
@@ -252,8 +276,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     createLeaveButton(socket, config);
 
     // handle incoming messages
-    socket.on("joined", async (data: Queue[]) => {
-        queues = data;
+    socket.on("joined", async (data: Array<Queue & { title?: string }>) => {
+        queues = data.map((item) => ({
+            id: item.id,
+            url: item.url,
+            title: item.title,
+        }));
+        setBridgeSession({ queues, joined: true });
         const playback = getPlaybackState();
         const isColdStart = !hasSynced && playback.state === "standby";
 
@@ -267,12 +296,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 await addQueue(missing.join(","));
             }
             hasSynced = true;
+            publishStatus();
         }, 1000);
     });
 
     // handle on leave
     socket.on("leave", async () => {
         hasSynced = false;
+        setBridgeSession({ joined: false, queues: [], roomId: null });
         stopIdleKeepAlive();
         stopContinueWatchingWatcher();
         // clear local storage
@@ -285,6 +316,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // handle on connect (fire when user joined the room or refresh the page)
     socket.on("connect", async () => {
         console.log("Connected to WebSocket server with ID:", socket.id);
+        publishStatus();
 
         const joinPayload = await getDeviceInfo(config);
 
@@ -292,9 +324,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         socket.emit("join", joinPayload);
     });
 
-    // handle on disconnect
+    // handle on disconnect — keep hasRoom; only socket is offline
     socket.on("disconnect", () => {
         console.log("Disconnected from WebSocket server");
+        setBridgeSession({ joined: false });
+    });
+
+    socket.on("connect_error", () => {
+        publishStatus();
     });
 
     socket.on("play", () => {
@@ -310,10 +347,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 message: `🚫 No tracks in the queue right now.`,
                 roomId: ROOM_ID,
             });
+            publishStatus();
             return;
         }
 
         play();
+        publishStatus();
 
         socket.emit("notify", {
             message: `Now playing: ___"${playback.song}"___ by ${playback.artist} 🎧`,
@@ -323,6 +362,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on("pause", () => {
         pause();
+        publishStatus();
 
         const playback = getPlaybackState();
 
@@ -334,14 +374,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on("next", () => {
         next();
+        publishStatus();
     });
 
     socket.on("prev", () => {
         prev();
+        publishStatus();
     });
 
     socket.on("volumeUp", () => {
         const currentVolume = volumeUp();
+        publishStatus();
 
         // notify
         socket.emit("notify", {
@@ -352,6 +395,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on("volumeDown", () => {
         const currentVolume = volumeDown();
+        publishStatus();
 
         // notify
         socket.emit("notify", {
@@ -362,6 +406,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on("mute", () => {
         toggleMute();
+        publishStatus();
 
         socket.emit("notify", {
             message: "🤫 Shhh... we're on mute. Enjoy the silence (for now)!",
@@ -371,6 +416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     socket.on("unmute", () => {
         toggleMute();
+        publishStatus();
 
         socket.emit("notify", {
             message: "🎶 We're back! Audio unmuted—let the music play!",
@@ -392,6 +438,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // i dont know why this is needed but just in case
     socket.on("resume", () => {
         resume();
+        publishStatus();
     });
 
     socket.on(
@@ -399,23 +446,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         async ({
             videoId,
             position,
+            title,
         }: {
             videoId: string;
             position?: QueuePosition;
+            title?: string;
         }) => {
-            const playback = getPlaybackState();
-            console.log("addToQueue", videoId);
+            console.log("addToQueue", videoId, title);
 
+            const queueItem: Queue = {
+                id: crypto.randomUUID(),
+                url: videoId,
+                title,
+            };
+
+            if (position === "next") {
+                queues = [queueItem, ...queues.filter((q) => q.url !== videoId)];
+            } else if (!queues.some((q) => q.url === videoId)) {
+                queues = [...queues, queueItem];
+            } else {
+                queues = queues.map((q) =>
+                    q.url === videoId ? { ...q, title: title ?? q.title } : q,
+                );
+            }
+            setBridgeSession({ queues });
+
+            const playback = getPlaybackState();
             if (playback.state == "standby") {
-                const queue = {
-                    id: crypto.randomUUID(),
-                    url: videoId,
-                };
-                if (position === "next") {
-                    queues.unshift(queue);
-                    return;
-                }
-                queues.push(queue);
                 return;
             }
 
@@ -427,6 +484,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // detect song changes
     detectSongChange((playback, videoId) => {
+        if (videoId) {
+            queues = queues.filter((q) => q.url !== videoId);
+            setBridgeSession({ queues });
+        } else {
+            publishStatus();
+        }
+
         socket.emit("started", {
             roomId: ROOM_ID,
             videoId: videoId,

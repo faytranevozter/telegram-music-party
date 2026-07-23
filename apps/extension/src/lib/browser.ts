@@ -77,14 +77,12 @@ export function createLeaveButton(socket: Socket, config: Config) {
                 console.log("Leaving room...");
 
                 socket.emit("leave", {
-                    id: config.roomId,
+                    roomId: config.roomId,
                     fingerprint: config.fingerprint,
                 });
 
-                // remove from local storage
-                Object.keys(config).forEach((key) => {
-                    localStorage.removeItem(key);
-                });
+                localStorage.removeItem("roomId");
+                localStorage.removeItem("partyUrl");
 
                 // refresh the page
                 window.location.reload();
