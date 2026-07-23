@@ -1,0 +1,96 @@
+name: Extension Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-attach:
+    name: Build extension & attach to release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            REF="${{ github.ref_name }}"
+          else
+            REF="${{ github.event.release.tag_name }}"
+          fi
+          VERSION="${REF#v}"
+          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VERSION} (tag ${REF})"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync extension manifest version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MANIFEST="apps/extension/public/manifest.json"
+          tmp="$(mktemp)"
+          sed -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")/\\1${VERSION}\\2/" "$MANIFEST" >"$tmp"
+          mv "$tmp" "$MANIFEST"
+          echo "manifest.json version set to ${VERSION}"
+          cat "$MANIFEST"
+
+      - name: Test extension
+        run: pnpm --filter=extension test
+
+      - name: Build extension
+        run: pnpm --filter=extension build
+
+      - name: Package zip
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP_NAME="yt-music-party-extension-v${VERSION}.zip"
+          (
+            cd apps/extension/dist
+            zip -r "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
+          )
+          test -f "${ZIP_NAME}"
+          ls -la "${ZIP_NAME}"
+          unzip -l "${ZIP_NAME}"
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-music-party-extension-v${{ steps.version.outputs.version }}
+          path: yt-music-party-extension-v${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: yt-music-party-extension-v${{ steps.version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -66,9 +66,15 @@ git tag "v$(tr -d '[:space:]' < VERSION)"
 git push origin "v$(tr -d '[:space:]' < VERSION)"
 ```
 
-Pushing a `v*.*.*` tag runs **Docker Publish** and pushes to GHCR:
+Pushing a `v*.*.*` tag runs:
+
+1. **Docker Publish** → GHCR backend image  
+2. **Extension Release** → builds the browser extension zip and attaches it to the GitHub Release
 
 ```
 ghcr.io/faytranevozter/telegram-music-party:vX.Y.Z
 ghcr.io/faytranevozter/telegram-music-party:latest
+
+# Release asset
+yt-music-party-extension-vX.Y.Z.zip
 ```
