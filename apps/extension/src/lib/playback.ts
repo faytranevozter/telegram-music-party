@@ -8,18 +8,21 @@ const lyricsButtonSelector =
 const lyricsContainerSelector =
     "#contents > ytmusic-description-shelf-renderer yt-formatted-string.non-expandable.description.style-scope.ytmusic-description-shelf-renderer";
 
-const LACT_REFRESH_MS = 15 * 60 * 1000;
+// pear-desktop uses 15m; use 1m so background-tab timer throttling still keeps
+// window._lact fresh before YT's idle check (~hours, but throttling is harsh).
+const LACT_REFRESH_MS = 60 * 1000;
 const DIALOG_DEBOUNCE_MS = 250;
 
 let intentionalPause = false;
 let lactTimer: ReturnType<typeof setInterval> | null = null;
 let dialogObserver: MutationObserver | null = null;
 let dialogDebounce: ReturnType<typeof setTimeout> | null = null;
+let videoPlayBound = false;
 
 const DIALOG_TEXT =
     /continue watching|video paused|still watching|are you (still )?there|are you there/i;
-const CONFIRM_LABEL = /continue|yes|ok|resume|watch/i;
-const REJECT_LABEL = /cancel|no|dismiss|close/i;
+const CONFIRM_LABEL = /^(continue|yes|ok|okay|resume)$|continue watching/i;
+const REJECT_LABEL = /cancel|dismiss|close|\bno\b/i;
 
 export function getVideoId(): string | null {
     const u = document
@@ -68,10 +71,50 @@ function refreshLact() {
     }
 }
 
+function bindVideoPlayListener() {
+    if (videoPlayBound) return;
+    const video = document.querySelector(
+        "#movie_player > div.html5-video-container > video",
+    ) as HTMLVideoElement | null;
+    if (!video) return;
+    video.addEventListener("play", () => {
+        intentionalPause = false;
+    });
+    videoPlayBound = true;
+}
+
+function isVisible(el: Element): boolean {
+    const node = el as HTMLElement;
+    if (node.getAttribute("aria-hidden") === "true") return false;
+    if (node.hasAttribute("hidden")) return false;
+    const style = window.getComputedStyle(node);
+    if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.opacity === "0"
+    ) {
+        return false;
+    }
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
+function buttonLabel(el: Element): string {
+    const node = el as HTMLElement;
+    return (
+        node.getAttribute("aria-label") ||
+        node.textContent ||
+        ""
+    )
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 export function startIdleKeepAlive() {
     if (lactTimer) return;
     refreshLact();
     lactTimer = setInterval(refreshLact, LACT_REFRESH_MS);
+    bindVideoPlayListener();
 }
 
 export function stopIdleKeepAlive() {
@@ -82,29 +125,28 @@ export function stopIdleKeepAlive() {
 }
 
 export function dismissContinueWatching(): boolean {
+    bindVideoPlayListener();
     const root = document.querySelector("ytmusic-app") ?? document.body;
     const dialogs = root.querySelectorAll(
         "tp-yt-paper-dialog, yt-confirm-dialog-renderer, [role='dialog']",
     );
 
     for (const dialog of Array.from(dialogs)) {
+        if (!isVisible(dialog)) continue;
         const text = dialog.textContent || "";
         if (!DIALOG_TEXT.test(text)) continue;
 
         const buttons = dialog.querySelectorAll(
-            "button, tp-yt-paper-button, [role='button'], yt-button-renderer, tp-yt-paper-button",
+            "button, tp-yt-paper-button, [role='button'], yt-button-renderer",
         );
         for (const btn of Array.from(buttons)) {
-            const el = btn as HTMLElement;
-            const label = (
-                el.textContent ||
-                el.getAttribute("aria-label") ||
-                ""
-            ).trim();
+            if (!isVisible(btn)) continue;
+            const label = buttonLabel(btn);
+            if (!label) continue;
             if (!CONFIRM_LABEL.test(label) || REJECT_LABEL.test(label)) {
                 continue;
             }
-            el.click();
+            (btn as HTMLElement).click();
             console.log("[music-party] dismissed continue-watching dialog");
             return true;
         }
@@ -131,11 +173,14 @@ function onDialogMutations() {
 
 export function startContinueWatchingWatcher() {
     if (dialogObserver) return;
+    startIdleKeepAlive();
     const target = document.querySelector("ytmusic-app") ?? document.body;
     dialogObserver = new MutationObserver(onDialogMutations);
     dialogObserver.observe(target, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ["aria-hidden", "hidden", "style", "class"],
     });
     onDialogMutations();
 }
