@@ -112,7 +112,8 @@ function getMissingQueueIds(serverQueues: Queue[]): string[] {
 
 async function addQueue(videoIds: string, position: QueuePosition = "end") {
     if (videoIds.length < 1) return;
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // setTimeout (not rAF): background tabs suspend rAF until focused again
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const app = getAppInstance();
     const queue = getQueueInstance();
     const store = queue?.queue.store.store;
