@@ -4,6 +4,7 @@ import { detect } from "detect-browser";
 import axios from "axios";
 import { Config, DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
+    applyContinueWatchingSetting,
     getPlaybackState,
     getVideoId,
     lyrics,
@@ -13,8 +14,6 @@ import {
     prev,
     Queue,
     resume,
-    startContinueWatchingWatcher,
-    startIdleKeepAlive,
     stopContinueWatchingWatcher,
     stopIdleKeepAlive,
     toggleMute,
@@ -270,8 +269,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Prevent YT "Continue watching?" via window._lact (pear-desktop approach)
     // and fall back to auto-clicking the dialog if it still appears.
-    startIdleKeepAlive();
-    startContinueWatchingWatcher();
+    // Honors the persisted bypass setting (default: enabled).
+    applyContinueWatchingSetting();
 
     // create leave button
     createLeaveButton(socket, config);

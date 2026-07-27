@@ -32,12 +32,14 @@ export type SessionStatus = {
     partyUrl: string | null;
     playback: PlaybackInfo | null;
     queue: QueueItem[];
+    bypassContinueWatching: boolean;
 };
 
 export type BridgeRequest =
     | { type: "GET_STATUS" }
     | { type: "CONTROL"; action: ControlAction }
-    | { type: "LEAVE" };
+    | { type: "LEAVE" }
+    | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean };
 
 export type BridgeResponse =
     | { type: "STATUS"; status: SessionStatus }
