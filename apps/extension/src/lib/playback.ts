@@ -1,3 +1,5 @@
+import { isContinueWatchingBypassEnabled } from "../constants/config";
+
 export type Queue = { id: string; url: string; title?: string };
 
 const artistSelector =
@@ -115,6 +117,7 @@ function buttonLabel(el: Element): string {
 
 export function startIdleKeepAlive() {
     if (lactTimer) return;
+    if (!isContinueWatchingBypassEnabled()) return;
     refreshLact();
     lactTimer = setInterval(refreshLact, LACT_REFRESH_MS);
     bindVideoPlayListener();
@@ -128,6 +131,7 @@ export function stopIdleKeepAlive() {
 }
 
 export function dismissContinueWatching(): boolean {
+    if (!isContinueWatchingBypassEnabled()) return false;
     bindVideoPlayListener();
     const root = document.querySelector("ytmusic-app") ?? document.body;
     const dialogs = root.querySelectorAll(
@@ -176,6 +180,7 @@ function onDialogMutations() {
 
 export function startContinueWatchingWatcher() {
     if (dialogObserver) return;
+    if (!isContinueWatchingBypassEnabled()) return;
     startIdleKeepAlive();
     const target = document.querySelector("ytmusic-app") ?? document.body;
     dialogObserver = new MutationObserver(onDialogMutations);
@@ -195,6 +200,16 @@ export function stopContinueWatchingWatcher() {
     }
     dialogObserver?.disconnect();
     dialogObserver = null;
+}
+
+// Sync the whole bypass feature with the persisted setting (live, no reload)
+export function applyContinueWatchingSetting() {
+    if (isContinueWatchingBypassEnabled()) {
+        startContinueWatchingWatcher();
+    } else {
+        stopContinueWatchingWatcher();
+        stopIdleKeepAlive();
+    }
 }
 
 export function play(queue?: Queue) {

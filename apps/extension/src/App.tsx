@@ -6,6 +6,7 @@ import {
     Chip,
     Divider,
     Spinner,
+    Switch,
 } from "@heroui/react";
 import type {
     BridgeResponse,
@@ -30,6 +31,7 @@ const emptyStatus: SessionStatus = {
     partyUrl: null,
     playback: null,
     queue: [],
+    bypassContinueWatching: true,
 };
 
 async function findYoutubeMusicTab(): Promise<chrome.tabs.Tab | null> {
@@ -49,7 +51,8 @@ async function sendToTab(
     message:
         | { type: "GET_STATUS" }
         | { type: "CONTROL"; action: ControlAction }
-        | { type: "LEAVE" },
+        | { type: "LEAVE" }
+        | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean },
 ): Promise<BridgeResponse> {
     return chrome.tabs.sendMessage(tabId, message) as Promise<BridgeResponse>;
 }
@@ -259,6 +262,36 @@ function App() {
         }
     };
 
+    const setBypassContinueWatching = async (enabled: boolean) => {
+        if (!tabId || busy) return;
+        setBusy(true);
+        // optimistic; STATUS_PUSH confirms, revert on failure
+        setStatus((prev) => ({ ...prev, bypassContinueWatching: enabled }));
+        try {
+            const response = await sendToTab(tabId, {
+                type: "SET_CONTINUE_WATCHING_BYPASS",
+                enabled,
+            });
+            if (response.type === "ERROR") {
+                setError(response.message);
+                setStatus((prev) => ({
+                    ...prev,
+                    bypassContinueWatching: !enabled,
+                }));
+            } else {
+                setError(null);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Setting failed");
+            setStatus((prev) => ({
+                ...prev,
+                bypassContinueWatching: !enabled,
+            }));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const isPlaying = status.playback?.state === "playing";
     const controlsDisabled =
         (!status.connected && !status.hasRoom) ||
@@ -428,6 +461,31 @@ function App() {
                                 >
                                     {playChip.label}
                                 </Chip>
+                            </CardBody>
+                        </Card>
+
+                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                            <CardBody className="gap-1 py-3">
+                                <Switch
+                                    size="sm"
+                                    isSelected={
+                                        status.bypassContinueWatching
+                                    }
+                                    isDisabled={busy}
+                                    onValueChange={(enabled) => {
+                                        void setBypassContinueWatching(
+                                            enabled,
+                                        );
+                                    }}
+                                >
+                                    <span className="text-sm text-zinc-200">
+                                        Bypass "continue watching"
+                                    </span>
+                                </Switch>
+                                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                                    Auto-dismisses YouTube Music's idle dialog
+                                    and keeps the tab active.
+                                </p>
                             </CardBody>
                         </Card>
 

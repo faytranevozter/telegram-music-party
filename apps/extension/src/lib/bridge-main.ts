@@ -1,5 +1,9 @@
 import type { Socket } from "socket.io-client";
-import { getConfig } from "../constants/config";
+import {
+    getConfig,
+    isContinueWatchingBypassEnabled,
+    setContinueWatchingBypass,
+} from "../constants/config";
 import {
     BridgeRequestMessage,
     BridgeResponse,
@@ -11,6 +15,7 @@ import {
     YTMP_MAIN,
 } from "../shared/messages";
 import {
+    applyContinueWatchingSetting,
     getPlaybackState,
     next,
     pause,
@@ -70,6 +75,7 @@ export function buildStatus(): SessionStatus {
             url: item.url,
             title: item.title,
         })),
+        bypassContinueWatching: isContinueWatchingBypassEnabled(),
     };
 }
 
@@ -164,6 +170,11 @@ function handleRequest(request: BridgeRequestMessage): BridgeResponse {
                 return { type: "ERROR", message: "Not in a room" };
             }
             leaveRoom();
+            return { type: "OK" };
+        case "SET_CONTINUE_WATCHING_BYPASS":
+            setContinueWatchingBypass(request.enabled);
+            applyContinueWatchingSetting();
+            publishStatus();
             return { type: "OK" };
         default:
             return { type: "ERROR", message: "Unknown request" };

@@ -71,7 +71,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         !request ||
         (request.type !== "GET_STATUS" &&
             request.type !== "CONTROL" &&
-            request.type !== "LEAVE")
+            request.type !== "LEAVE" &&
+            request.type !== "SET_CONTINUE_WATCHING_BYPASS")
     ) {
         return false;
     }
