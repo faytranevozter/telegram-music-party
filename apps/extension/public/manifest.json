@@ -9,8 +9,20 @@
         "https://api.github.com/*",
         "https://github.com/*"
     ],
+    "icons": {
+        "16": "app-icon.png",
+        "32": "app-icon.png",
+        "48": "app-icon.png",
+        "128": "app-icon.png"
+    },
     "action": {
-        "default_popup": "index.html"
+        "default_popup": "index.html",
+        "default_icon": {
+            "16": "app-icon.png",
+            "32": "app-icon.png",
+            "48": "app-icon.png",
+            "128": "app-icon.png"
+        }
     },
     "content_scripts": [
         {

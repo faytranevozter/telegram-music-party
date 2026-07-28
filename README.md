@@ -1,149 +1,190 @@
-# Telegram Music Party
+<div align="center">
+  <img src="apps/extension/public/app-icon.png" alt="Telegram Music Party" width="128" height="128">
+  <h1>Telegram Music Party</h1>
+  <p>Control YouTube Music from Telegram.</p>
+</div>
 
-Control [YouTube Music](https://music.youtube.com) from a Telegram group. The bot queues songs and sends playback commands; a browser extension on YouTube Music receives them over Socket.IO and drives the player.
+Telegram Music Party connects a Telegram group to a YouTube Music tab. The bot manages rooms, queues, votes, and commands. The browser extension joins the room on `music.youtube.com` and drives playback over Socket.IO.
 
+```mermaid
+flowchart LR
+    TG[Telegram group] --> BE[NestJS backend]
+    BE --> IO[Socket.IO]
+    IO --> EXT[YouTube Music extension]
 ```
-Telegram group  →  NestJS backend  →  Socket.IO  →  Extension on music.youtube.com
-     /play, /queue, inline search…                    play / pause / queue / volume…
+
+## Install
+
+Download the latest extension zip from [GitHub Releases](https://github.com/faytranevozter/telegram-music-party/releases/latest).
+
+```txt
+yt-music-party-extension-vX.Y.Z.zip
 ```
+
+Load it in your browser:
+
+```txt
+Chrome  -> chrome://extensions -> Developer mode -> Load unpacked
+Firefox -> about:debugging -> This Firefox -> Load Temporary Add-on
+```
+
+Use the extracted extension folder, or build locally and load `apps/extension/dist`.
+
+## Quickstart
+
+Add the bot to a Telegram group.
+
+```txt
+@xmsc_bot
+```
+
+Register the group.
+
+```txt
+/register
+```
+
+Open YouTube Music and join the room.
+
+```txt
+music.youtube.com -> Join Room -> paste Room ID -> enter party server URL
+```
+
+Queue a song from Telegram.
+
+```txt
+@xmsc_bot never gonna give you up
+```
+
+Start playback.
+
+```txt
+/play
+```
+
+Only one device can be active in a room. Joining from another browser replaces the previous device.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/app-icon.png" alt="Telegram Music Party icon" width="96" height="96">
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot/ext-01.png" alt="Extension screenshot 1" width="360">
+  <img src="docs/images/screenshot/ext-02.png" alt="Extension screenshot 2" width="360">
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot/ss-01.jpg" alt="Screenshot 1" width="240">
+  <img src="docs/images/screenshot/ss-02.jpg" alt="Screenshot 2" width="240">
+  <img src="docs/images/screenshot/ss-03.jpg" alt="Screenshot 3" width="240">
+  <img src="docs/images/screenshot/ss-04.jpg" alt="Screenshot 4" width="240">
+  <img src="docs/images/screenshot/ss-05.jpg" alt="Screenshot 5" width="240">
+</p>
 
 ## Features
 
-- Room-based music parties (one active player device per room)
-- Inline song search and queue from Telegram
-- Playback controls: play, pause, next, prev, volume, mute, lyrics
-- Vote-to-skip (`/vote_next`)
-- Admin room config via `/config` (queue limits, who can skip, etc.)
-- Browser extension popup: session status, now playing, queue, remote controls, update check
+- Telegram-first YouTube Music control
+- Inline search and queue management
+- Play, pause, next, previous, volume, mute, and lyrics commands
+- Vote-to-skip with `/vote_next`
+- Admin room configuration with `/config`
+- Extension popup for status, now playing, queue, controls, leave, and update checks
+- One active player device per room
 
-## How to use
-
-### 1. Telegram
-
-1. Add [@xmsc_bot](https://t.me/xmsc_bot) to your group (or your self-hosted bot).
-2. Run `/register` — the bot replies with a **Room ID**.
-3. Keep the group/topic open for queue and status messages.
-
-### 2. Browser extension
-
-1. Install the latest release zip from  
-   [GitHub Releases](https://github.com/faytranevozter/telegram-music-party/releases/latest)  
-   (`yt-music-party-extension-vX.Y.Z.zip`).
-2. Chrome: open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the extracted folder.  
-   Firefox: load temporary add-on / install from AMO if published.
-3. Open [music.youtube.com](https://music.youtube.com) and sign in.
-4. In the left sidebar, click **Join Room**.
-5. Paste the Room ID from `/register`.
-6. Enter the party server URL (default `http://localhost:3000` for local dev; your production URL otherwise).
-
-Only **one device** can be connected to a room at a time. Joining from another browser replaces the previous device.
-
-### 3. Queue and play
-
-1. In the group, type `@xmsc_bot <song name>` (inline search).
-2. Choose **Add to queue** or **Play Next** (if enabled).
-3. Run `/play` to start (or control from the extension popup).
-
-### Extension popup
-
-Click the extension icon for:
-
-| State | What you see |
-|--------|----------------|
-| No YT Music tab | Button to open YouTube Music |
-| Not joined | Hint to use **Join Room** in the YT Music sidebar |
-| Server offline | “Server unreachable” (room is saved, socket down) |
-| Connected | Now playing, transport/volume controls, queue, leave |
-
-The popup can also **check for updates** against GitHub Releases and guide you through reloading the unpacked extension after downloading a new zip.
-
-## Bot commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Instructions |
-| `/register` | Link this chat/topic to a party room |
-| `/unregister` | Unlink room (admin) |
-| `/play` | Play / resume |
+| `/start` | Show instructions |
+| `/register` | Link the chat or topic to a room |
+| `/unregister` | Unlink the room |
+| `/play` | Play or resume |
 | `/pause` | Pause |
 | `/next` | Next track |
 | `/prev` | Previous track |
 | `/vote_next` | Vote to skip |
 | `/queue` | Show queue |
-| `/lyrics` | Lyrics for current track |
-| `/volume_up` / `/volume_down` | Volume |
-| `/mute` / `/unmute` | Mute |
-| `/info` | Room info (rich table) |
-| `/devices` | Connected device(s) |
-| `/config` | View & edit room settings (admin) |
+| `/lyrics` | Show lyrics for the current track |
+| `/volume_up` | Increase volume |
+| `/volume_down` | Decrease volume |
+| `/mute` | Mute |
+| `/unmute` | Unmute |
+| `/info` | Show room info |
+| `/devices` | Show connected devices |
+| `/config` | View and edit room settings |
 
-## Monorepo layout
+## Develop
 
-```
-apps/backend     NestJS + Telegraf bot + Socket.IO + Prisma
-apps/extension   Chrome/Firefox MV3 extension (popup + content scripts)
-packages/        reserved
-```
+Requirements:
 
-## Local development
-
-### Requirements
-
-- Node 22+, pnpm 10.6+
+- Node 22+
+- pnpm 10.6+
 - PostgreSQL
 - Redis
 
-### Setup
+Install dependencies.
 
 ```bash
 pnpm install
-
-# Backend env
-cp apps/backend/.env.example apps/backend/.env
-# Set TELEGRAM_BOT_TOKEN, DATABASE_URL (Postgres), REDIS_URL
-
-pnpm --filter=backend prisma generate
-pnpm --filter=backend prisma migrate dev
-
-pnpm dev   # turbo: backend + extension
 ```
 
-- Backend: `http://localhost:3000`
-- Extension: build with `pnpm --filter=extension build`, then load `apps/extension/dist` as unpacked.
+Configure the backend.
 
-### Useful commands
+```bash
+cp apps/backend/.env.example apps/backend/.env
+pnpm --filter=backend prisma generate
+pnpm --filter=backend prisma migrate dev
+```
+
+Run everything.
+
+```bash
+pnpm dev
+```
+
+Build the extension.
+
+```bash
+pnpm --filter=extension build
+```
+
+Load `apps/extension/dist` as an unpacked extension.
+
+## Scripts
 
 ```bash
 pnpm --filter=backend dev
 pnpm --filter=backend test
 pnpm --filter=backend lint
+pnpm --filter=backend build
 
 pnpm --filter=extension dev
-pnpm --filter=extension build
 pnpm --filter=extension test
 pnpm --filter=extension lint
+pnpm --filter=extension build
 ```
 
-## Technologies
+## Structure
 
-- NestJS, nestjs-telegraf, Socket.IO
-- Prisma + PostgreSQL, Redis (Keyv)
-- React, Vite, Tailwind, HeroUI (extension popup)
-- YouTube Music DOM control from the content script
+```txt
+apps/backend     NestJS, Telegraf, Socket.IO, Prisma, PostgreSQL, Redis
+apps/extension   React, Vite, Tailwind, HeroUI, MV3 content scripts
+packages         Shared packages placeholder
+```
 
-## Versioning & release
+## Release
 
-Semver lives in `VERSION` (source of truth) and is mirrored in root + workspace `package.json` files and `apps/extension/public/manifest.json`.
-
-### Bump
+Version is stored in `VERSION` and mirrored into package manifests and the extension manifest.
 
 ```bash
-pnpm version:patch   # 1.5.4 → 1.5.5
-pnpm version:minor   # 1.5.4 → 1.6.0
-pnpm version:major   # 1.5.4 → 2.0.0
+pnpm version:patch
+pnpm version:minor
+pnpm version:major
 ```
 
-Commit the bumped files, then publish:
+Publish a release tag.
 
 ```bash
 git checkout main && git pull
@@ -151,19 +192,14 @@ git tag "v$(tr -d '[:space:]' < VERSION)"
 git push origin "v$(tr -d '[:space:]' < VERSION)"
 ```
 
-Pushing a `v*.*.*` tag runs:
+Release assets:
 
-1. **Docker Publish** → GHCR backend image  
-2. **Extension Release** → builds the browser extension zip and attaches it to the GitHub Release
-
-```
+```txt
 ghcr.io/faytranevozter/telegram-music-party:vX.Y.Z
 ghcr.io/faytranevozter/telegram-music-party:latest
-
-# Release asset
 yt-music-party-extension-vX.Y.Z.zip
 ```
 
 ## License
 
-See [LICENSE.md](./LICENSE.md).
+[MIT](./LICENSE.md)
