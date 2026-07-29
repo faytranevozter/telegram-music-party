@@ -17,7 +17,6 @@
     "@tailwindcss/vite": "^4.0.14",
     "@thumbmarkjs/thumbmarkjs": "^0.19.1",
     "autoprefixer": "^10.4.21",
-    "axios": "^1.13.5",
     "detect-browser": "^5.3.0",
     "framer-motion": "^12.5.0",
     "peerjs": "^1.5.4",

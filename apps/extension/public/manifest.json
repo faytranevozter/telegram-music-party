@@ -3,14 +3,25 @@
     "name": "YouTube Music Party",
     "version": "1.7.3",
     "description": "Control YouTube Music Party sessions from a popup: status, now playing, queue, and playback.",
-    "permissions": ["activeTab", "scripting", "tabs", "storage"],
     "host_permissions": [
         "https://music.youtube.com/*",
         "https://api.github.com/*",
         "https://github.com/*"
     ],
+    "icons": {
+        "16": "app-icon.png",
+        "32": "app-icon.png",
+        "48": "app-icon.png",
+        "128": "app-icon.png"
+    },
     "action": {
-        "default_popup": "index.html"
+        "default_popup": "index.html",
+        "default_icon": {
+            "16": "app-icon.png",
+            "32": "app-icon.png",
+            "48": "app-icon.png",
+            "128": "app-icon.png"
+        }
     },
     "content_scripts": [
         {

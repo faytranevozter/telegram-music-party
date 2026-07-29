@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
 import { detect } from "detect-browser";
-import axios from "axios";
 import { Config, DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
@@ -160,32 +159,18 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
         });
 }
 
-const getDeviceInfo = async (config: Config) => {
-    console.log("Gathering device info...");
-
-    const ifconfig = await axios.get("https://ifconfig.me/all.json", {
-        headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-        },
-    });
-
-    // detect browser info
+const getDeviceInfo = (config: Config) => {
     const info = detect();
-
-    // get fingerprint
     const fingerprint = getDeviceId();
-
     const browser = [
         (info?.name?.slice(0, 1).toUpperCase() || "") +
             (info?.name?.slice(1) || ""),
-        info?.os, // Mac OS, Windows
-    ]; // [Chrome, Mac OS]
+        info?.os,
+    ];
 
     return {
         id: config.roomId || "",
         browser: browser.filter(Boolean).join(" ") || "",
-        ip: ifconfig.data.ip_addr || "",
         fingerprint,
     };
 };
@@ -285,9 +270,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         setBridgeSession({ queues, joined: true });
         const playback = getPlaybackState();
         const isColdStart = !hasSynced && playback.state === "standby";
+        const head = data[0];
+        const currentId = getVideoId();
 
-        if (isColdStart && data[0]) {
-            play(data[0]);
+        // Cold start with a waiting queue: navigate once to the head track.
+        // If we're already on that /watch URL (after the first redirect), do not
+        // call play(head) again — location.href to the same page reloads forever
+        // while the player is still standby / video.src empty.
+        if (isColdStart && head) {
+            if (currentId === head.url) {
+                hasSynced = true;
+            } else {
+                play(head);
+                // Page is unloading; skip queue DOM sync on this document.
+                return;
+            }
         }
 
         setTimeout(async () => {
@@ -318,10 +315,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("Connected to WebSocket server with ID:", socket.id);
         publishStatus();
 
-        const joinPayload = await getDeviceInfo(config);
-
-        // emit join event to server
-        socket.emit("join", joinPayload);
+        socket.emit("join", getDeviceInfo(config));
     });
 
     // handle on disconnect — keep hasRoom; only socket is offline
@@ -338,7 +332,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playback = getPlaybackState();
 
         if (playback.state == "standby" && queues[0]) {
-            window.location.reload();
+            // Navigate to head (or no-op if already on it) — never bare reload
+            // (reload + standby + joined can loop when queue is waiting).
+            play(queues[0]);
+            publishStatus();
             return;
         }
 
