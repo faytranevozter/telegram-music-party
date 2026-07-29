@@ -27,11 +27,23 @@ const CONFIRM_LABEL = /^(continue|yes|ok|okay|resume)$|continue watching/i;
 const REJECT_LABEL = /cancel|dismiss|close|\bno\b/i;
 
 export function getVideoId(): string | null {
+    try {
+        const fromLocation = new URL(window.location.href).searchParams.get(
+            "v",
+        );
+        if (fromLocation) return fromLocation;
+    } catch {
+        // ignore
+    }
     const u = document
         .querySelector('[class="ytp-title-link yt-uix-sessionlink"]')
         ?.getAttribute("href");
     if (!u) return null;
-    return new URL(u).searchParams.get("v");
+    try {
+        return new URL(u, window.location.origin).searchParams.get("v");
+    } catch {
+        return null;
+    }
 }
 
 export function getPlaybackState(): {
@@ -217,7 +229,16 @@ export function play(queue?: Queue) {
     dismissContinueWatching();
     const playback = getPlaybackState();
     if (queue?.url && playback.state !== "playing") {
+        // Same track already open (e.g. cold-start /watch landing): never
+        // reassign location.href — that reloads and loops while video is still standby.
+        if (getVideoId() === queue.url) {
+            if (playback.state === "paused" && playback.el?.src) {
+                void playback.el.play().catch(() => undefined);
+            }
+            return;
+        }
         window.location.href = `/watch?v=${queue.url}&qid=${queue.id}`;
+        return;
     }
     if (playback.state === "paused") {
         void playback.el.play().catch(() => undefined);
@@ -304,7 +325,10 @@ export function next(queue?: Queue) {
     intentionalPause = false;
     dismissContinueWatching();
     if (queue?.url) {
-        window.location.href = `/watch?v=${queue.url}&qid=${queue.id}`;
+        if (getVideoId() !== queue.url) {
+            window.location.href = `/watch?v=${queue.url}&qid=${queue.id}`;
+        }
+        return;
     }
 
     const NEXT_SELECTOR = ".next-button";

@@ -285,9 +285,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         setBridgeSession({ queues, joined: true });
         const playback = getPlaybackState();
         const isColdStart = !hasSynced && playback.state === "standby";
+        const head = data[0];
+        const currentId = getVideoId();
 
-        if (isColdStart && data[0]) {
-            play(data[0]);
+        // Cold start with a waiting queue: navigate once to the head track.
+        // If we're already on that /watch URL (after the first redirect), do not
+        // call play(head) again — location.href to the same page reloads forever
+        // while the player is still standby / video.src empty.
+        if (isColdStart && head) {
+            if (currentId === head.url) {
+                hasSynced = true;
+            } else {
+                play(head);
+                // Page is unloading; skip queue DOM sync on this document.
+                return;
+            }
         }
 
         setTimeout(async () => {
@@ -338,7 +350,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playback = getPlaybackState();
 
         if (playback.state == "standby" && queues[0]) {
-            window.location.reload();
+            // Navigate to head (or no-op if already on it) — never bare reload
+            // (reload + standby + joined can loop when queue is waiting).
+            play(queues[0]);
+            publishStatus();
             return;
         }
 
