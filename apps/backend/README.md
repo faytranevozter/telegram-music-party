@@ -58,7 +58,7 @@ prisma/
 
 | Client → server | Server → client |
 |-----------------|-----------------|
-| `join` `{ id, browser, ip, fingerprint }` | `joined` (queue rows with `title`) |
+| `join` `{ id, browser, fingerprint }` | `joined` (queue rows with `title`) |
 | `leave` `{ roomId, fingerprint }` | `leave` (also used when replaced by another device) |
 | `started` `{ roomId, videoId }` | `play` / `pause` / `next` / `prev` |
 | `notify` `{ roomId, message }` | `volumeUp` / `volumeDown` / `mute` / `unmute` |

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
 import { detect } from "detect-browser";
-import axios from "axios";
 import { Config, DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
@@ -160,32 +159,18 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
         });
 }
 
-const getDeviceInfo = async (config: Config) => {
-    console.log("Gathering device info...");
-
-    const ifconfig = await axios.get("https://ifconfig.me/all.json", {
-        headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-        },
-    });
-
-    // detect browser info
+const getDeviceInfo = (config: Config) => {
     const info = detect();
-
-    // get fingerprint
     const fingerprint = getDeviceId();
-
     const browser = [
         (info?.name?.slice(0, 1).toUpperCase() || "") +
             (info?.name?.slice(1) || ""),
-        info?.os, // Mac OS, Windows
-    ]; // [Chrome, Mac OS]
+        info?.os,
+    ];
 
     return {
         id: config.roomId || "",
         browser: browser.filter(Boolean).join(" ") || "",
-        ip: ifconfig.data.ip_addr || "",
         fingerprint,
     };
 };
@@ -330,10 +315,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("Connected to WebSocket server with ID:", socket.id);
         publishStatus();
 
-        const joinPayload = await getDeviceInfo(config);
-
-        // emit join event to server
-        socket.emit("join", joinPayload);
+        socket.emit("join", getDeviceInfo(config));
     });
 
     // handle on disconnect — keep hasRoom; only socket is offline
