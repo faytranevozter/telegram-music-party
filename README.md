@@ -1,17 +1,13 @@
 <div align="center">
-  <img src="apps/extension/public/app-icon.png" alt="Telegram Music Party" width="128" height="128">
   <h1>Telegram Music Party</h1>
   <p>Control YouTube Music from Telegram.</p>
 </div>
 
 Telegram Music Party connects a Telegram group to a YouTube Music tab. The bot manages rooms, queues, votes, and commands. The browser extension joins the room on `music.youtube.com` and drives playback over Socket.IO.
 
-```mermaid
-flowchart LR
-    TG[Telegram group] --> BE[NestJS backend]
-    BE --> IO[Socket.IO]
-    IO --> EXT[YouTube Music extension]
-```
+<p align="center">
+  <img src="docs/images/screenshot/header.jpg" alt="Telegram Music Party" width="100%">
+</p>
 
 ## Install
 
