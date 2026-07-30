@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Socket } from "socket.io-client";
 import { Config, DEFAULT_PARTY_URL } from "../constants/config";
+import { requestDefaultPartyUrl } from "./bridge-main";
 
 const DEVICE_ID_KEY = "ytmp_device_id";
 
@@ -102,21 +103,20 @@ export function createJoinButton() {
         const btn = createButton({
             children: "Join Room",
             onClick: async () => {
-                // popup the room ID
                 const roomId = prompt("Enter your room ID");
                 if (!roomId) return;
 
+                const defaultHost =
+                    (await requestDefaultPartyUrl()) || DEFAULT_PARTY_URL;
                 const partyUrl = prompt(
                     "Enter your party URL",
-                    DEFAULT_PARTY_URL,
+                    defaultHost,
                 );
                 if (!partyUrl) return;
 
-                // save roomId and partyUrl into local storage
                 localStorage.setItem("roomId", roomId);
                 localStorage.setItem("partyUrl", partyUrl);
 
-                // reload after saving onto local storage
                 if (roomId && partyUrl) {
                     window.location.reload();
                 }

@@ -5,10 +5,12 @@ import {
     CardBody,
     Chip,
     Divider,
+    Input,
     Spinner,
     Switch,
 } from "@heroui/react";
 import type {
+    BridgeRequest,
     BridgeResponse,
     ControlAction,
     PopupStatusMessage,
@@ -20,8 +22,15 @@ import {
     getCurrentVersion,
     type UpdateInfo,
 } from "./lib/update";
+import {
+    getDefaultPartyUrl,
+    normalizePartyUrl,
+    setDefaultPartyUrl,
+} from "./lib/default-party-url";
+import { DEFAULT_PARTY_URL } from "./constants/config";
 
 type TabState = "loading" | "no-tab" | "ready";
+type View = "main" | "settings";
 
 const emptyStatus: SessionStatus = {
     connected: false,
@@ -48,11 +57,7 @@ async function findYoutubeMusicTab(): Promise<chrome.tabs.Tab | null> {
 
 async function sendToTab(
     tabId: number,
-    message:
-        | { type: "GET_STATUS" }
-        | { type: "CONTROL"; action: ControlAction }
-        | { type: "LEAVE" }
-        | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean },
+    message: BridgeRequest,
 ): Promise<BridgeResponse> {
     return chrome.tabs.sendMessage(tabId, message) as Promise<BridgeResponse>;
 }
@@ -123,6 +128,7 @@ function parseQueueLabel(item: QueueItem): { title: string; subtitle?: string } 
 }
 
 function App() {
+    const [view, setView] = useState<View>("main");
     const [tabState, setTabState] = useState<TabState>("loading");
     const [tabId, setTabId] = useState<number | null>(null);
     const [status, setStatus] = useState<SessionStatus>(emptyStatus);
@@ -131,11 +137,26 @@ function App() {
     const [update, setUpdate] = useState<UpdateInfo | null>(null);
     const [updateChecking, setUpdateChecking] = useState(false);
     const [updateError, setUpdateError] = useState<string | null>(null);
+    const [joinRoomId, setJoinRoomId] = useState("");
+    const [joinPartyUrl, setJoinPartyUrl] = useState(DEFAULT_PARTY_URL);
+    const [defaultHostDraft, setDefaultHostDraft] = useState(DEFAULT_PARTY_URL);
+    const [defaultHostSaved, setDefaultHostSaved] = useState(DEFAULT_PARTY_URL);
+    const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
     const currentVersion = getCurrentVersion();
 
     const applyStatus = useCallback((next: SessionStatus) => {
         setStatus(next);
         setError(null);
+    }, []);
+
+    const loadDefaultHost = useCallback(async () => {
+        const url = await getDefaultPartyUrl();
+        setDefaultHostDraft(url);
+        setDefaultHostSaved(url);
+        setJoinPartyUrl((prev) => {
+            if (!prev.trim() || prev === DEFAULT_PARTY_URL) return url;
+            return prev;
+        });
     }, []);
 
     const refresh = useCallback(async () => {
@@ -172,6 +193,10 @@ function App() {
     useEffect(() => {
         void refresh();
     }, [refresh]);
+
+    useEffect(() => {
+        void loadDefaultHost();
+    }, [loadDefaultHost]);
 
     useEffect(() => {
         const onMessage = (message: PopupStatusMessage) => {
@@ -215,8 +240,6 @@ function App() {
         if (!update?.releaseUrl) return;
         await chrome.tabs.create({ url: update.releaseUrl });
     };
-
-
 
     const openYoutubeMusic = async () => {
         await chrome.tabs.create({ url: "https://music.youtube.com" });
@@ -262,10 +285,42 @@ function App() {
         }
     };
 
+    const joinRoom = async () => {
+        if (!tabId || busy) return;
+        const roomId = joinRoomId.trim();
+        const partyUrl = normalizePartyUrl(joinPartyUrl);
+        if (!roomId) {
+            setError("Room ID is required");
+            return;
+        }
+        if (!partyUrl) {
+            setError("Enter a valid http(s) party URL");
+            return;
+        }
+        setBusy(true);
+        setError(null);
+        try {
+            const response = await sendToTab(tabId, {
+                type: "JOIN",
+                roomId,
+                partyUrl,
+            });
+            if (response.type === "ERROR") {
+                setError(response.message);
+            } else {
+                setError(null);
+                // page reloads; status will refresh via STATUS_PUSH / next open
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Join failed");
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const setBypassContinueWatching = async (enabled: boolean) => {
         if (!tabId || busy) return;
         setBusy(true);
-        // optimistic; STATUS_PUSH confirms, revert on failure
         setStatus((prev) => ({ ...prev, bypassContinueWatching: enabled }));
         try {
             const response = await sendToTab(tabId, {
@@ -292,6 +347,31 @@ function App() {
         }
     };
 
+    const saveDefaultHost = async () => {
+        const normalized = normalizePartyUrl(defaultHostDraft);
+        if (!normalized) {
+            setSettingsMsg("Enter a valid http(s) URL");
+            return;
+        }
+        setBusy(true);
+        setSettingsMsg(null);
+        try {
+            await setDefaultPartyUrl(normalized);
+            setDefaultHostDraft(normalized);
+            setDefaultHostSaved(normalized);
+            setJoinPartyUrl((prev) =>
+                !status.hasRoom || !prev ? normalized : prev,
+            );
+            setSettingsMsg("Default host saved");
+        } catch (err) {
+            setSettingsMsg(
+                err instanceof Error ? err.message : "Could not save",
+            );
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const isPlaying = status.playback?.state === "playing";
     const controlsDisabled =
         (!status.connected && !status.hasRoom) ||
@@ -303,6 +383,123 @@ function App() {
     const showNotJoined = tabState === "ready" && !status.hasRoom;
     const showDisconnected =
         tabState === "ready" && status.hasRoom && !status.socketConnected;
+
+    if (view === "settings") {
+        return (
+            <div className="dark w-[380px] min-h-[420px] bg-zinc-950 text-zinc-100 overflow-x-hidden">
+                <div className="flex flex-col gap-3 p-4 box-border">
+                    <header className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="light"
+                            className="min-w-8 px-1 text-zinc-400"
+                            onPress={() => {
+                                setView("main");
+                                setSettingsMsg(null);
+                            }}
+                        >
+                            ←
+                        </Button>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="text-base font-semibold tracking-tight">
+                                Settings
+                            </h1>
+                            <p className="text-xs text-zinc-400">
+                                Extension defaults
+                            </p>
+                        </div>
+                    </header>
+
+                    {error && (
+                        <Card className="bg-danger-50/10 border border-danger-400/30 shadow-none">
+                            <CardBody className="py-2 text-xs text-danger-300">
+                                {error}
+                            </CardBody>
+                        </Card>
+                    )}
+
+                    <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                        <CardBody className="gap-3 py-3">
+                            <div>
+                                <p className="text-sm font-medium text-zinc-200">
+                                    Default party host
+                                </p>
+                                <p className="text-[10px] text-zinc-500 leading-relaxed mt-0.5">
+                                    Prefills join forms (popup and sidebar). Does
+                                    not leave an active room.
+                                </p>
+                            </div>
+                            <Input
+                                size="sm"
+                                label="Party URL"
+                                labelPlacement="outside"
+                                placeholder={DEFAULT_PARTY_URL}
+                                value={defaultHostDraft}
+                                onValueChange={setDefaultHostDraft}
+                                classNames={{
+                                    label: "text-xs text-zinc-400",
+                                    input: "font-mono text-xs",
+                                }}
+                            />
+                            <Button
+                                size="sm"
+                                color="primary"
+                                isDisabled={busy}
+                                onPress={() => {
+                                    void saveDefaultHost();
+                                }}
+                            >
+                                Save default host
+                            </Button>
+                            {settingsMsg && (
+                                <p
+                                    className={`text-[10px] ${
+                                        settingsMsg.includes("saved")
+                                            ? "text-success"
+                                            : "text-danger-300"
+                                    }`}
+                                >
+                                    {settingsMsg}
+                                </p>
+                            )}
+                            <p className="text-[10px] text-zinc-600">
+                                Built-in fallback:{" "}
+                                <span className="font-mono">
+                                    {DEFAULT_PARTY_URL}
+                                </span>
+                            </p>
+                        </CardBody>
+                    </Card>
+
+                    <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                        <CardBody className="gap-1 py-3">
+                            <Switch
+                                size="sm"
+                                isSelected={status.bypassContinueWatching}
+                                isDisabled={
+                                    busy ||
+                                    tabState !== "ready" ||
+                                    tabId == null
+                                }
+                                onValueChange={(enabled) => {
+                                    void setBypassContinueWatching(enabled);
+                                }}
+                            >
+                                <span className="text-sm text-zinc-200">
+                                    Bypass &quot;continue watching&quot;
+                                </span>
+                            </Switch>
+                            <p className="text-[10px] text-zinc-500 leading-relaxed">
+                                Auto-dismisses YouTube Music&apos;s idle dialog
+                                and keeps the tab active. Requires an open YT
+                                Music tab.
+                            </p>
+                        </CardBody>
+                    </Card>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="dark w-[380px] min-h-[420px] bg-zinc-950 text-zinc-100 overflow-x-hidden">
@@ -316,14 +513,28 @@ function App() {
                             Session control center
                         </p>
                     </div>
-                    <Chip
-                        size="sm"
-                        variant="flat"
-                        className="shrink-0"
-                        color={conn.color}
-                    >
-                        {conn.label}
-                    </Chip>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            className="min-w-8 w-8 px-0"
+                            aria-label="Settings"
+                            onPress={() => {
+                                setView("settings");
+                                setSettingsMsg(null);
+                                void loadDefaultHost();
+                            }}
+                        >
+                            ⚙
+                        </Button>
+                        <Chip
+                            size="sm"
+                            variant="flat"
+                            color={conn.color}
+                        >
+                            {conn.label}
+                        </Chip>
+                    </div>
                 </header>
 
                 {error && (
@@ -404,20 +615,53 @@ function App() {
                         </Card>
 
                         {showNotJoined && (
-                            <Card className="bg-amber-500/10 border border-amber-500/30 shadow-none">
-                                <CardBody className="gap-1 py-3">
-                                    <p className="text-sm font-medium text-amber-200">
-                                        Not in a room
-                                    </p>
-                                    <p className="text-xs text-amber-100/80 leading-relaxed">
-                                        On YouTube Music, open the left sidebar
-                                        and click <strong>Join Room</strong>.
-                                        Enter the room ID from Telegram{" "}
-                                        <code className="rounded bg-black/30 px-1">
-                                            /register
-                                        </code>
-                                        .
-                                    </p>
+                            <Card className="bg-zinc-900 border border-amber-500/30 shadow-none">
+                                <CardBody className="gap-3 py-3">
+                                    <div>
+                                        <p className="text-sm font-medium text-amber-200">
+                                            Join a room
+                                        </p>
+                                        <p className="text-xs text-zinc-400 leading-relaxed mt-0.5">
+                                            Room ID from Telegram{" "}
+                                            <code className="rounded bg-black/30 px-1">
+                                                /register
+                                            </code>
+                                        </p>
+                                    </div>
+                                    <Input
+                                        size="sm"
+                                        label="Room ID"
+                                        labelPlacement="outside"
+                                        placeholder="e.g. happy-cat-moon"
+                                        value={joinRoomId}
+                                        onValueChange={setJoinRoomId}
+                                        classNames={{
+                                            label: "text-xs text-zinc-400",
+                                            input: "font-mono text-xs",
+                                        }}
+                                    />
+                                    <Input
+                                        size="sm"
+                                        label="Party host"
+                                        labelPlacement="outside"
+                                        placeholder={defaultHostSaved}
+                                        value={joinPartyUrl}
+                                        onValueChange={setJoinPartyUrl}
+                                        classNames={{
+                                            label: "text-xs text-zinc-400",
+                                            input: "font-mono text-xs",
+                                        }}
+                                    />
+                                    <Button
+                                        color="primary"
+                                        size="sm"
+                                        isDisabled={busy}
+                                        onPress={() => {
+                                            void joinRoom();
+                                        }}
+                                    >
+                                        Join room
+                                    </Button>
                                 </CardBody>
                             </Card>
                         )}
@@ -461,31 +705,6 @@ function App() {
                                 >
                                     {playChip.label}
                                 </Chip>
-                            </CardBody>
-                        </Card>
-
-                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
-                            <CardBody className="gap-1 py-3">
-                                <Switch
-                                    size="sm"
-                                    isSelected={
-                                        status.bypassContinueWatching
-                                    }
-                                    isDisabled={busy}
-                                    onValueChange={(enabled) => {
-                                        void setBypassContinueWatching(
-                                            enabled,
-                                        );
-                                    }}
-                                >
-                                    <span className="text-sm text-zinc-200">
-                                        Bypass "continue watching"
-                                    </span>
-                                </Switch>
-                                <p className="text-[10px] text-zinc-500 leading-relaxed">
-                                    Auto-dismisses YouTube Music's idle dialog
-                                    and keeps the tab active.
-                                </p>
                             </CardBody>
                         </Card>
 
@@ -648,8 +867,11 @@ function App() {
                             </p>
                             <ol className="list-decimal pl-4 space-y-1 text-xs text-zinc-400 leading-relaxed">
                                 <li>
-                                    Click <strong className="text-zinc-300">Download ZIP</strong> and
-                                    save the file.
+                                    Click{" "}
+                                    <strong className="text-zinc-300">
+                                        Download ZIP
+                                    </strong>{" "}
+                                    and save the file.
                                 </li>
                                 <li>
                                     Extract the ZIP to a folder (replace the old
@@ -663,13 +885,18 @@ function App() {
                                     .
                                 </li>
                                 <li>
-                                    Enable <strong className="text-zinc-300">Developer mode</strong>{" "}
+                                    Enable{" "}
+                                    <strong className="text-zinc-300">
+                                        Developer mode
+                                    </strong>{" "}
                                     (top-right).
                                 </li>
                                 <li>
                                     Click the reload icon on this extension, or{" "}
-                                    <strong className="text-zinc-300">Load unpacked</strong> and
-                                    select the extracted folder.
+                                    <strong className="text-zinc-300">
+                                        Load unpacked
+                                    </strong>{" "}
+                                    and select the extracted folder.
                                 </li>
                             </ol>
                             <div className="flex gap-2 pt-1">
@@ -677,7 +904,9 @@ function App() {
                                     size="sm"
                                     color="primary"
                                     className="flex-1"
-                                    isDisabled={!update.downloadUrl && !update.releaseUrl}
+                                    isDisabled={
+                                        !update.downloadUrl && !update.releaseUrl
+                                    }
                                     onPress={() => {
                                         void openDownload();
                                     }}

@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io-client";
 import {
+    DEFAULT_PARTY_URL,
     getConfig,
     isContinueWatchingBypassEnabled,
     setContinueWatchingBypass,
@@ -9,6 +10,8 @@ import {
     BridgeResponse,
     BridgeResponseMessage,
     ControlAction,
+    DefaultPartyUrlRequestMessage,
+    DefaultPartyUrlResponseMessage,
     SessionStatus,
     StatusPushMessage,
     YTMP_BRIDGE,
@@ -146,6 +149,82 @@ function leaveRoom() {
     window.location.reload();
 }
 
+function persistAndReloadJoin(roomId: string, partyUrl: string) {
+    localStorage.setItem("roomId", roomId);
+    localStorage.setItem("partyUrl", partyUrl);
+    session.roomId = roomId;
+    session.partyUrl = partyUrl;
+    session.joined = false;
+    publishStatus();
+    setTimeout(() => {
+        window.location.reload();
+    }, 0);
+}
+
+function joinRoom(roomIdRaw: string, partyUrlRaw: string): BridgeResponse {
+    const roomId = roomIdRaw.trim();
+    const partyUrl = partyUrlRaw.trim();
+    if (!roomId) {
+        return { type: "ERROR", message: "Room ID is required" };
+    }
+    if (!partyUrl) {
+        return { type: "ERROR", message: "Party URL is required" };
+    }
+    try {
+        const parsed = new URL(partyUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return {
+                type: "ERROR",
+                message: "Party URL must be http or https",
+            };
+        }
+    } catch {
+        return { type: "ERROR", message: "Invalid party URL" };
+    }
+
+    persistAndReloadJoin(roomId, partyUrl);
+    return { type: "OK" };
+}
+
+/** Ask ISOLATED bridge for chrome.storage default (falls back to DEFAULT_PARTY_URL). */
+export function requestDefaultPartyUrl(timeoutMs = 800): Promise<string> {
+    return new Promise((resolve) => {
+        const id = crypto.randomUUID();
+        const timer = setTimeout(() => {
+            window.removeEventListener("message", onMessage);
+            resolve(DEFAULT_PARTY_URL);
+        }, timeoutMs);
+
+        function onMessage(event: MessageEvent) {
+            if (event.source !== window) return;
+            const data = event.data as DefaultPartyUrlResponseMessage | undefined;
+            if (
+                !data ||
+                data.source !== YTMP_BRIDGE ||
+                data.type !== "DEFAULT_PARTY_URL" ||
+                data.id !== id
+            ) {
+                return;
+            }
+            clearTimeout(timer);
+            window.removeEventListener("message", onMessage);
+            const url =
+                typeof data.partyUrl === "string" && data.partyUrl.trim()
+                    ? data.partyUrl.trim()
+                    : DEFAULT_PARTY_URL;
+            resolve(url);
+        }
+
+        window.addEventListener("message", onMessage);
+        const request: DefaultPartyUrlRequestMessage = {
+            source: YTMP_MAIN,
+            type: "GET_DEFAULT_PARTY_URL",
+            id,
+        };
+        window.postMessage(request, "*");
+    });
+}
+
 function handleRequest(request: BridgeRequestMessage): BridgeResponse {
     switch (request.type) {
         case "GET_STATUS":
@@ -171,6 +250,8 @@ function handleRequest(request: BridgeRequestMessage): BridgeResponse {
             }
             leaveRoom();
             return { type: "OK" };
+        case "JOIN":
+            return joinRoom(request.roomId, request.partyUrl);
         case "SET_CONTINUE_WATCHING_BYPASS":
             setContinueWatchingBypass(request.enabled);
             applyContinueWatchingSetting();

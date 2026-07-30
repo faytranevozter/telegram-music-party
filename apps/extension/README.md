@@ -6,13 +6,19 @@ MV3 browser extension that connects [YouTube Music](https://music.youtube.com) t
 
 | Piece | Role |
 |--------|------|
-| **Popup** | Session control center: connection status, now playing, queue, play/pause/next/volume, leave room, update check |
+| **Popup** | Session control center: join room, connection status, now playing, queue, play/pause/next/volume, leave room, settings, update check |
 | **content.js** (MAIN) | Socket.IO client, YT Music DOM control, sidebar Join/Leave |
 | **content-bridge.js** (ISOLATED) | Bridges `chrome.runtime` ↔ MAIN via `window.postMessage` |
 
-Join is only on the YT Music left sidebar (prompts for Room ID + party URL). The popup does not join rooms; it observes and controls an already-joined tab.
+Join is available from the popup and from the YT Music left sidebar. Both paths save the selected room ID and party URL on the YouTube Music page.
 
 **One device per room** (enforced by the backend). A second join replaces the first.
+
+## Popup Join & Default Host
+
+Open a YouTube Music tab, then open the extension popup. If the tab is not joined, the popup shows a join form for the Telegram room ID and party host URL. Submitting joins through the popup bridge, saves `roomId` and `partyUrl` on `music.youtube.com`, and reloads the tab so the content script connects to the backend.
+
+Use the popup settings button to edit the default party host. The value is stored extension-wide in `chrome.storage.local`, falls back to `http://localhost:3000` when unset, and prefills both the popup join form and the sidebar Join Room party URL prompt. Changing the default host does not leave or reconnect an active room until you join with a new host.
 
 ## Develop
 
@@ -55,7 +61,7 @@ Popup Vite uses `base: "./"` so asset paths work under `chrome-extension://`.
 
 Shared types: `src/shared/messages.ts`.
 
-- Popup → tab: `GET_STATUS` | `CONTROL` | `LEAVE`
+- Popup → tab: `GET_STATUS` | `CONTROL` | `JOIN` | `LEAVE` | `SET_CONTINUE_WATCHING_BYPASS`
 - MAIN → popup (via bridge): `STATUS` replies and unsolicited `STATUS_PUSH` on socket/DOM events
 
 ## Config storage
@@ -63,8 +69,12 @@ Shared types: `src/shared/messages.ts`.
 On `music.youtube.com` page `localStorage`:
 
 - `roomId`
-- `partyUrl` (default prompt: `http://localhost:3000`)
+- `partyUrl`
 - `ytmp_device_id` (stable device fingerprint)
+
+Extension-wide `chrome.storage.local`:
+
+- `defaultPartyUrl` (default join host; fallback: `http://localhost:3000`)
 
 ## Updates
 

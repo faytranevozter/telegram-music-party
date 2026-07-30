@@ -1,8 +1,13 @@
 import {
+    getDefaultPartyUrl,
+} from "./default-party-url";
+import {
     BridgeRequest,
     BridgeRequestMessage,
     BridgeResponse,
     BridgeResponseMessage,
+    DefaultPartyUrlRequestMessage,
+    DefaultPartyUrlResponseMessage,
     PopupStatusMessage,
     StatusPushMessage,
     YTMP_BRIDGE,
@@ -18,18 +23,49 @@ const pending = new Map<
     }
 >();
 
+const BRIDGE_REQUEST_TYPES = new Set([
+    "GET_STATUS",
+    "CONTROL",
+    "LEAVE",
+    "JOIN",
+    "SET_CONTINUE_WATCHING_BYPASS",
+]);
+
 window.addEventListener("message", (event: MessageEvent) => {
     if (event.source !== window) return;
-    const data = event.data as
+    const raw = event.data as
         | BridgeResponseMessage
         | StatusPushMessage
+        | DefaultPartyUrlRequestMessage
         | undefined;
-    if (!data || data.source !== YTMP_MAIN) return;
+    if (!raw || typeof raw !== "object" || !("source" in raw)) return;
 
-    if (data.type === "STATUS_PUSH") {
+    if (
+        raw.source === YTMP_MAIN &&
+        "type" in raw &&
+        raw.type === "GET_DEFAULT_PARTY_URL" &&
+        "id" in raw &&
+        typeof raw.id === "string"
+    ) {
+        const requestId = raw.id;
+        void getDefaultPartyUrl().then((partyUrl) => {
+            const response: DefaultPartyUrlResponseMessage = {
+                source: YTMP_BRIDGE,
+                type: "DEFAULT_PARTY_URL",
+                id: requestId,
+                partyUrl,
+            };
+            window.postMessage(response, "*");
+        });
+        return;
+    }
+
+    if (raw.source !== YTMP_MAIN) return;
+
+    if ("type" in raw && raw.type === "STATUS_PUSH" && "status" in raw) {
         const push: PopupStatusMessage = {
             type: "STATUS_PUSH",
-            status: data.status,
+            status: raw.status,
         };
         void chrome.runtime.sendMessage(push).catch(() => {
             // popup may be closed
@@ -37,13 +73,21 @@ window.addEventListener("message", (event: MessageEvent) => {
         return;
     }
 
-    if (!("id" in data) || !data.id) return;
+    if (!("id" in raw) || !raw.id || !("type" in raw)) return;
+    if (
+        raw.type !== "STATUS" &&
+        raw.type !== "OK" &&
+        raw.type !== "ERROR"
+    ) {
+        return;
+    }
 
-    const entry = pending.get(data.id);
+    const response = raw as BridgeResponseMessage;
+    const entry = pending.get(response.id);
     if (!entry) return;
     clearTimeout(entry.timer);
-    pending.delete(data.id);
-    entry.resolve(data);
+    pending.delete(response.id);
+    entry.resolve(response);
 });
 
 function sendToMain(request: BridgeRequest, timeoutMs = 3000) {
@@ -67,13 +111,7 @@ function sendToMain(request: BridgeRequest, timeoutMs = 3000) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const request = message as BridgeRequest;
-    if (
-        !request ||
-        (request.type !== "GET_STATUS" &&
-            request.type !== "CONTROL" &&
-            request.type !== "LEAVE" &&
-            request.type !== "SET_CONTINUE_WATCHING_BYPASS")
-    ) {
+    if (!request || !BRIDGE_REQUEST_TYPES.has(request.type)) {
         return false;
     }
 
