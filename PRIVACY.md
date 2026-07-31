@@ -6,6 +6,8 @@ This privacy policy describes how the **YouTube Music Party** browser extension 
 
 The Extension connects [YouTube Music](https://music.youtube.com) to a Telegram Music Party server so a Telegram group can control playback. It is open source: [github.com/faytranevozter/telegram-music-party](https://github.com/faytranevozter/telegram-music-party).
 
+The Extension is not affiliated with YouTube, Google, Chrome, or Telegram.
+
 ## Summary
 
 - We do **not** sell your data.
