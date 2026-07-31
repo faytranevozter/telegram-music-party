@@ -425,8 +425,8 @@ function App() {
                                     Default party host
                                 </p>
                                 <p className="text-[10px] text-zinc-500 leading-relaxed mt-0.5">
-                                    Prefills join forms (popup and sidebar). Does
-                                    not leave an active room.
+                                    Prefills the popup join form. Does not leave
+                                    an active room.
                                 </p>
                             </div>
                             <Input
@@ -960,9 +960,6 @@ function App() {
                     </p>
                 )}
 
-                <p className="text-center text-[10px] text-zinc-600">
-                    Join / leave also available in the YT Music sidebar
-                </p>
             </div>
         </div>
     );

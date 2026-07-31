@@ -7,10 +7,10 @@ MV3 browser extension that connects [YouTube Music](https://music.youtube.com) t
 | Piece | Role |
 |--------|------|
 | **Popup** | Session control center: join room, connection status, now playing, queue, play/pause/next/volume, leave room, settings, update check |
-| **content.js** (MAIN) | Socket.IO client, YT Music DOM control, sidebar Join/Leave |
+| **content.js** (MAIN) | Socket.IO client and YT Music DOM control |
 | **content-bridge.js** (ISOLATED) | Bridges `chrome.runtime` ↔ MAIN via `window.postMessage` |
 
-Join is available from the popup and from the YT Music left sidebar. Both paths save the selected room ID and party URL on the YouTube Music page.
+Join is available from the popup. It saves the selected room ID and party URL on the YouTube Music page.
 
 **One device per room** (enforced by the backend). A second join replaces the first.
 
@@ -18,7 +18,7 @@ Join is available from the popup and from the YT Music left sidebar. Both paths 
 
 Open a YouTube Music tab, then open the extension popup. If the tab is not joined, the popup shows a join form for the Telegram room ID and party host URL. Submitting joins through the popup bridge, saves `roomId` and `partyUrl` on `music.youtube.com`, and reloads the tab so the content script connects to the backend.
 
-Use the popup settings button to edit the default party host. The value is stored extension-wide in `chrome.storage.local`, falls back to `http://localhost:3000` when unset, and prefills both the popup join form and the sidebar Join Room party URL prompt. Changing the default host does not leave or reconnect an active room until you join with a new host.
+Use the popup settings button to edit the default party host. The value is stored extension-wide in `chrome.storage.local`, falls back to `http://localhost:3000` when unset, and prefills the popup join form. Changing the default host does not leave or reconnect an active room until you join with a new host.
 
 ## Develop
 

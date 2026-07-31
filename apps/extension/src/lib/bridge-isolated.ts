@@ -1,13 +1,8 @@
 import {
-    getDefaultPartyUrl,
-} from "./default-party-url";
-import {
     BridgeRequest,
     BridgeRequestMessage,
     BridgeResponse,
     BridgeResponseMessage,
-    DefaultPartyUrlRequestMessage,
-    DefaultPartyUrlResponseMessage,
     PopupStatusMessage,
     StatusPushMessage,
     YTMP_BRIDGE,
@@ -36,29 +31,8 @@ window.addEventListener("message", (event: MessageEvent) => {
     const raw = event.data as
         | BridgeResponseMessage
         | StatusPushMessage
-        | DefaultPartyUrlRequestMessage
         | undefined;
     if (!raw || typeof raw !== "object" || !("source" in raw)) return;
-
-    if (
-        raw.source === YTMP_MAIN &&
-        "type" in raw &&
-        raw.type === "GET_DEFAULT_PARTY_URL" &&
-        "id" in raw &&
-        typeof raw.id === "string"
-    ) {
-        const requestId = raw.id;
-        void getDefaultPartyUrl().then((partyUrl) => {
-            const response: DefaultPartyUrlResponseMessage = {
-                source: YTMP_BRIDGE,
-                type: "DEFAULT_PARTY_URL",
-                id: requestId,
-                partyUrl,
-            };
-            window.postMessage(response, "*");
-        });
-        return;
-    }
 
     if (raw.source !== YTMP_MAIN) return;
 

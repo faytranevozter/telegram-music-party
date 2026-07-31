@@ -42,21 +42,6 @@ export type BridgeRequest =
     | { type: "JOIN"; roomId: string; partyUrl: string }
     | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean };
 
-/** MAIN → ISOLATED: ask for extension-wide default party URL */
-export type DefaultPartyUrlRequestMessage = {
-    source: typeof YTMP_MAIN;
-    type: "GET_DEFAULT_PARTY_URL";
-    id: string;
-};
-
-/** ISOLATED → MAIN: default party URL from chrome.storage */
-export type DefaultPartyUrlResponseMessage = {
-    source: typeof YTMP_BRIDGE;
-    type: "DEFAULT_PARTY_URL";
-    id: string;
-    partyUrl: string;
-};
-
 export type BridgeResponse =
     | { type: "STATUS"; status: SessionStatus }
     | { type: "OK" }

@@ -19,7 +19,7 @@ import {
     volumeDown,
     volumeUp,
 } from "./playback";
-import { createJoinButton, createLeaveButton, getDeviceId } from "./browser";
+import { getDeviceId } from "./browser";
 import {
     publishStatus,
     setBridgeSession,
@@ -233,12 +233,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     startPlaybackStatusWatchers();
 
-    // if roomId or partyURL doesnot exist
+    // If roomId or partyURL does not exist, wait for popup join.
     if (!config.partyUrl || !config.roomId) {
-        // display join button
-        createJoinButton();
-
-        // wait for user to join
         return;
     }
 
@@ -256,9 +252,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // and fall back to auto-clicking the dialog if it still appears.
     // Honors the persisted bypass setting (default: enabled).
     applyContinueWatchingSetting();
-
-    // create leave button
-    createLeaveButton(socket, config);
 
     // handle incoming messages
     socket.on("joined", async (data: Array<Queue & { title?: string }>) => {
