@@ -196,6 +196,10 @@ ghcr.io/faytranevozter/telegram-music-party:latest
 yt-music-party-extension-vX.Y.Z.zip
 ```
 
+## Privacy
+
+[Privacy Policy](./PRIVACY.md) for the browser extension.
+
 ## License
 
 [MIT](./LICENSE.md)
