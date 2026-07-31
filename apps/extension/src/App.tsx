@@ -15,11 +15,6 @@ import type {
     QueueItem,
     SessionStatus,
 } from "./shared/messages";
-import {
-    checkForUpdate,
-    getCurrentVersion,
-    type UpdateInfo,
-} from "./lib/update";
 
 type TabState = "loading" | "no-tab" | "ready";
 
@@ -128,10 +123,7 @@ function App() {
     const [status, setStatus] = useState<SessionStatus>(emptyStatus);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [update, setUpdate] = useState<UpdateInfo | null>(null);
-    const [updateChecking, setUpdateChecking] = useState(false);
-    const [updateError, setUpdateError] = useState<string | null>(null);
-    const currentVersion = getCurrentVersion();
+    const currentVersion = chrome.runtime.getManifest().version;
 
     const applyStatus = useCallback((next: SessionStatus) => {
         setStatus(next);
@@ -185,38 +177,6 @@ function App() {
             chrome.runtime.onMessage.removeListener(onMessage);
         };
     }, [applyStatus]);
-
-    const runUpdateCheck = useCallback(async () => {
-        setUpdateChecking(true);
-        setUpdateError(null);
-        try {
-            const info = await checkForUpdate();
-            setUpdate(info);
-        } catch (err) {
-            setUpdateError(
-                err instanceof Error ? err.message : "Could not check updates",
-            );
-        } finally {
-            setUpdateChecking(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        void runUpdateCheck();
-    }, [runUpdateCheck]);
-
-    const openDownload = async () => {
-        const url = update?.downloadUrl ?? update?.releaseUrl;
-        if (!url) return;
-        await chrome.tabs.create({ url });
-    };
-
-    const openRelease = async () => {
-        if (!update?.releaseUrl) return;
-        await chrome.tabs.create({ url: update.releaseUrl });
-    };
-
-
 
     const openYoutubeMusic = async () => {
         await chrome.tabs.create({ url: "https://music.youtube.com" });
@@ -630,106 +590,10 @@ function App() {
                     </>
                 )}
 
-                {update?.hasUpdate && (
-                    <Card className="bg-primary-500/10 border border-primary-400/40 shadow-none rounded-xl">
-                        <CardBody className="gap-2 py-3">
-                            <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-medium text-primary-300">
-                                    Update available
-                                </p>
-                                <Chip size="sm" color="primary" variant="flat">
-                                    v{update.latestVersion}
-                                </Chip>
-                            </div>
-                            <p className="text-xs text-zinc-400 leading-relaxed">
-                                You have v{update.currentVersion}. Unpacked
-                                extensions cannot update themselves — follow
-                                these steps after downloading:
-                            </p>
-                            <ol className="list-decimal pl-4 space-y-1 text-xs text-zinc-400 leading-relaxed">
-                                <li>
-                                    Click <strong className="text-zinc-300">Download ZIP</strong> and
-                                    save the file.
-                                </li>
-                                <li>
-                                    Extract the ZIP to a folder (replace the old
-                                    folder or use a new one).
-                                </li>
-                                <li>
-                                    Open{" "}
-                                    <code className="rounded bg-black/30 px-1">
-                                        chrome://extensions
-                                    </code>
-                                    .
-                                </li>
-                                <li>
-                                    Enable <strong className="text-zinc-300">Developer mode</strong>{" "}
-                                    (top-right).
-                                </li>
-                                <li>
-                                    Click the reload icon on this extension, or{" "}
-                                    <strong className="text-zinc-300">Load unpacked</strong> and
-                                    select the extracted folder.
-                                </li>
-                            </ol>
-                            <div className="flex gap-2 pt-1">
-                                <Button
-                                    size="sm"
-                                    color="primary"
-                                    className="flex-1"
-                                    isDisabled={!update.downloadUrl && !update.releaseUrl}
-                                    onPress={() => {
-                                        void openDownload();
-                                    }}
-                                >
-                                    Download ZIP
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="bordered"
-                                    className="flex-1"
-                                    onPress={() => {
-                                        void openRelease();
-                                    }}
-                                >
-                                    Release notes
-                                </Button>
-                            </div>
-                        </CardBody>
-                    </Card>
-                )}
-
                 <div className="flex items-center justify-between gap-2 pt-1 text-[10px] text-zinc-600">
                     <span>v{currentVersion}</span>
-                    <button
-                        type="button"
-                        className="text-zinc-500 hover:text-zinc-300 underline-offset-2 hover:underline disabled:opacity-50"
-                        disabled={updateChecking}
-                        onClick={() => {
-                            void runUpdateCheck();
-                        }}
-                    >
-                        {updateChecking
-                            ? "Checking…"
-                            : update?.hasUpdate
-                              ? "Recheck update"
-                              : updateError
-                                ? "Retry update check"
-                                : "Check for updates"}
-                    </button>
+                    <span>Updates are handled by Chrome</span>
                 </div>
-
-                {updateError && (
-                    <p className="text-center text-[10px] text-danger-400">
-                        {updateError}
-                    </p>
-                )}
-
-                {!update?.hasUpdate && update && !updateError && (
-                    <p className="text-center text-[10px] text-zinc-600">
-                        Up to date · latest v{update.latestVersion}
-                    </p>
-                )}
 
                 <p className="text-center text-[10px] text-zinc-600">
                     Join / leave also available in the YT Music sidebar

@@ -92,7 +92,7 @@ Popup (React) ──chrome.tabs.sendMessage──► content-bridge.js (ISOLATED
 - **Bridge** (`src/lib/bridge-main.ts`, `src/lib/bridge-isolated.ts`, `src/shared/messages.ts`): request/response + `STATUS_PUSH` on socket/DOM events (no popup polling).
 - **Config**: page `localStorage` keys `roomId`, `partyUrl`, `ytmp_device_id`, `ytmp_bypass_continue_watching` (`"false"` disables; unset = enabled) on `music.youtube.com`. Helpers in `src/constants/config.ts` (`isContinueWatchingBypassEnabled` / `setContinueWatchingBypass`); popup switch sends `SET_CONTINUE_WATCHING_BYPASS` via bridge → `applyContinueWatchingSetting()` gates watcher + `_lact` keep-alive live.
 - **Leave payload**: `{ roomId, fingerprint }` (not `id`).
-- **Updates**: `src/lib/update.ts` fetches GitHub latest release; host_permissions include `api.github.com` / `github.com`.
+- **Updates**: Chrome Web Store builds rely on native browser auto-update. Do not add a manual ZIP downloader or GitHub release checker to the extension popup.
 - **Build**: `base: "./"` in popup Vite config so assets work under `chrome-extension://`.
 
 ### Flow

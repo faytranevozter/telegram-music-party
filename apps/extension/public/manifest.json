@@ -1,13 +1,9 @@
 {
     "manifest_version": 3,
     "name": "YouTube Music Party",
-    "version": "1.7.3",
-    "description": "Control YouTube Music Party sessions from a popup: status, now playing, queue, and playback.",
-    "host_permissions": [
-        "https://music.youtube.com/*",
-        "https://api.github.com/*",
-        "https://github.com/*"
-    ],
+    "version": "1.7.4",
+    "description": "Connect a YouTube Music tab to a Telegram-controlled room for shared playback.",
+    "host_permissions": ["https://music.youtube.com/*"],
     "icons": {
         "16": "app-icon.png",
         "32": "app-icon.png",

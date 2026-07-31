@@ -49,11 +49,7 @@ When you join a room, the Extension connects to the **party URL you provide** (W
 
 The Extension does **not** send your Telegram account credentials. Telegram interaction happens via the bot/backend you use with the party server, not by logging into Telegram inside the Extension.
 
-### 2. GitHub — optional update check
-
-The Extension popup may request the latest release from GitHub (`api.github.com` for this project’s repository) to tell you if a newer version exists. That request uses normal HTTPS and does not include your room ID, device ID, or playback data.
-
-### 3. YouTube Music
+### 2. YouTube Music
 
 The Extension runs content scripts on `https://music.youtube.com/*` to read player UI state and control playback (play, pause, queue, volume, etc.). It interacts with the page in your browser session. It does **not** collect or transmit your Google password. Any requests YouTube Music makes as part of normal site use are governed by [Google’s privacy policy](https://policies.google.com/privacy).
 
@@ -62,7 +58,6 @@ The Extension runs content scripts on `https://music.youtube.com/*` to read play
 The Extension declares host access to:
 
 - `https://music.youtube.com/*` — inject content scripts and operate the player UI  
-- `https://api.github.com/*` and `https://github.com/*` — check for extension updates  
 
 It also connects to whatever **party URL you enter** (which may be `http://` or `https://` on a host you control or trust). Use only party servers you trust.
 
@@ -87,7 +82,6 @@ The Extension is not directed at children under 13 (or the equivalent minimum ag
 
 - **On device:** Stored until you leave the room, clear site data, or uninstall the Extension.  
 - **On a party server:** Retention depends on that server’s operator and configuration (not controlled solely by this Extension).  
-- **GitHub update checks:** Subject to GitHub’s normal request logs and policies.
 
 ## Security
 
@@ -109,7 +103,6 @@ No method of transmission or storage is 100% secure. Use trusted networks and se
 |---------|------|
 | YouTube Music (Google) | Music playback site where the Extension runs |
 | Party server (user-configured) | Session, queue, and remote control relay |
-| GitHub | Release metadata for update checks |
 | Telegram (via bot/backend) | Group commands; not logged into inside the Extension UI |
 
 Each has its own terms and privacy policy.

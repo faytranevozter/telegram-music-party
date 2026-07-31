@@ -11,20 +11,22 @@ Telegram Music Party connects a Telegram group to a YouTube Music tab. The bot m
 
 ## Install
 
-Download the latest extension zip from [GitHub Releases](https://github.com/faytranevozter/telegram-music-party/releases/latest).
+Install the published extension from the Chrome Web Store when available. Chrome handles extension updates automatically.
 
-```txt
-yt-music-party-extension-vX.Y.Z.zip
+For local development, build the extension package:
+
+```bash
+pnpm --filter=extension build
 ```
 
-Load it in your browser:
+Then load it in your browser:
 
 ```txt
 Chrome  -> chrome://extensions -> Developer mode -> Load unpacked
 Firefox -> about:debugging -> This Firefox -> Load Temporary Add-on
 ```
 
-Use the extracted extension folder, or build locally and load `apps/extension/dist`.
+Use the extracted extension folder, or load `apps/extension/dist` after a local build.
 
 ## Quickstart
 
@@ -86,7 +88,7 @@ Only one device can be active in a room. Joining from another browser replaces t
 - Play, pause, next, previous, volume, mute, and lyrics commands
 - Vote-to-skip with `/vote_next`
 - Admin room configuration with `/config`
-- Extension popup for status, now playing, queue, controls, leave, and update checks
+- Extension popup for status, now playing, queue, controls, and leave
 - One active player device per room
 
 ## Commands
