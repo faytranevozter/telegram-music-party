@@ -146,40 +146,18 @@ Optional. Skip unless polished artwork is available.
 
 These values match the current manifest and source code. If permissions or data handling change, update these answers before submitting.
 
+The current Chrome Web Store ZIP should only request this host permission:
+
+```json
+"host_permissions": ["https://music.youtube.com/*"]
+```
+
+If the Privacy page asks for any permission justification other than the host permission below, the uploaded ZIP is stale or the manifest has changed. Rebuild and upload the latest extension package before filling the form.
+
 ### Single Purpose Description
 
 ```text
 YouTube Music Party lets a user connect a YouTube Music tab to a Telegram-controlled party room so group members can manage shared playback and queue actions.
-```
-
-### activeTab Justification
-
-The current manifest does not request `activeTab`. If it is added later, use:
-
-```text
-The extension uses activeTab only to interact with the user's active YouTube Music tab when the user opens the popup and chooses playback or session actions.
-```
-
-### scripting Justification
-
-The current manifest does not request `scripting`. Scripts are declared in `content_scripts`. If `scripting` is added later, use:
-
-```text
-The extension uses scripting only to support extension-controlled interaction with the YouTube Music page required for joining a room and controlling playback.
-```
-
-### tabs Justification
-
-```text
-The extension uses tabs permission to find an open music.youtube.com tab, send popup commands to the content script in that tab, and open YouTube Music when the user clicks a button.
-```
-
-### storage Justification
-
-The current manifest does not request `storage`. The current code stores room settings in the YouTube Music page's localStorage instead of `chrome.storage`. If `storage` is added later, use:
-
-```text
-The extension uses storage to remember user session settings such as room connection preferences and playback helper options between browser sessions.
 ```
 
 ### Host Permission Justification
@@ -216,9 +194,7 @@ Why:
 - The extension reads current playback state and queue metadata from YouTube Music.
 - The extension responds to user playback actions and room activity.
 
-Do not under-disclose; rejection risk is higher than selecting a broader accurate category.
-
-Recommended boxes to leave unchecked unless your hosted backend collects them elsewhere:
+Recommended boxes to leave unchecked:
 
 - Health information
 - Financial and payment information
@@ -226,6 +202,8 @@ Recommended boxes to leave unchecked unless your hosted backend collects them el
 - Personal communications
 - Location
 - Web history
+
+Do not under-disclose. If the production backend collects additional data outside the extension package, update these selections and the privacy policy before submitting.
 
 ### Data Use Certifications
 
@@ -261,7 +239,7 @@ The privacy policy should mention:
 
 - What data is processed: room ID, backend URL, generated device ID/fingerprint, browser/OS label, playback state, queue metadata, and user-selected settings.
 - Why it is processed: connecting the YouTube Music tab to a party room and enabling shared playback controls.
-- Where it is sent: the configured party backend and the IP lookup service if still used.
+- Where it is sent: the configured party backend.
 - Data selling: not sold.
 - Retention: depends on the configured backend; local settings stay in browser storage until the user leaves/clears them.
 - Contact/support URL.
@@ -308,7 +286,7 @@ Recommended host permission for the Web Store build:
 "host_permissions": ["https://music.youtube.com/*"]
 ```
 
-Do not add `activeTab`, `scripting`, `storage`, or extra host permissions unless the code needs them. Fewer permissions usually means easier review and better user trust.
+Do not add extra permissions unless the code needs them. Fewer permissions usually means easier review and better user trust.
 
 ## Privacy Notes
 
