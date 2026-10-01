@@ -80,6 +80,19 @@ function extractVideoId(value: unknown): string | null {
     return null;
 }
 
+function getSelectedRenderer(item: unknown): Record<string, any> | undefined {
+    if (!item || typeof item !== "object") return undefined;
+    const it = item as Record<string, any>;
+    return (
+        it.playlistPanelVideoRenderer ||
+        it.playlistPanelVideoWrapperRenderer?.primaryRenderer
+            ?.playlistPanelVideoRenderer ||
+        it.content?.playlistPanelVideoRenderer ||
+        it.content?.playlistPanelVideoWrapperRenderer?.primaryRenderer
+            ?.playlistPanelVideoRenderer
+    );
+}
+
 function getYtQueueVideoIds(): Set<string> {
     const ids = new Set<string>();
     try {
@@ -137,7 +150,9 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
                 const queueItemsLength = queueItems.length ?? 0;
                 const index =
                     position === "next"
-                        ? Math.max(queueItemsLength - 1, 0)
+                        ? queueItems.findIndex((it: any) =>
+                              getSelectedRenderer(it)?.selected,
+                          ) + 1 || queueItemsLength
                         : queueItemsLength;
                 queue?.dispatch({
                     type: "ADD_ITEMS",
