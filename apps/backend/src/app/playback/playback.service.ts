@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Queue } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { PrismaService } from 'src/platform/prisma.service';
+import { PlaybackNotification } from 'src/types/playback.type';
+import { escapeHtml } from 'src/helpers/util';
 import { Context, Telegraf } from 'telegraf';
 
 @Injectable()
@@ -296,10 +298,49 @@ export class PlaybackService {
         chatId: string,
         threadId: number | null,
         message: string,
+        parseMode: 'HTML' | 'Markdown' = 'Markdown',
     ) {
         await this.bot.telegram.sendMessage(chatId, message, {
-            parse_mode: 'Markdown',
+            parse_mode: parseMode,
             ...(threadId ? { message_thread_id: threadId } : {}),
         });
+    }
+
+    async sendPlaybackNotification(
+        chatId: string,
+        threadId: number | null,
+        notification: PlaybackNotification,
+    ) {
+        let message: string;
+
+        switch (notification.type) {
+            case 'queue-empty':
+                message = '🚫 No tracks in the queue right now.';
+                break;
+            case 'now-playing':
+                message = `Now playing: <i>"${escapeHtml(notification.song)}"</i> by ${escapeHtml(notification.artist)} 🎧`;
+                break;
+            case 'paused':
+                message = `⏸️ <i>${escapeHtml(notification.song)}</i> - ${escapeHtml(notification.artist)} is now paused`;
+                break;
+            case 'volume-changed':
+                message = `🔊 Volume ${notification.direction}. Current volume: ${escapeHtml(notification.volume)}`;
+                break;
+            case 'mute-changed':
+                message = notification.muted
+                    ? "🤫 Shhh... we're on mute. Enjoy the silence (for now)!"
+                    : "🎶 We're back! Audio unmuted—let the music play!";
+                break;
+            case 'lyrics':
+                message = escapeHtml(
+                    notification.text ||
+                        "🤷‍♀️ No lyrics this time—guess we're freestyling!",
+                );
+                break;
+            default:
+                return;
+        }
+
+        await this.sendMessage(chatId, threadId, message, 'HTML');
     }
 }

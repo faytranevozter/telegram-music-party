@@ -7,7 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PlaybackService } from './playback.service';
-import { Join } from 'src/types/playback.type';
+import { Join, PlaybackNotificationPayload } from 'src/types/playback.type';
 import { from, map } from 'rxjs';
 
 @WebSocketGateway({ cors: { origin: '*' } })
@@ -197,8 +197,10 @@ export class PlaybackGateway {
         await this.playbackService.removeRoomVotes(data.roomId);
     }
 
-    @SubscribeMessage('notify')
-    async onNotify(@MessageBody() data: { roomId: string; message: string }) {
+    @SubscribeMessage('playback-notification')
+    async onPlaybackNotification(
+        @MessageBody() data: PlaybackNotificationPayload,
+    ) {
         // get room
         const room = await this.playbackService.getRoom(data.roomId);
 
@@ -207,10 +209,10 @@ export class PlaybackGateway {
             return;
         }
 
-        await this.playbackService.sendMessage(
+        await this.playbackService.sendPlaybackNotification(
             room.chatId,
             room.threadId,
-            data.message,
+            data,
         );
     }
 }

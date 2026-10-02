@@ -61,6 +61,18 @@ function getQueueInstance() {
 
 type QueuePosition = "end" | "next";
 
+type PlaybackNotification =
+    | { type: "queue-empty" }
+    | { type: "now-playing"; song: string; artist: string }
+    | { type: "paused"; song: string; artist: string }
+    | {
+          type: "volume-changed";
+          direction: "increased" | "decreased";
+          volume: number;
+      }
+    | { type: "mute-changed"; muted: boolean }
+    | { type: "lyrics"; text: string | null };
+
 function extractVideoId(value: unknown): string | null {
     if (!value || typeof value !== "object") return null;
     const item = value as Record<string, any>;
@@ -267,6 +279,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         joined: false,
     });
 
+    const sendPlaybackNotification = (
+        notification: PlaybackNotification,
+    ) => {
+        socket.emit("playback-notification", {
+            ...notification,
+            roomId: ROOM_ID,
+        });
+    };
+
     // Prevent YT "Continue watching?" via window._lact (pear-desktop approach)
     // and fall back to auto-clicking the dialog if it still appears.
     // Honors the persisted bypass setting (default: enabled).
@@ -355,9 +376,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         if (playback.state == "standby" && !queues[0]) {
-            socket.emit("notify", {
-                message: `🚫 No tracks in the queue right now.`,
-                roomId: ROOM_ID,
+            sendPlaybackNotification({
+                type: "queue-empty",
             });
             publishStatus();
             return;
@@ -366,9 +386,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         play();
         publishStatus();
 
-        socket.emit("notify", {
-            message: `Now playing: ___"${playback.song}"___ by ${playback.artist} 🎧`,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "now-playing",
+            song: playback.song,
+            artist: playback.artist,
         });
     });
 
@@ -378,9 +399,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const playback = getPlaybackState();
 
-        socket.emit("notify", {
-            message: `⏸️ ___${playback.song}___ - ${playback.artist} is now paused`,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "paused",
+            song: playback.song,
+            artist: playback.artist,
         });
     });
 
@@ -398,10 +420,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const currentVolume = volumeUp();
         publishStatus();
 
-        // notify
-        socket.emit("notify", {
-            message: `🔊 Volume increased. Current volume: ${currentVolume}`,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "volume-changed",
+            direction: "increased",
+            volume: currentVolume,
         });
     });
 
@@ -409,10 +431,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const currentVolume = volumeDown();
         publishStatus();
 
-        // notify
-        socket.emit("notify", {
-            message: `🔊 Volume decreased. Current volume: ${currentVolume}`,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "volume-changed",
+            direction: "decreased",
+            volume: currentVolume,
         });
     });
 
@@ -420,9 +442,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         toggleMute();
         publishStatus();
 
-        socket.emit("notify", {
-            message: "🤫 Shhh... we're on mute. Enjoy the silence (for now)!",
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "mute-changed",
+            muted: true,
         });
     });
 
@@ -430,20 +452,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         toggleMute();
         publishStatus();
 
-        socket.emit("notify", {
-            message: "🎶 We're back! Audio unmuted—let the music play!",
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "mute-changed",
+            muted: false,
         });
     });
 
     socket.on("lyrics", async () => {
-        const txt =
-            (await lyrics()) ||
-            "🤷‍♀️ No lyrics this time—guess we're freestyling!";
+        const text = await lyrics();
 
-        socket.emit("notify", {
-            message: txt,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "lyrics",
+            text: typeof text === "string" ? text : null,
         });
     });
 
@@ -508,9 +528,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             videoId: videoId,
         });
 
-        socket.emit("notify", {
-            message: `Now playing: ___"${playback.song}"___ by ${playback.artist} 🎧`,
-            roomId: ROOM_ID,
+        sendPlaybackNotification({
+            type: "now-playing",
+            song: playback.song,
+            artist: playback.artist,
         });
     });
 });
