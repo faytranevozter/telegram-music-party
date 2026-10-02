@@ -336,24 +336,26 @@ export class PlaybackTelegramController {
         senderID: number,
         videoId: string,
     ) {
-        const actionRow = [
+        const rows = [
             ...(playNextLabel
                 ? [
-                      Markup.button.callback(
-                          playNextLabel,
-                          `playnext:${senderID}:${videoId}`,
-                      ),
+                      [
+                          Markup.button.callback(
+                              playNextLabel,
+                              `playnext:${senderID}:${videoId}`,
+                          ),
+                      ],
                   ]
                 : []),
-            Markup.button.callback(
-                'Add to Queue',
-                `queue:${senderID}:${videoId}`,
-            ),
-        ];
-        return Markup.inlineKeyboard([
-            actionRow,
+            [
+                Markup.button.callback(
+                    'Add to Queue',
+                    `queue:${senderID}:${videoId}`,
+                ),
+            ],
             [Markup.button.callback('Cancel', `cancel:${senderID}`)],
-        ]);
+        ];
+        return Markup.inlineKeyboard(rows);
     }
 
     private async resolvePlayNextLabel(
