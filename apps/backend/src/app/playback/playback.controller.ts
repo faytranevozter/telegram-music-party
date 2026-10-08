@@ -2099,12 +2099,24 @@ export class PlaybackTelegramController {
         }
 
         const roomId = room.id;
-        const data = await this.playbackService.getQueues(roomId);
+        const result = await this.gateway.getPlayerQueue(roomId);
+        if (result.status !== 'ok') {
+            await ctx.reply(
+                result.status === 'offline'
+                    ? 'No player connected. Open YouTube Music and join this room.'
+                    : result.status === 'timeout'
+                      ? 'The player did not respond. Try again shortly, and make sure your extension is up to date.'
+                      : 'The YouTube Music queue is not available yet. Try again shortly.',
+            );
+            return;
+        }
+        const data = result.items;
+        const requests = await this.playbackService.getQueues(roomId);
 
-        if (!data || data.length === 0) {
+        if (data.length === 0 && requests.length === 0) {
             await ctx.reply(
                 [
-                    `🎧 ${htmlBold('Queue is empty')}`,
+                    `🎧 ${htmlBold('YouTube Music queue is empty')}`,
                     htmlItalic('Search with the bot inline to add songs.'),
                 ].join('\n'),
                 { parse_mode: 'HTML' },
@@ -2112,19 +2124,45 @@ export class PlaybackTelegramController {
             return;
         }
 
-        await ctx.reply(
-            [
-                `🎧 ${htmlBold('Queue')} · ${data.length} song(s)`,
-                '',
-                ...data.map((d, i) => {
-                    const [title, ...rest] = d.title.split(' - ');
-                    const suffix = rest.length
-                        ? ` — ${escapeHtml(rest.join(' - '))}`
-                        : '';
-                    return `${htmlBold(`${i + 1}.`)} ${htmlItalic(title)}${suffix}`;
-                }),
-            ].join('\n'),
-            { parse_mode: 'HTML' },
-        );
+        const currentIndex = data.findIndex((item) => item.current);
+        const upcoming =
+            currentIndex >= 0 ? data.slice(currentIndex + 1) : data;
+        const requestedIds = new Set(requests.map((item) => item.url));
+        const userQueue = upcoming.filter((item) => requestedIds.has(item.url));
+        for (const request of requests) {
+            if (!data.some((item) => item.url === request.url)) {
+                userQueue.push({ ...request, artist: '', current: false });
+            }
+        }
+        const autoplay = upcoming.filter((item) => !requestedIds.has(item.url));
+        const formatTrack = (item: { title: string; artist: string }) =>
+            `${escapeHtml(item.title.slice(0, 120) || 'Unknown track')}${item.artist ? ` — ${escapeHtml(item.artist.slice(0, 80))}` : ''}`;
+        const lines = [`🎧 ${htmlBold('YouTube Music queue')}`];
+        if (currentIndex >= 0)
+            lines.push('', `▶ ${formatTrack(data[currentIndex])}`);
+        // Reserve a separate budget for autoplay so requests cannot hide its preview.
+        const appendSection = (
+            label: string,
+            items: { title: string; artist: string }[],
+            limit: number,
+            budget: number,
+        ) => {
+            lines.push('', htmlBold(label));
+            if (!items.length) lines.push('No upcoming tracks.');
+            let shown = 0;
+            let length = 0;
+            for (const item of items.slice(0, limit)) {
+                const line = `${shown + 1}. ${formatTrack(item)}`;
+                if (length + line.length > budget) break;
+                lines.push(line);
+                length += line.length + 1;
+                shown++;
+            }
+            if (shown < items.length)
+                lines.push(`… ${items.length - shown} more tracks.`);
+        };
+        appendSection('User requests', userQueue, userQueue.length, 1800);
+        appendSection('Player / autoplay', autoplay, 5, 1200);
+        await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
     }
 }

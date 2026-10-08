@@ -1,4 +1,5 @@
 import type { Socket } from "socket.io-client";
+import { readPlayerQueue, watchPlayerQueue } from "./player-queue";
 import {
     getConfig,
     isContinueWatchingBypassEnabled,
@@ -63,6 +64,7 @@ export function buildStatus(): SessionStatus {
         playback = null;
     }
 
+    const playerQueue = readPlayerQueue();
     return {
         connected,
         socketConnected,
@@ -70,11 +72,9 @@ export function buildStatus(): SessionStatus {
         roomId,
         partyUrl,
         playback,
-        queue: session.queues.map((item) => ({
-            id: item.id,
-            url: item.url,
-            title: item.title,
-        })),
+        queue: playerQueue.items,
+        queueAvailable: playerQueue.available,
+        userQueue: session.queues,
         bypassContinueWatching: isContinueWatchingBypassEnabled(),
     };
 }
@@ -210,6 +210,8 @@ export function startMainBridge() {
 }
 
 export function startPlaybackStatusWatchers() {
+    const stopQueueWatcher = watchPlayerQueue(publishStatus);
+    window.addEventListener("pagehide", stopQueueWatcher, { once: true });
     const onPlaybackChange = () => {
         publishStatus();
     };

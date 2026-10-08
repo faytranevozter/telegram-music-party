@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
 import { detect } from "detect-browser";
+import { readPlayerQueue } from "./player-queue";
 import { Config, DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
@@ -73,25 +74,6 @@ type PlaybackNotification =
     | { type: "mute-changed"; muted: boolean }
     | { type: "lyrics"; text: string | null };
 
-function extractVideoId(value: unknown): string | null {
-    if (!value || typeof value !== "object") return null;
-    const item = value as Record<string, any>;
-    const candidates = [
-        item.videoId,
-        item.playlistPanelVideoRenderer?.videoId,
-        item.playlistPanelVideoWrapperRenderer?.primaryRenderer
-            ?.playlistPanelVideoRenderer?.videoId,
-        item.content?.videoId,
-        item.content?.playlistPanelVideoRenderer?.videoId,
-        item.playlistItemData?.videoId,
-        item.navigationEndpoint?.watchEndpoint?.videoId,
-    ];
-    for (const id of candidates) {
-        if (typeof id === "string" && id.length > 0) return id;
-    }
-    return null;
-}
-
 function getSelectedRenderer(item: unknown): Record<string, any> | undefined {
     if (!item || typeof item !== "object") return undefined;
     const it = item as Record<string, any>;
@@ -107,15 +89,8 @@ function getSelectedRenderer(item: unknown): Record<string, any> | undefined {
 
 function getYtQueueVideoIds(): Set<string> {
     const ids = new Set<string>();
-    try {
-        const store = getQueueInstance()?.queue?.store?.store;
-        const items = store?.getState()?.queue?.items ?? [];
-        for (const item of items) {
-            const id = extractVideoId(item);
-            if (id) ids.add(id);
-        }
-    } catch {
-        // queue store may not be ready yet
+    for (const item of readPlayerQueue().items) {
+        ids.add(item.url);
     }
     const currentId = getVideoId();
     if (currentId) ids.add(currentId);
@@ -271,6 +246,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // initialize socket connection
     const socket = io(partyURL);
+    socket.on("get-player-queue", (ack: (snapshot: unknown) => void) => {
+        if (typeof ack === "function") ack(readPlayerQueue());
+    });
     setBridgeSession({
         socket,
         roomId: config.roomId,

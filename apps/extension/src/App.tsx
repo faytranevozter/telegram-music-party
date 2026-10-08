@@ -16,6 +16,7 @@ import type {
     SessionStatus,
 } from "./shared/messages";
 
+import { splitQueue } from "./lib/player-queue";
 type TabState = "loading" | "no-tab" | "ready";
 
 const emptyStatus: SessionStatus = {
@@ -26,6 +27,8 @@ const emptyStatus: SessionStatus = {
     partyUrl: null,
     playback: null,
     queue: [],
+    queueAvailable: false,
+    userQueue: [],
     bypassContinueWatching: true,
 };
 
@@ -99,6 +102,9 @@ function playbackChip(state: SessionStatus["playback"]) {
 }
 
 function parseQueueLabel(item: QueueItem): { title: string; subtitle?: string } {
+    if (item.artist !== undefined) {
+        return { title: item.title || "Unknown track", subtitle: item.artist };
+    }
     const raw = item.title?.trim();
     if (!raw) {
         return { title: "Unknown track", subtitle: item.url };
@@ -253,6 +259,7 @@ function App() {
     };
 
     const isPlaying = status.playback?.state === "playing";
+    const queueGroups = splitQueue(status.queue, status.userQueue ?? []);
     const controlsDisabled =
         (!status.connected && !status.hasRoom) ||
         busy ||
@@ -530,27 +537,34 @@ function App() {
                             <CardBody className="gap-2 py-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                                        Queue
+                                        YouTube Music queue
                                     </p>
                                     <span className="text-[10px] text-zinc-500 shrink-0">
                                         {status.queue.length} tracks
                                     </span>
                                 </div>
-                                {status.queue.length === 0 ? (
+                                {!status.queueAvailable ? (
                                     <p className="text-xs text-zinc-500">
-                                        Queue is empty. Add songs via Telegram.
+                                        Player queue is not available yet.
                                     </p>
-                                ) : (
+                                ) : null}
+                                {[
+                                    { label: "User requests", items: queueGroups.user },
+                                    { label: "Player / autoplay", items: queueGroups.autoplay },
+                                ].map((group) => (
+                                    <div key={group.label} className="space-y-2">
+                                    <p className="text-xs font-medium text-zinc-400">{group.label}</p>
+                                    {group.items.length === 0 && <p className="text-xs text-zinc-500">No upcoming tracks.</p>}
                                     <ul className="max-h-36 space-y-2 overflow-y-auto pr-1">
-                                        {status.queue.map((item, index) => {
+                                        {group.items.map((item, index) => {
                                             const label = parseQueueLabel(item);
                                             return (
                                                 <li
-                                                    key={item.id || item.url}
+                                                    key={`${index}:${item.id || item.url}`}
                                                     className="flex items-start gap-2 text-xs"
                                                 >
                                                     <span className="w-4 shrink-0 pt-0.5 text-zinc-500 tabular-nums">
-                                                        {index + 1}
+                                                        {item.current ? "▶" : index + 1}
                                                     </span>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="truncate font-medium text-zinc-200">
@@ -566,6 +580,10 @@ function App() {
                                             );
                                         })}
                                     </ul>
+                                    </div>
+                                ))}
+                                {queueGroups.hiddenAutoplay > 0 && (
+                                    <p className="text-xs text-zinc-500">+{queueGroups.hiddenAutoplay} more player tracks</p>
                                 )}
                             </CardBody>
                         </Card>

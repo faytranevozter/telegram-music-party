@@ -7,13 +7,36 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PlaybackService } from './playback.service';
-import { Join, PlaybackNotificationPayload } from 'src/types/playback.type';
+import {
+    Join,
+    PlaybackNotificationPayload,
+    PlayerQueueResult,
+    validatePlayerQueue,
+} from 'src/types/playback.type';
 import { from, map } from 'rxjs';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class PlaybackGateway {
     constructor(private readonly playbackService: PlaybackService) {}
     @WebSocketServer() wss: Server;
+
+    async getPlayerQueue(roomId: string): Promise<PlayerQueueResult> {
+        const sockets = await this.wss.in(roomId).fetchSockets();
+        if (sockets.length !== 1) return { status: 'offline' };
+        const playerId = sockets[0].id;
+        try {
+            const responses = (await this.wss
+                .to(playerId)
+                .timeout(5000)
+                .emitWithAck('get-player-queue')) as unknown[];
+            const active = await this.wss.in(roomId).fetchSockets();
+            if (active.length !== 1 || active[0].id !== playerId)
+                return { status: 'offline' };
+            return validatePlayerQueue(responses[0]);
+        } catch {
+            return { status: 'timeout' };
+        }
+    }
 
     // Function to emit events from the server
     playCommand(roomID: string) {

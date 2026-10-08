@@ -21,6 +21,8 @@ export type QueueItem = {
     id: string;
     url: string;
     title?: string;
+    artist?: string;
+    current?: boolean;
 };
 
 export type SessionStatus = {
@@ -32,6 +34,8 @@ export type SessionStatus = {
     partyUrl: string | null;
     playback: PlaybackInfo | null;
     queue: QueueItem[];
+    queueAvailable: boolean;
+    userQueue: QueueItem[];
     bypassContinueWatching: boolean;
 };
 
