@@ -58,6 +58,174 @@ describe('PlaybackGateway player queue', () => {
     });
 });
 
+describe('PlaybackGateway room admission', () => {
+    const room = { id: 'room', chatId: 'chat', threadId: null };
+    let gateway: PlaybackGateway;
+    let service: {
+        getRoom: jest.Mock;
+        getRoomDevices: jest.Mock;
+        getRoomDevice: jest.Mock;
+        addDevice: jest.Mock;
+        removeDevice: jest.Mock;
+        getQueues: jest.Mock;
+        sendMessage: jest.Mock;
+    };
+
+    function makeSocket(id = 'socket-1') {
+        const socket = {
+            id,
+            data: {} as Record<string, unknown>,
+            emit: jest.fn(),
+            join: jest.fn(),
+            leave: jest.fn(),
+        };
+        return socket as unknown as {
+            id: string;
+            data: Record<string, unknown>;
+            emit: jest.Mock;
+            join: jest.Mock;
+            leave: jest.Mock;
+        };
+    }
+
+    beforeEach(() => {
+        service = {
+            getRoom: jest.fn().mockResolvedValue(room),
+            getRoomDevices: jest.fn().mockResolvedValue([]),
+            getRoomDevice: jest.fn().mockResolvedValue(null),
+            addDevice: jest.fn().mockResolvedValue(undefined),
+            removeDevice: jest.fn().mockResolvedValue(undefined),
+            getQueues: jest.fn().mockResolvedValue([]),
+            sendMessage: jest.fn().mockResolvedValue(undefined),
+        };
+        gateway = new PlaybackGateway(service as unknown as PlaybackService);
+        gateway.wss = {
+            in: jest.fn(() => ({
+                fetchSockets: jest.fn().mockResolvedValue([]),
+            })),
+        } as unknown as Server;
+    });
+
+    it('rejects a join when a different device already occupies the room', async () => {
+        service.getRoomDevices.mockResolvedValue([
+            { id: 'd1', name: 'Other', fingerprint: 'other' },
+        ]);
+        const socket = makeSocket();
+
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+
+        expect(socket.emit).toHaveBeenCalledWith('join-rejected', {
+            reason: 'room-busy',
+        });
+        expect(socket.join).not.toHaveBeenCalled();
+        expect(service.addDevice).not.toHaveBeenCalled();
+    });
+
+    it('allows the same fingerprint to reconnect', async () => {
+        service.getRoomDevices.mockResolvedValue([
+            { id: 'd1', name: 'Mine', fingerprint: 'mine' },
+        ]);
+        service.getRoomDevice.mockResolvedValue({
+            id: 'd1',
+            name: 'Mine',
+            fingerprint: 'mine',
+        });
+        const socket = makeSocket();
+
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+
+        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+        expect(socket.join).toHaveBeenCalledWith('room');
+        expect(service.addDevice).not.toHaveBeenCalled();
+    });
+
+    it('admits the first player into an empty room', async () => {
+        const socket = makeSocket();
+
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+
+        expect(service.addDevice).toHaveBeenCalledWith(
+            'room',
+            'mine',
+            'Chrome',
+        );
+        expect(socket.join).toHaveBeenCalledWith('room');
+        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+        expect(socket.data.session).toEqual({
+            roomId: 'room',
+            fingerprint: 'mine',
+        });
+    });
+
+    it('frees the room when the owning socket disconnects', async () => {
+        service.getRoomDevice.mockResolvedValue({
+            id: 'd1',
+            name: 'Mine',
+            fingerprint: 'mine',
+        });
+        const socket = makeSocket();
+        socket.data.session = { roomId: 'room', fingerprint: 'mine' };
+
+        await gateway.handleDisconnect(socket as never);
+
+        expect(service.removeDevice).toHaveBeenCalledWith('room', 'mine');
+    });
+
+    it('does not free the room when the same device reconnected elsewhere', async () => {
+        service.getRoomDevice.mockResolvedValue({
+            id: 'd1',
+            name: 'Mine',
+            fingerprint: 'mine',
+        });
+        gateway.wss = {
+            in: jest.fn(() => ({
+                fetchSockets: jest.fn().mockResolvedValue([
+                    {
+                        id: 'socket-2',
+                        data: { session: { fingerprint: 'mine' } },
+                    },
+                ]),
+            })),
+        } as unknown as Server;
+        const socket = makeSocket('socket-1');
+        socket.data.session = { roomId: 'room', fingerprint: 'mine' };
+
+        await gateway.handleDisconnect(socket as never);
+
+        expect(service.removeDevice).not.toHaveBeenCalled();
+    });
+
+    it('leaves the socket room on explicit leave', async () => {
+        service.getRoomDevice.mockResolvedValue({
+            id: 'd1',
+            name: 'Mine',
+            fingerprint: 'mine',
+            room,
+        });
+        const socket = makeSocket();
+
+        await gateway.onLeave(socket as never, {
+            roomId: 'room',
+            fingerprint: 'mine',
+        });
+
+        expect(socket.leave).toHaveBeenCalledWith('room');
+        expect(service.removeDevice).toHaveBeenCalledWith('room', 'mine');
+    });
+});
+
 describe('PlaybackGateway notifications', () => {
     const getRoom = jest.fn();
     const sendPlaybackNotification = jest.fn();

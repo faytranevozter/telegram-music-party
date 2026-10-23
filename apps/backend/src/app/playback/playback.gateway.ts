@@ -1,6 +1,7 @@
 import {
     ConnectedSocket,
     MessageBody,
+    OnGatewayDisconnect,
     SubscribeMessage,
     WebSocketGateway,
     WebSocketServer,
@@ -15,10 +16,45 @@ import {
 } from 'src/types/playback.type';
 import { from, map } from 'rxjs';
 
+type PlayerSession = { roomId: string; fingerprint: string };
+
 @WebSocketGateway({ cors: { origin: '*' } })
-export class PlaybackGateway {
+export class PlaybackGateway implements OnGatewayDisconnect {
     constructor(private readonly playbackService: PlaybackService) {}
     @WebSocketServer() wss: Server;
+
+    /** Serializes join admission per room so concurrent joins can't both win. */
+    private readonly roomLocks = new Map<string, Promise<void>>();
+
+    private withRoomLock<T>(roomId: string, fn: () => Promise<T>): Promise<T> {
+        const previous = this.roomLocks.get(roomId) ?? Promise.resolve();
+        const run = previous.then(fn, fn);
+        this.roomLocks.set(
+            roomId,
+            run.then(
+                () => undefined,
+                () => undefined,
+            ),
+        );
+        return run;
+    }
+
+    private setSession(
+        socket: Socket,
+        session: { roomId: string; fingerprint: string } | null,
+    ) {
+        const data = socket.data as { session?: PlayerSession };
+        if (session) {
+            data.session = session;
+        } else {
+            delete data.session;
+        }
+    }
+
+    private getSession(socket: { data: unknown }): PlayerSession | undefined {
+        const data = socket.data as { session?: PlayerSession } | undefined;
+        return data?.session;
+    }
 
     async getPlayerQueue(roomId: string): Promise<PlayerQueueResult> {
         const sockets = await this.wss.in(roomId).fetchSockets();
@@ -116,56 +152,56 @@ export class PlaybackGateway {
             return;
         }
 
-        // Only one active device per room: kick everyone else first
-        const removed = await this.playbackService.removeOtherDevices(
-            room.id,
-            data.fingerprint,
-        );
-
-        const socketsInRoom = await this.wss.in(room.id).fetchSockets();
-        for (const other of socketsInRoom) {
-            if (other.id === socket.id) continue;
-            other.emit('leave');
-            void other.leave(room.id);
-        }
-
-        for (const old of removed) {
-            await this.playbackService.sendMessage(
-                room.chatId,
-                room.threadId,
-                `${old.name} disconnected (replaced by a new device)`,
+        // Admission control: at most one player per room.
+        // The existing device must leave or disconnect before another can join.
+        await this.withRoomLock(room.id, async () => {
+            const devices = await this.playbackService.getRoomDevices(room.id);
+            const occupant = devices.find(
+                (device) => device.fingerprint !== data.fingerprint,
             );
-        }
 
-        // check device is already joined
-        const device = await this.playbackService.getRoomDevice(
-            room.id,
-            data.fingerprint,
-        );
+            if (occupant) {
+                console.log(`join: room ${room.id} is busy (${occupant.name})`);
+                socket.emit('join-rejected', { reason: 'room-busy' });
+                return;
+            }
 
-        if (!device) {
-            // add device
-            await this.playbackService.addDevice(
+            // check device is already joined (same fingerprint reconnect)
+            const device = await this.playbackService.getRoomDevice(
                 room.id,
                 data.fingerprint,
-                data.browser,
             );
 
-            // send message
-            await this.playbackService.sendMessage(
-                room.chatId,
-                room.threadId,
-                `${data.browser} joined`,
-            );
-        }
+            if (!device) {
+                // add device
+                await this.playbackService.addDevice(
+                    room.id,
+                    data.fingerprint,
+                    data.browser,
+                );
 
-        void socket.join(room.id);
+                // send message
+                await this.playbackService.sendMessage(
+                    room.chatId,
+                    room.threadId,
+                    `${data.browser} joined`,
+                );
+            }
 
-        // emit join with queue only to the joining socket
-        const queues = await this.playbackService.getQueues(room.id);
-        socket.emit('joined', queues);
+            void socket.join(room.id);
 
-        console.log('player joined', data.id);
+            // remember what this socket owns, for disconnect cleanup
+            this.setSession(socket, {
+                roomId: room.id,
+                fingerprint: data.fingerprint,
+            });
+
+            // emit join with queue only to the joining socket
+            const queues = await this.playbackService.getQueues(room.id);
+            socket.emit('joined', queues);
+
+            console.log('player joined', data.id);
+        });
     }
 
     @SubscribeMessage('leave')
@@ -195,7 +231,39 @@ export class PlaybackGateway {
         // remove device
         await this.playbackService.removeDevice(data.roomId, data.fingerprint);
 
-        // void socket.leave(data.roomId);
+        // actually leave the Socket.IO room so it stops receiving playback events
+        void socket.leave(data.roomId);
+        this.setSession(socket, null);
+    }
+
+    async handleDisconnect(socket: Socket) {
+        const session = this.getSession(socket);
+        if (!session) return;
+
+        const { roomId, fingerprint } = session;
+        this.setSession(socket, null);
+
+        const room = await this.playbackService.getRoom(roomId);
+        if (!room) return;
+
+        // Free the room only if this socket still owns the device and no
+        // newer socket for the same fingerprint has taken over.
+        const device = await this.playbackService.getRoomDevice(
+            roomId,
+            fingerprint,
+        );
+        if (!device) return;
+
+        const active = await this.wss.in(roomId).fetchSockets();
+        const stillConnected = active.some(
+            (s) =>
+                s.id !== socket.id &&
+                this.getSession(s)?.fingerprint === fingerprint,
+        );
+        if (stillConnected) return;
+
+        await this.playbackService.removeDevice(roomId, fingerprint);
+        console.log(`${device.name} disconnected from ${roomId}`);
     }
 
     @SubscribeMessage('started')
