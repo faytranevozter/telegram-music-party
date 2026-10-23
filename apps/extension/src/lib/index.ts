@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
-import { detect } from "detect-browser";
 import { readPlayerQueue } from "./player-queue";
-import { Config, DEFAULT_PARTY_URL, getConfig } from "../constants/config";
+import { DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
     getPlaybackState,
@@ -20,7 +19,7 @@ import {
     volumeDown,
     volumeUp,
 } from "./playback";
-import { createJoinButton, createLeaveButton, getDeviceId } from "./browser";
+import { createJoinButton, createLeaveButton, getDeviceInfo } from "./browser";
 import {
     publishStatus,
     setBridgeSession,
@@ -161,22 +160,6 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
         });
 }
 
-const getDeviceInfo = (config: Config) => {
-    const info = detect();
-    const fingerprint = getDeviceId();
-    const browser = [
-        (info?.name?.slice(0, 1).toUpperCase() || "") +
-            (info?.name?.slice(1) || ""),
-        info?.os,
-    ];
-
-    return {
-        id: config.roomId || "",
-        browser: browser.filter(Boolean).join(" ") || "",
-        fingerprint,
-    };
-};
-
 const detectSongChange = (
     callback: (
         playback: ReturnType<typeof getPlaybackState>,
@@ -281,7 +264,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             url: item.url,
             title: item.title,
         }));
-        setBridgeSession({ queues, joined: true });
+        setBridgeSession({ queues, joined: true, joinRejected: false });
         const playback = getPlaybackState();
         const isColdStart = !hasSynced && playback.state === "standby";
         const head = data[0];
@@ -311,10 +294,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 1000);
     });
 
+    // the room already has a connected player; we must not take over
+    socket.on("join-rejected", () => {
+        console.log("Join rejected: room already has a connected player");
+        queues = [];
+        hasSynced = false;
+        setBridgeSession({ joined: false, queues: [], joinRejected: true });
+    });
+
     // handle on leave
     socket.on("leave", async () => {
         hasSynced = false;
-        setBridgeSession({ joined: false, queues: [], roomId: null });
+        setBridgeSession({
+            joined: false,
+            queues: [],
+            roomId: null,
+            joinRejected: false,
+        });
         stopIdleKeepAlive();
         stopContinueWatchingWatcher();
         // clear local storage
@@ -327,7 +323,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // handle on connect (fire when user joined the room or refresh the page)
     socket.on("connect", async () => {
         console.log("Connected to WebSocket server with ID:", socket.id);
-        publishStatus();
+        setBridgeSession({ joinRejected: false });
 
         socket.emit("join", getDeviceInfo(config));
     });

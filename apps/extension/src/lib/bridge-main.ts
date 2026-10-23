@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io-client";
 import { readPlayerQueue, watchPlayerQueue } from "./player-queue";
+import { getDeviceInfo } from "./browser";
 import {
     getConfig,
     isContinueWatchingBypassEnabled,
@@ -34,6 +35,7 @@ type Session = {
     partyUrl: string | null;
     queues: Queue[];
     joined: boolean;
+    joinRejected: boolean;
 };
 
 const session: Session = {
@@ -42,6 +44,7 @@ const session: Session = {
     partyUrl: null,
     queues: [],
     joined: false,
+    joinRejected: false,
 };
 
 export function buildStatus(): SessionStatus {
@@ -69,6 +72,7 @@ export function buildStatus(): SessionStatus {
         connected,
         socketConnected,
         hasRoom,
+        joinRejected: session.joinRejected,
         roomId,
         partyUrl,
         playback,
@@ -140,6 +144,7 @@ function leaveRoom() {
     localStorage.removeItem("roomId");
     localStorage.removeItem("partyUrl");
     session.joined = false;
+    session.joinRejected = false;
     session.queues = [];
     session.roomId = null;
     publishStatus();
@@ -171,6 +176,23 @@ function handleRequest(request: BridgeRequestMessage): BridgeResponse {
             }
             leaveRoom();
             return { type: "OK" };
+        case "JOIN": {
+            const config = getConfig();
+            const roomId = session.roomId ?? config.roomId;
+            if (!roomId) {
+                return { type: "ERROR", message: "Not in a room" };
+            }
+            if (!session.socket?.connected) {
+                return { type: "ERROR", message: "Server unreachable" };
+            }
+            session.joinRejected = false;
+            session.socket.emit(
+                "join",
+                getDeviceInfo({ ...config, roomId }),
+            );
+            publishStatus();
+            return { type: "OK" };
+        }
         case "SET_CONTINUE_WATCHING_BYPASS":
             setContinueWatchingBypass(request.enabled);
             applyContinueWatchingSetting();

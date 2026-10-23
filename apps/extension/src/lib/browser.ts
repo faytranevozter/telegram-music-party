@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Socket } from "socket.io-client";
+import { detect } from "detect-browser";
 import { Config, DEFAULT_PARTY_URL } from "../constants/config";
 
 const DEVICE_ID_KEY = "ytmp_device_id";
@@ -15,6 +16,22 @@ export function getDeviceId(): string {
 
     localStorage.setItem(DEVICE_ID_KEY, id);
     return id;
+}
+
+export function getDeviceInfo(config: Config) {
+    const info = detect();
+    const fingerprint = getDeviceId();
+    const browser = [
+        (info?.name?.slice(0, 1).toUpperCase() || "") +
+            (info?.name?.slice(1) || ""),
+        info?.os,
+    ];
+
+    return {
+        id: config.roomId || "",
+        browser: browser.filter(Boolean).join(" ") || "",
+        fingerprint,
+    };
 }
 
 function createButton({

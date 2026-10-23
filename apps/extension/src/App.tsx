@@ -23,6 +23,7 @@ const emptyStatus: SessionStatus = {
     connected: false,
     socketConnected: false,
     hasRoom: false,
+    joinRejected: false,
     roomId: null,
     partyUrl: null,
     playback: null,
@@ -50,6 +51,7 @@ async function sendToTab(
         | { type: "GET_STATUS" }
         | { type: "CONTROL"; action: ControlAction }
         | { type: "LEAVE" }
+        | { type: "JOIN" }
         | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean },
 ): Promise<BridgeResponse> {
     return chrome.tabs.sendMessage(tabId, message) as Promise<BridgeResponse>;
@@ -72,6 +74,9 @@ function truncate(value: string, max = 22): string {
 function connectionMeta(status: SessionStatus, tabState: TabState) {
     if (tabState === "no-tab") {
         return { label: "No tab", color: "default" as const };
+    }
+    if (status.joinRejected) {
+        return { label: "Room busy", color: "warning" as const };
     }
     if (status.connected) {
         return { label: "Connected", color: "success" as const };
@@ -228,6 +233,23 @@ function App() {
         }
     };
 
+    const retryJoin = async () => {
+        if (!tabId || busy) return;
+        setBusy(true);
+        try {
+            const response = await sendToTab(tabId, { type: "JOIN" });
+            if (response.type === "ERROR") {
+                setError(response.message);
+            } else {
+                setError(null);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Join failed");
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const setBypassContinueWatching = async (enabled: boolean) => {
         if (!tabId || busy) return;
         setBusy(true);
@@ -262,14 +284,19 @@ function App() {
     const queueGroups = splitQueue(status.queue, status.userQueue ?? []);
     const controlsDisabled =
         (!status.connected && !status.hasRoom) ||
+        status.joinRejected ||
         busy ||
         tabState !== "ready" ||
         !status.socketConnected;
     const conn = connectionMeta(status, tabState);
     const playChip = playbackChip(status.playback);
     const showNotJoined = tabState === "ready" && !status.hasRoom;
+    const showJoinRejected = tabState === "ready" && status.joinRejected;
     const showDisconnected =
-        tabState === "ready" && status.hasRoom && !status.socketConnected;
+        tabState === "ready" &&
+        status.hasRoom &&
+        !status.joinRejected &&
+        !status.socketConnected;
 
     return (
         <div className="dark w-[380px] min-h-[420px] bg-zinc-950 text-zinc-100 overflow-x-hidden">
@@ -385,6 +412,33 @@ function App() {
                                         </code>
                                         .
                                     </p>
+                                </CardBody>
+                            </Card>
+                        )}
+
+                        {showJoinRejected && (
+                            <Card className="bg-amber-500/10 border border-amber-500/30 shadow-none">
+                                <CardBody className="gap-2 py-3">
+                                    <p className="text-sm font-medium text-amber-200">
+                                        Room is busy
+                                    </p>
+                                    <p className="text-xs text-amber-100/80 leading-relaxed">
+                                        Another device is already playing in
+                                        this room. Only one player can be
+                                        connected at a time — leave the room on
+                                        that device first, then retry.
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="flat"
+                                        className="w-fit"
+                                        isDisabled={busy}
+                                        onPress={() => {
+                                            void retryJoin();
+                                        }}
+                                    >
+                                        Retry join
+                                    </Button>
                                 </CardBody>
                             </Card>
                         )}

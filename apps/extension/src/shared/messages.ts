@@ -30,6 +30,8 @@ export type SessionStatus = {
     socketConnected: boolean;
     /** True when a room ID is saved (joined or reconnecting), false when never joined */
     hasRoom: boolean;
+    /** True when the server refused the join because another device owns the room */
+    joinRejected: boolean;
     roomId: string | null;
     partyUrl: string | null;
     playback: PlaybackInfo | null;
@@ -43,6 +45,7 @@ export type BridgeRequest =
     | { type: "GET_STATUS" }
     | { type: "CONTROL"; action: ControlAction }
     | { type: "LEAVE" }
+    | { type: "JOIN" }
     | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean };
 
 export type BridgeResponse =
