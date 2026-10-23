@@ -222,24 +222,7 @@ export class PlaybackService {
     }
 
     async removeRoom(roomId: string) {
-        await this.prisma.device.deleteMany({
-            where: {
-                roomId,
-            },
-        });
-
-        await this.prisma.queue.deleteMany({
-            where: {
-                roomId,
-            },
-        });
-
-        await this.prisma.feature.deleteMany({
-            where: {
-                roomId,
-            },
-        });
-
+        // Child rows (Device, Queue, Vote, Feature) cascade from the room.
         await this.prisma.room.delete({
             where: {
                 id: roomId,
