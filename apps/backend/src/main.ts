@@ -26,6 +26,22 @@ async function bootstrap() {
         },
         { command: 'vote_next', description: 'Voting to play next' },
         { command: 'queue', description: 'Queue list' },
+        {
+            command: 'stats',
+            description: 'Room overview: requests, plays, listening time',
+        },
+        {
+            command: 'top',
+            description: 'Top songs or artists (today/week/month/all)',
+        },
+        {
+            command: 'history',
+            description: 'Recent playbacks in this room',
+        },
+        {
+            command: 'mystats',
+            description: 'Your requests and plays in this room',
+        },
         { command: 'lyrics', description: 'Get lyrics from current playing' },
         { command: 'volume_up', description: 'Increase the volume' },
         { command: 'volume_down', description: 'Decrease the volume' },

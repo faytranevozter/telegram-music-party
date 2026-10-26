@@ -1,5 +1,6 @@
 import { PlaybackGateway } from './playback.gateway';
 import { PlaybackService } from './playback.service';
+import type { AnalyticsService } from 'src/app/analytics/analytics.service';
 import type { Server } from 'socket.io';
 
 describe('PlaybackGateway player queue', () => {
@@ -12,7 +13,10 @@ describe('PlaybackGateway player queue', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        gateway = new PlaybackGateway({} as PlaybackService);
+        gateway = new PlaybackGateway(
+            {} as PlaybackService,
+            {} as AnalyticsService,
+        );
         gateway.wss = {
             in: inRoom,
             to,
@@ -68,7 +72,10 @@ describe('PlaybackGateway autoplay commands', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        gateway = new PlaybackGateway({} as PlaybackService);
+        gateway = new PlaybackGateway(
+            {} as PlaybackService,
+            {} as AnalyticsService,
+        );
         gateway.wss = {
             in: inRoom,
             to,
@@ -170,6 +177,7 @@ describe('PlaybackGateway autoplay commands', () => {
 describe('PlaybackGateway room admission', () => {
     const room = { id: 'room', chatId: 'chat', threadId: null };
     let gateway: PlaybackGateway;
+    let analytics: { closeRoomSessions: jest.Mock };
     let service: {
         getRoom: jest.Mock;
         getRoomDevices: jest.Mock;
@@ -198,6 +206,9 @@ describe('PlaybackGateway room admission', () => {
     }
 
     beforeEach(() => {
+        analytics = {
+            closeRoomSessions: jest.fn().mockResolvedValue(undefined),
+        };
         service = {
             getRoom: jest.fn().mockResolvedValue(room),
             getRoomDevices: jest.fn().mockResolvedValue([]),
@@ -207,7 +218,10 @@ describe('PlaybackGateway room admission', () => {
             getQueues: jest.fn().mockResolvedValue([]),
             sendMessage: jest.fn().mockResolvedValue(undefined),
         };
-        gateway = new PlaybackGateway(service as unknown as PlaybackService);
+        gateway = new PlaybackGateway(
+            service as unknown as PlaybackService,
+            analytics as unknown as AnalyticsService,
+        );
         gateway.wss = {
             in: jest.fn(() => ({
                 fetchSockets: jest.fn().mockResolvedValue([]),
@@ -290,6 +304,10 @@ describe('PlaybackGateway room admission', () => {
         await gateway.handleDisconnect(socket as never);
 
         expect(service.removeDevice).toHaveBeenCalledWith('room', 'mine');
+        expect(analytics.closeRoomSessions).toHaveBeenCalledWith(
+            'room',
+            'interrupted',
+        );
     });
 
     it('does not free the room when the same device reconnected elsewhere', async () => {
@@ -332,6 +350,107 @@ describe('PlaybackGateway room admission', () => {
 
         expect(socket.leave).toHaveBeenCalledWith('room');
         expect(service.removeDevice).toHaveBeenCalledWith('room', 'mine');
+        expect(analytics.closeRoomSessions).toHaveBeenCalledWith(
+            'room',
+            'interrupted',
+        );
+    });
+});
+
+describe('PlaybackGateway playback reports', () => {
+    const getRoomDevice = jest.fn();
+    const recordPlayback = jest.fn();
+    const sendPlaybackNotification = jest.fn();
+    let gateway: PlaybackGateway;
+
+    const report = () => ({
+        roomId: 'room',
+        playbackId: 'playback-1',
+        videoId: 'dQw4w9WgXcQ',
+        title: 'Song',
+        artist: 'Artist',
+        durationMs: 200_000,
+        source: 'requested' as const,
+        event: 'start' as const,
+        startedAt: new Date().toISOString(),
+        listenedMs: 0,
+    });
+
+    function makeSocket(inRoom = true) {
+        return {
+            id: 'socket-1',
+            data: { session: { roomId: 'room', fingerprint: 'device-1' } },
+            rooms: new Set(inRoom ? ['room'] : []),
+        };
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        getRoomDevice.mockResolvedValue({
+            id: 'device',
+            fingerprint: 'device-1',
+        });
+        recordPlayback.mockResolvedValue(undefined);
+        gateway = new PlaybackGateway(
+            {
+                getRoomDevice,
+                sendPlaybackNotification,
+            } as unknown as PlaybackService,
+            { recordPlayback } as unknown as AnalyticsService,
+        );
+    });
+
+    it('records reports from the admitted device in the room', async () => {
+        await gateway.onPlaybackReport(makeSocket() as never, report());
+        expect(getRoomDevice).toHaveBeenCalledWith('room', 'device-1');
+        expect(recordPlayback).toHaveBeenCalledWith(
+            expect.objectContaining({
+                playbackId: 'playback-1',
+                roomId: 'room',
+            }),
+        );
+        // Analytics is independent of Telegram notifications.
+        expect(sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('ignores sockets that are not in the room channel', async () => {
+        await gateway.onPlaybackReport(makeSocket(false) as never, report());
+        expect(recordPlayback).not.toHaveBeenCalled();
+    });
+
+    it('ignores devices that are no longer admitted', async () => {
+        getRoomDevice.mockResolvedValue(null);
+        await gateway.onPlaybackReport(makeSocket() as never, report());
+        expect(recordPlayback).not.toHaveBeenCalled();
+    });
+
+    it('ignores the old device after another device takes over the room', async () => {
+        // The room is now admitted to a different fingerprint; the old socket
+        // may still be connected and buffering reports.
+        getRoomDevice.mockResolvedValue(null);
+        await gateway.onPlaybackReport(makeSocket() as never, {
+            ...report(),
+            playbackId: 'old-playback',
+        });
+        expect(getRoomDevice).toHaveBeenCalledWith('room', 'device-1');
+        expect(recordPlayback).not.toHaveBeenCalled();
+    });
+
+    it('ignores reports for a different room', async () => {
+        await gateway.onPlaybackReport(makeSocket() as never, {
+            ...report(),
+            roomId: 'other-room',
+        });
+        expect(recordPlayback).not.toHaveBeenCalled();
+    });
+
+    it('ignores malformed reports before querying admission', async () => {
+        await gateway.onPlaybackReport(makeSocket() as never, {
+            ...report(),
+            videoId: '',
+        });
+        expect(getRoomDevice).not.toHaveBeenCalled();
+        expect(recordPlayback).not.toHaveBeenCalled();
     });
 });
 
@@ -347,7 +466,7 @@ describe('PlaybackGateway notifications', () => {
     beforeEach(() => {
         getRoom.mockReset();
         sendPlaybackNotification.mockReset();
-        gateway = new PlaybackGateway(playbackService);
+        gateway = new PlaybackGateway(playbackService, {} as AnalyticsService);
     });
 
     it('routes typed notifications through the room Telegram chat', async () => {

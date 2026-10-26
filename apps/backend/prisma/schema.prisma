@@ -21,10 +21,12 @@ model Room {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    Queues   Queue[]
-    Devices  Device[]
-    Votes    Vote[]
-    Feature Feature?
+    Queues           Queue[]
+    Devices          Device[]
+    Votes            Vote[]
+    Feature          Feature?
+    SongRequests     SongRequest[]
+    PlaybackSessions PlaybackSession[]
 
     @@unique([chatId, threadId])
 }
@@ -61,24 +63,84 @@ model Vote {
 }
 
 model Feature {
-    id                String   @id @default(uuid())
-    roomId            String   @unique
-    room              Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-    minimumVotes      Int      @default(5)
-    nextCommand       Boolean  @default(false)
-    nextOnlyAdmin     Boolean  @default(true)
-    radioCommand      Boolean  @default(true)
-    radioOnlyAdmin    Boolean  @default(true)
-    refreshCommand    Boolean  @default(true)
-    refreshOnlyAdmin  Boolean  @default(true)
-    previousCommand   Boolean  @default(false)
-    previousOnlyAdmin Boolean  @default(true)
-    muteCommand       Boolean  @default(true)
-    unmuteCommand     Boolean  @default(true)
+    id                 String   @id @default(uuid())
+    roomId             String   @unique
+    room               Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+    minimumVotes       Int      @default(5)
+    nextCommand        Boolean  @default(false)
+    nextOnlyAdmin      Boolean  @default(true)
+    radioCommand       Boolean  @default(true)
+    radioOnlyAdmin     Boolean  @default(true)
+    refreshCommand     Boolean  @default(true)
+    refreshOnlyAdmin   Boolean  @default(true)
+    previousCommand    Boolean  @default(false)
+    previousOnlyAdmin  Boolean  @default(true)
+    muteCommand        Boolean  @default(true)
+    unmuteCommand      Boolean  @default(true)
     volumeCommand      Boolean  @default(false)
     maxQueueSize       Int      @default(25)
-    playNextCommand   Boolean  @default(false)
+    playNextCommand    Boolean  @default(false)
     dailyPlayNextLimit Int      @default(3)
     createdAt          DateTime @default(now())
-    updatedAt         DateTime @updatedAt
+    updatedAt          DateTime @updatedAt
+}
+
+/// Durable record of a song request. Kept after the disposable Queue row is
+/// gone, so request history is independent of playback queue state.
+model SongRequest {
+    id          String   @id @default(uuid())
+    roomId      String
+    room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+    /// Telegram user ID when the request came from the bot; null when unknown.
+    requesterId String?
+    videoId     String
+    /// Display snapshots at request time; titles and artist strings can change.
+    title       String
+    artist      String
+    /// queue | play_next
+    source      String   @default("queue")
+    /// queued | started | played | skipped | failed
+    outcome     String   @default("queued")
+    requestedAt DateTime @default(now())
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    PlaybackSessions PlaybackSession[]
+
+    @@index([roomId, requestedAt])
+    @@index([roomId, videoId])
+    @@index([roomId, requesterId, requestedAt])
+}
+
+/// A playback reported by the admitted extension device. Pauses and resumes
+/// stay in one session; a genuine repeat creates a new playback ID.
+model PlaybackSession {
+    id         String       @id
+    roomId     String
+    room       Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+    videoId    String
+    requestId  String?
+    request    SongRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+    title      String       @default("")
+    artist     String       @default("")
+    durationMs Int?
+    /// requested | autoplay | manual | unknown
+    source     String       @default("unknown")
+    startedAt  DateTime
+    /// End observation; null while the playback is still open.
+    endedAt    DateTime?
+    /// Observed playing time only; seeks and paused time are excluded.
+    listenedMs Int          @default(0)
+    /// completed | skipped | interrupted | replaced | unknown
+    endReason  String?
+    /// open | closed | incomplete
+    status     String       @default("open")
+    qualified  Boolean      @default(false)
+    completed  Boolean      @default(false)
+    createdAt  DateTime     @default(now())
+    updatedAt  DateTime     @updatedAt
+
+    @@index([roomId, startedAt])
+    @@index([roomId, videoId])
+    @@index([roomId, requestId])
 }

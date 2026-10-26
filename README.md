@@ -90,6 +90,7 @@ Only one device can be active in a room. Joining from another browser replaces t
 - Reset the queue to the current song plus autoplay with `/refresh`
 - Vote-to-skip with `/vote_next`
 - Admin room configuration with `/config`
+- Room analytics: requests, plays, top songs/artists, listening time
 - Extension popup for status, now playing, queue, controls, and leave
 - One active player device per room
 
@@ -108,6 +109,10 @@ Only one device can be active in a room. Joining from another browser replaces t
 | `/refresh` | Reset the queue to the current song plus autoplay |
 | `/vote_next` | Vote to skip |
 | `/queue` | Show queue |
+| `/stats` | Room overview for today (add `week`, `month`, or `all`) |
+| `/top` | Top songs, requested songs, or artists (`/top requested week`) |
+| `/history` | Recent playbacks in this room |
+| `/mystats` | Your request and playback stats in this room |
 | `/lyrics` | Show lyrics for the current track |
 | `/volume_up` | Increase volume |
 | `/volume_down` | Decrease volume |
@@ -201,6 +206,12 @@ ghcr.io/faytranevozter/telegram-music-party:vX.Y.Z
 ghcr.io/faytranevozter/telegram-music-party:latest
 yt-music-party-extension-vX.Y.Z.zip
 ```
+
+## Analytics
+
+Song requests and confirmed playback are tracked separately per room. See
+[docs/analytics.md](docs/analytics.md) for event definitions, counting rules,
+timezone boundaries, attribution limits, and retention.
 
 ## Privacy
 

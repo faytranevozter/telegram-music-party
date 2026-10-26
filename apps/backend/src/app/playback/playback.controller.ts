@@ -17,6 +17,7 @@ import {
     Update as UpdateType,
 } from 'telegraf/types';
 import { PlaybackService } from './playback.service';
+import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
 import {
@@ -199,6 +200,7 @@ export class PlaybackTelegramController {
         @Inject('KEYV_CACHE') private cacheManager: Keyv,
         private readonly gateway: PlaybackGateway,
         private readonly playbackService: PlaybackService,
+        private readonly analyticsService: AnalyticsService,
         private readonly ytmusicService: YTMusicService,
     ) {}
 
@@ -514,7 +516,9 @@ export class PlaybackTelegramController {
                 '5. Search with @botname and add songs',
                 '6. Run /play to start',
                 '',
-                htmlItalic('Tip: use /info, /queue, and /config anytime.'),
+                htmlItalic(
+                    'Tip: use /info, /queue, /stats, and /config anytime.',
+                ),
             ].join('\n'),
             { parse_mode: 'HTML' },
         );
@@ -1987,11 +1991,37 @@ export class PlaybackTelegramController {
                 cachedSong.duration || 0,
             )}]`;
 
-            await this.playbackService.addToQueue(
-                roomId,
-                videoId,
-                songCombined,
-            );
+            // Analytics is best-effort: a tracking failure must never block a
+            // song request. The request ID becomes the queue row ID.
+            let requestId: string | undefined;
+            try {
+                requestId = await this.analyticsService.recordRequest({
+                    roomId,
+                    requesterId: ctx.from?.id ?? null,
+                    videoId,
+                    title: cachedSong.name,
+                    artist: cachedSong.artist.name,
+                    source: 'queue',
+                });
+            } catch (error) {
+                console.error('recordRequest failed', error);
+            }
+
+            try {
+                await this.playbackService.addToQueue(
+                    roomId,
+                    videoId,
+                    songCombined,
+                    requestId,
+                );
+            } catch (error) {
+                if (requestId) {
+                    await this.analyticsService
+                        .markRequestFailed(requestId)
+                        .catch(() => undefined);
+                }
+                throw error;
+            }
 
             // Mark done before clearing song cache so a concurrent path cannot
             // rewrite the success message as "link expired".
@@ -2025,6 +2055,7 @@ export class PlaybackTelegramController {
                 videoId,
                 'end',
                 songCombined,
+                requestId,
             );
         } finally {
             await this.cacheManager.delete(lockKey);
@@ -2121,11 +2152,36 @@ export class PlaybackTelegramController {
                 cachedSong.duration || 0,
             )}]`;
 
-            await this.playbackService.addPlayNext(
-                roomId,
-                videoId,
-                songCombined,
-            );
+            // Analytics is best-effort; see completeAddToQueue.
+            let requestId: string | undefined;
+            try {
+                requestId = await this.analyticsService.recordRequest({
+                    roomId,
+                    requesterId: userId,
+                    videoId,
+                    title: cachedSong.name,
+                    artist: cachedSong.artist.name,
+                    source: 'play_next',
+                });
+            } catch (error) {
+                console.error('recordRequest failed', error);
+            }
+
+            try {
+                await this.playbackService.addPlayNext(
+                    roomId,
+                    videoId,
+                    songCombined,
+                    requestId,
+                );
+            } catch (error) {
+                if (requestId) {
+                    await this.analyticsService
+                        .markRequestFailed(requestId)
+                        .catch(() => undefined);
+                }
+                throw error;
+            }
 
             if (!isAdmin) {
                 await this.incrementPlayNextCount(roomId, userId);
@@ -2161,6 +2217,7 @@ export class PlaybackTelegramController {
                 videoId,
                 'next',
                 songCombined,
+                requestId,
             );
         } finally {
             await this.cacheManager.delete(lockKey);

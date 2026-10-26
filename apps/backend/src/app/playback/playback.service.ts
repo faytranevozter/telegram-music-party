@@ -13,9 +13,20 @@ export class PlaybackService {
         @InjectBot() private bot: Telegraf<Context>,
     ) {}
 
-    async addToQueue(roomId: string, videoId: string, title: string) {
+    /**
+     * Create the disposable queue row. When analytics created a durable
+     * request, the queue row reuses its ID so playback can be correlated
+     * without an extra column.
+     */
+    async addToQueue(
+        roomId: string,
+        videoId: string,
+        title: string,
+        requestId?: string,
+    ) {
         await this.prisma.queue.create({
             data: {
+                ...(requestId ? { id: requestId } : {}),
                 roomId,
                 url: videoId,
                 title: title,
@@ -23,10 +34,16 @@ export class PlaybackService {
         });
     }
 
-    async addPlayNext(roomId: string, videoId: string, title: string) {
+    async addPlayNext(
+        roomId: string,
+        videoId: string,
+        title: string,
+        requestId?: string,
+    ) {
         const head = await this.getQueue(roomId);
         await this.prisma.queue.create({
             data: {
+                ...(requestId ? { id: requestId } : {}),
                 roomId,
                 url: videoId,
                 title: title,
@@ -222,7 +239,8 @@ export class PlaybackService {
     }
 
     async removeRoom(roomId: string) {
-        // Child rows (Device, Queue, Vote, Feature) cascade from the room.
+        // Child rows (Device, Queue, Vote, Feature) and analytics history
+        // (SongRequest, PlaybackSession) cascade from the room.
         await this.prisma.room.delete({
             where: {
                 id: roomId,

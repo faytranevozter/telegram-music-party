@@ -44,6 +44,9 @@ When you join a room, the Extension connects to the **party URL you provide** (W
 - Device ID (`ytmp_device_id`)  
 - Browser name and OS string (from a local user-agent parse; used to label the connected device)  
 - Playback and queue-related events (e.g. play, pause, next, previous, volume, mute, queue updates, now-playing metadata derived from the YouTube Music page, short status/notify messages)
+- Playback analytics events while you are the active device: YouTube video ID, title/artist display text, playback timestamps, and observed playing time (seeks and pauses excluded), plus a request correlation when the track was requested through the bot
+
+Analytics rows do not include device fingerprints, browser names, message text, or usernames. They are room-scoped and used for the room’s stats commands.
 
 **You choose the server.** If you use a public or third-party party host, that host’s privacy practices apply to data it receives. If you run your own backend, data stays under your control according to how you configure that deployment.
 
@@ -81,7 +84,7 @@ The Extension is not directed at children under 13 (or the equivalent minimum ag
 ## Data retention
 
 - **On device:** Stored until you leave the room, clear site data, or uninstall the Extension.  
-- **On a party server:** Retention depends on that server’s operator and configuration (not controlled solely by this Extension).  
+- **On a party server:** Retention depends on that server’s operator and configuration (not controlled solely by this Extension). The reference backend prunes raw request and playback analytics after `ANALYTICS_RETENTION_DAYS` (365 by default).
 
 ## Security
 

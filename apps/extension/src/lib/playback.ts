@@ -1,6 +1,11 @@
 import { isContinueWatchingBypassEnabled } from "../constants/config";
 
-export type Queue = { id: string; url: string; title?: string };
+export type Queue = {
+    id: string;
+    url: string;
+    title?: string;
+    requestId?: string;
+};
 
 const artistSelector =
     "div.content-info-wrapper.style-scope.ytmusic-player-bar > span > .subtitle.style-scope.ytmusic-player-bar yt-formatted-string > a";

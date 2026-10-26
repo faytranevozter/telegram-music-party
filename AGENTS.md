@@ -57,6 +57,7 @@ Backend reads from `apps/backend/.env` (gitignored). Required:
 - `TELEGRAM_BOT_TOKEN` — Telegram bot token
 - `DATABASE_URL` — PostgreSQL connection string
 - `REDIS_URL` — Redis connection string (used by Keyv cache)
+- `ANALYTICS_RETENTION_DAYS` — optional; raw request/playback retention in days (default 365, `0` disables pruning)
 
 See `apps/backend/.env.example`.
 
@@ -68,8 +69,10 @@ See `apps/backend/.env.example`.
 - **AppModule**: CacheModule (Redis/Keyv), ServeStaticModule, PlaybackModule, TelegrafModule.
 - **PlaybackModule** (`src/app/playback/`):
   - `playback.controller.ts` — Telegram handlers (`@Update()`). Commands: play/pause/next/prev, queue, register, config, info, devices, inline search, etc. **No `/set`** — use `/config`.
-  - `playback.gateway.ts` — Socket.IO. On `join`: enforce single device (remove other devices + emit `leave` to other sockets). Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title`)/`leave`.
+  - `playback.gateway.ts` — Socket.IO. On `join`: enforce single device (remove other devices + emit `leave` to other sockets). Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title` + `requestId`)/`leave`. Accepts `playback-report` only from the admitted device.
   - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features.
+  - `playback.stats.controller.ts` — room analytics commands: `/stats`, `/top`, `/history`, `/mystats`.
+- **AnalyticsModule** (`src/app/analytics/`) — `AnalyticsService` records durable `SongRequest` and confirmed `PlaybackSession` rows, runs room-scoped queries, and prunes raw events by `ANALYTICS_RETENTION_DAYS`. Definitions and counting rules: `docs/analytics.md`.
 - **HTML helpers** (`src/helpers/util.ts`): `escapeHtml`, `htmlBold`, `htmlCode`, etc. Never spread a joined string into a message array (`...map().join()` spreads characters and breaks HTML tags).
 - **`/info`**: uses Bot API `sendRichMessage` with rich HTML `<table>` (telegraf has no typed helper yet — `callApi('sendRichMessage', …)`).
 - **Platform**: `prisma.service.ts`, `yt-music.service.ts` (`ytmusic-api`).

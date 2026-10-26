@@ -26,6 +26,10 @@ import {
     startMainBridge,
     startPlaybackStatusWatchers,
 } from "./bridge-main";
+import {
+    noteSkipIntent,
+    startPlaybackAnalytics,
+} from "./playback-analytics";
 
 Object.defineProperty(window, "onbeforeunload", {
     get: () => null,
@@ -291,6 +295,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const ROOM_ID = config.roomId as string;
     let queues: Queue[] = [];
     let hasSynced = false;
+    // Durable request IDs survive queue cleanup, so a song that starts right as
+    // it is removed from the local queue still keeps its requester attribution.
+    const requestIds = new Map<string, string>();
+    const rememberRequest = (url: string, requestId?: string) => {
+        if (url && requestId) requestIds.set(url, requestId);
+    };
 
     console.log("Current config:", config);
 
@@ -323,6 +333,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         partyUrl: config.partyUrl,
         queues: [],
         joined: false,
+    });
+
+    // Playback analytics is independent of Telegram notification preferences.
+    // The backend accepts reports only while this device owns the room.
+    startPlaybackAnalytics({
+        socket,
+        getRoomId: () => ROOM_ID,
+        getRequestId: (videoId) => requestIds.get(videoId) ?? null,
     });
 
     const sendPlaybackNotification = (
@@ -462,10 +480,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // handle incoming messages
     socket.on("joined", async (data: Array<Queue & { title?: string }>) => {
+        for (const item of data) {
+            // Queue rows reuse the durable request ID.
+            rememberRequest(item.url, item.id);
+        }
         queues = data.map((item) => ({
             id: item.id,
             url: item.url,
             title: item.title,
+            // Queue rows reuse the durable request ID, so joined rows can
+            // correlate playback without another column.
+            requestId: item.id,
         }));
         setBridgeSession({ queues, joined: true, joinRejected: false });
         const playback = getPlaybackState();
@@ -584,11 +609,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     socket.on("next", () => {
+        noteSkipIntent();
         next();
         publishStatus();
     });
 
     socket.on("prev", () => {
+        noteSkipIntent();
         prev();
         publishStatus();
     });
@@ -656,10 +683,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             videoId,
             position,
             title,
+            requestId,
         }: {
             videoId: string;
             position?: QueuePosition;
             title?: string;
+            requestId?: string;
         }) => {
             console.log("addToQueue", videoId, title);
 
@@ -667,7 +696,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 id: crypto.randomUUID(),
                 url: videoId,
                 title,
+                requestId,
             };
+            rememberRequest(videoId, requestId);
 
             if (position === "next") {
                 queues = [queueItem, ...queues.filter((q) => q.url !== videoId)];

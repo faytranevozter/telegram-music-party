@@ -16,13 +16,18 @@ import {
     validateAutoplayResult,
     validatePlayerQueue,
 } from 'src/types/playback.type';
+import { validatePlaybackReport } from 'src/types/analytics.type';
+import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { from, map } from 'rxjs';
 
 type PlayerSession = { roomId: string; fingerprint: string };
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class PlaybackGateway implements OnGatewayDisconnect {
-    constructor(private readonly playbackService: PlaybackService) {}
+    constructor(
+        private readonly playbackService: PlaybackService,
+        private readonly analyticsService: AnalyticsService,
+    ) {}
     @WebSocketServer() wss: Server;
 
     /** Serializes join admission per room so concurrent joins can't both win. */
@@ -163,9 +168,12 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         videoId: string,
         position: 'end' | 'next' = 'end',
         title?: string,
+        requestId?: string,
     ) {
         console.log(`Emitting 'addToQueue' event to ${roomID}`);
-        this.wss.to(roomID).emit('addToQueue', { videoId, position, title });
+        this.wss
+            .to(roomID)
+            .emit('addToQueue', { videoId, position, title, requestId });
     }
 
     leave(roomID: string) {
@@ -262,6 +270,12 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         // remove device
         await this.playbackService.removeDevice(data.roomId, data.fingerprint);
 
+        // The player is gone; close what it was observing as interrupted.
+        await this.analyticsService.closeRoomSessions(
+            data.roomId,
+            'interrupted',
+        );
+
         // actually leave the Socket.IO room so it stops receiving playback events
         void socket.leave(data.roomId);
         this.setSession(socket, null);
@@ -294,6 +308,9 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         if (stillConnected) return;
 
         await this.playbackService.removeDevice(roomId, fingerprint);
+        // Playback cannot be confirmed while disconnected. A reconnect with the
+        // same playback ID reopens an interrupted session.
+        await this.analyticsService.closeRoomSessions(roomId, 'interrupted');
         console.log(`${device.name} disconnected from ${roomId}`);
     }
 
@@ -317,6 +334,36 @@ export class PlaybackGateway implements OnGatewayDisconnect {
 
         // clear votes
         await this.playbackService.removeRoomVotes(data.roomId);
+    }
+
+    /**
+     * Analytics reports are accepted only from the device currently admitted
+     * to the room. The report never triggers Telegram notifications.
+     */
+    @SubscribeMessage('playback-report')
+    async onPlaybackReport(
+        @ConnectedSocket() socket: Socket,
+        @MessageBody() data: unknown,
+    ) {
+        const report = validatePlaybackReport(data);
+        if (!report) return;
+
+        const session = this.getSession(socket);
+        if (!session || session.roomId !== report.roomId) return;
+        if (!socket.rooms?.has(report.roomId)) return;
+
+        const device = await this.playbackService.getRoomDevice(
+            report.roomId,
+            session.fingerprint,
+        );
+        if (!device) return;
+
+        try {
+            await this.analyticsService.recordPlayback(report);
+        } catch (error) {
+            // Analytics must never break playback or the socket session.
+            console.error('playback-report failed', error);
+        }
     }
 
     @SubscribeMessage('playback-notification')

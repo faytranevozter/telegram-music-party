@@ -192,6 +192,7 @@ Why:
 
 - The extension stores/sends a generated device identifier/fingerprint for active-device handling.
 - The extension reads current playback state and queue metadata from YouTube Music.
+- The extension sends playback analytics while it is the active device (video ID, title/artist text, timing, observed listening time).
 - The extension responds to user playback actions and room activity.
 
 Recommended boxes to leave unchecked:
@@ -237,8 +238,8 @@ https://your-domain.com/privacy
 
 The privacy policy should mention:
 
-- What data is processed: room ID, backend URL, generated device ID/fingerprint, browser/OS label, playback state, queue metadata, and user-selected settings.
-- Why it is processed: connecting the YouTube Music tab to a party room and enabling shared playback controls.
+- What data is processed: room ID, backend URL, generated device ID/fingerprint, browser/OS label, playback state, queue metadata, playback analytics (video ID, title/artist text, timing, observed listening time), and user-selected settings.
+- Why it is processed: connecting the YouTube Music tab to a party room and enabling shared playback controls and room-scoped stats.
 - Where it is sent: the configured party backend.
 - Data selling: not sold.
 - Retention: depends on the configured backend; local settings stay in browser storage until the user leaves/clears them.
