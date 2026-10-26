@@ -16,6 +16,14 @@ async function bootstrap() {
         { command: 'pause', description: 'You know this' },
         { command: 'next', description: 'Go to next song' },
         { command: 'prev', description: 'Go to previous song' },
+        {
+            command: 'radio',
+            description: 'Start a radio from the current song',
+        },
+        {
+            command: 'refresh',
+            description: 'Reset the queue to the current song + autoplay',
+        },
         { command: 'vote_next', description: 'Voting to play next' },
         { command: 'queue', description: 'Queue list' },
         { command: 'lyrics', description: 'Get lyrics from current playing' },

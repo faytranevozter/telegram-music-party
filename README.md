@@ -86,6 +86,8 @@ Only one device can be active in a room. Joining from another browser replaces t
 - Telegram-first YouTube Music control
 - Inline search and queue management
 - Play, pause, next, previous, volume, mute, and lyrics commands
+- Start a song radio with `/radio`
+- Reset the queue to the current song plus autoplay with `/refresh`
 - Vote-to-skip with `/vote_next`
 - Admin room configuration with `/config`
 - Extension popup for status, now playing, queue, controls, and leave
@@ -102,6 +104,8 @@ Only one device can be active in a room. Joining from another browser replaces t
 | `/pause` | Pause |
 | `/next` | Next track |
 | `/prev` | Previous track |
+| `/radio` | Start a radio from the current song |
+| `/refresh` | Reset the queue to the current song plus autoplay |
 | `/vote_next` | Vote to skip |
 | `/queue` | Show queue |
 | `/lyrics` | Show lyrics for the current track |

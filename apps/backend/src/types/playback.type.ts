@@ -50,6 +50,37 @@ export function validatePlayerQueue(value: unknown): PlayerQueueResult {
     return { status: 'ok', items };
 }
 
+export type AutoplayResult =
+    | { status: 'ok'; videoId: string; song: string; artist: string }
+    | {
+          status: 'no-current-song' | 'unavailable' | 'offline' | 'timeout';
+      };
+
+export function validateAutoplayResult(value: unknown): AutoplayResult {
+    if (!value || typeof value !== 'object') return { status: 'unavailable' };
+    const data = value as Record<string, unknown>;
+    if (data.status === 'no-current-song' || data.status === 'unavailable') {
+        return { status: data.status };
+    }
+    if (data.status !== 'ok') return { status: 'unavailable' };
+    if (
+        typeof data.videoId !== 'string' ||
+        !/^[\w-]{1,128}$/.test(data.videoId) ||
+        typeof data.song !== 'string' ||
+        data.song.length > 1000 ||
+        typeof data.artist !== 'string' ||
+        data.artist.length > 1000
+    ) {
+        return { status: 'unavailable' };
+    }
+    return {
+        status: 'ok',
+        videoId: data.videoId,
+        song: data.song,
+        artist: data.artist,
+    };
+}
+
 export type PlaybackNotification =
     | { type: 'queue-empty' }
     | { type: 'now-playing'; song: string; artist: string }

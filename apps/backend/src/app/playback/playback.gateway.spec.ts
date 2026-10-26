@@ -58,6 +58,115 @@ describe('PlaybackGateway player queue', () => {
     });
 });
 
+describe('PlaybackGateway autoplay commands', () => {
+    const fetchSockets = jest.fn();
+    const emitWithAck = jest.fn();
+    const timeout = jest.fn(() => ({ emitWithAck }));
+    const to = jest.fn(() => ({ timeout }));
+    const inRoom = jest.fn(() => ({ fetchSockets }));
+    let gateway: PlaybackGateway;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        gateway = new PlaybackGateway({} as PlaybackService);
+        gateway.wss = {
+            in: inRoom,
+            to,
+        } as unknown as Server;
+        fetchSockets.mockResolvedValue([{ id: 'player' }]);
+    });
+
+    it('asks only the room player to start the current song radio', async () => {
+        emitWithAck.mockResolvedValue([
+            {
+                status: 'ok',
+                videoId: 'dQw4w9WgXcQ',
+                song: 'Never Gonna Give You Up',
+                artist: 'Rick Astley',
+            },
+        ]);
+
+        expect(await gateway.startRadio('room')).toEqual({
+            status: 'ok',
+            videoId: 'dQw4w9WgXcQ',
+            song: 'Never Gonna Give You Up',
+            artist: 'Rick Astley',
+        });
+        expect(inRoom).toHaveBeenCalledWith('room');
+        expect(to).toHaveBeenCalledWith('player');
+        expect(timeout).toHaveBeenCalledWith(10000);
+        expect(emitWithAck).toHaveBeenCalledWith('start-radio');
+    });
+
+    it('asks only the room player to rebuild its autoplay queue', async () => {
+        emitWithAck.mockResolvedValue([
+            {
+                status: 'ok',
+                videoId: 'dQw4w9WgXcQ',
+                song: 'Never Gonna Give You Up',
+                artist: 'Rick Astley',
+            },
+        ]);
+
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'ok',
+            videoId: 'dQw4w9WgXcQ',
+            song: 'Never Gonna Give You Up',
+            artist: 'Rick Astley',
+        });
+        expect(inRoom).toHaveBeenCalledWith('room');
+        expect(to).toHaveBeenCalledWith('player');
+        expect(timeout).toHaveBeenCalledWith(10000);
+        expect(emitWithAck).toHaveBeenCalledWith('refresh-autoplay');
+    });
+
+    it('returns player-reported refresh failures', async () => {
+        emitWithAck.mockResolvedValue([{ status: 'no-current-song' }]);
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'no-current-song',
+        });
+    });
+
+    it('rejects malformed player responses', async () => {
+        emitWithAck.mockResolvedValue([{ status: 'ok', videoId: '' }]);
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'unavailable',
+        });
+    });
+
+    it('reports disconnected players without sending a request', async () => {
+        fetchSockets.mockResolvedValue([]);
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'offline',
+        });
+        expect(to).not.toHaveBeenCalled();
+    });
+
+    it('reports a bounded request timeout', async () => {
+        emitWithAck.mockRejectedValue(new Error('timeout'));
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'timeout',
+        });
+    });
+
+    it('discards responses from a replaced player', async () => {
+        fetchSockets
+            .mockResolvedValueOnce([{ id: 'player' }])
+            .mockResolvedValueOnce([{ id: 'replacement' }]);
+        emitWithAck.mockResolvedValue([
+            {
+                status: 'ok',
+                videoId: 'dQw4w9WgXcQ',
+                song: 'Song',
+                artist: 'Artist',
+            },
+        ]);
+        expect(await gateway.refreshAutoplay('room')).toEqual({
+            status: 'offline',
+        });
+    });
+});
+
 describe('PlaybackGateway room admission', () => {
     const room = { id: 'room', chatId: 'chat', threadId: null };
     let gateway: PlaybackGateway;

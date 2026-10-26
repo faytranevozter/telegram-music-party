@@ -9,9 +9,11 @@ import {
 import { Server, Socket } from 'socket.io';
 import { PlaybackService } from './playback.service';
 import {
+    AutoplayResult,
     Join,
     PlaybackNotificationPayload,
     PlayerQueueResult,
+    validateAutoplayResult,
     validatePlayerQueue,
 } from 'src/types/playback.type';
 import { from, map } from 'rxjs';
@@ -72,6 +74,35 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         } catch {
             return { status: 'timeout' };
         }
+    }
+
+    private async requestAutoplay(
+        roomId: string,
+        event: 'start-radio' | 'refresh-autoplay',
+    ): Promise<AutoplayResult> {
+        const sockets = await this.wss.in(roomId).fetchSockets();
+        if (sockets.length !== 1) return { status: 'offline' };
+        const playerId = sockets[0].id;
+        try {
+            const responses = (await this.wss
+                .to(playerId)
+                .timeout(10000)
+                .emitWithAck(event)) as unknown[];
+            const active = await this.wss.in(roomId).fetchSockets();
+            if (active.length !== 1 || active[0].id !== playerId)
+                return { status: 'offline' };
+            return validateAutoplayResult(responses[0]);
+        } catch {
+            return { status: 'timeout' };
+        }
+    }
+
+    startRadio(roomId: string): Promise<AutoplayResult> {
+        return this.requestAutoplay(roomId, 'start-radio');
+    }
+
+    refreshAutoplay(roomId: string): Promise<AutoplayResult> {
+        return this.requestAutoplay(roomId, 'refresh-autoplay');
     }
 
     // Function to emit events from the server

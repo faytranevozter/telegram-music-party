@@ -107,6 +107,91 @@ function getMissingQueueIds(serverQueues: Queue[]): string[] {
     return missing;
 }
 
+const RADIO_PLAYLIST_PREFIX = "RDAMVM";
+const AUTOPLAY_TIMEOUT_MS = 5000;
+
+type YtMusicApp = Element & {
+    handleNavigationEndpoint: (endpoint: {
+        watchEndpoint: { videoId: string; playlistId?: string };
+    }) => void;
+};
+
+type YtMusicAppCandidate = Element & {
+    handleNavigationEndpoint?: YtMusicApp["handleNavigationEndpoint"];
+};
+
+function playerQueueSignature(
+    snapshot: ReturnType<typeof readPlayerQueue> = readPlayerQueue(),
+): string {
+    return JSON.stringify(
+        snapshot.items
+            .slice(0, 20)
+            .map((item) => `${item.url}:${item.current}`),
+    );
+}
+
+function currentPlaylistId(): string | null {
+    try {
+        return new URL(window.location.href).searchParams.get("list");
+    } catch {
+        return null;
+    }
+}
+
+function realQueueItems(snapshot: ReturnType<typeof readPlayerQueue>) {
+    return snapshot.items.filter((item) => !item.id.startsWith("automix:"));
+}
+
+async function waitForRadioQueue(
+    videoId: string,
+    previousSignature: string,
+): Promise<boolean> {
+    const expectedRadio = `${RADIO_PLAYLIST_PREFIX}${videoId}`;
+    const deadline = Date.now() + AUTOPLAY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        const snapshot = readPlayerQueue();
+        const items = realQueueItems(snapshot);
+        const current = items.find((item) => item.current);
+        const radioReady =
+            current?.url === videoId &&
+            items.length > 1 &&
+            (currentPlaylistId() === expectedRadio ||
+                playerQueueSignature(snapshot) !== previousSignature);
+        if (snapshot.available && radioReady) {
+            return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return false;
+}
+
+/**
+ * `/refresh` should leave only the current song in the queue so YT Music
+ * autoplay fills the rest. The plain watch URL does exactly that.
+ */
+async function waitForRefreshedQueue(
+    videoId: string,
+    previousSignature: string,
+): Promise<boolean> {
+    const deadline = Date.now() + AUTOPLAY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        const snapshot = readPlayerQueue();
+        const items = realQueueItems(snapshot);
+        const current = items[0];
+        const refreshed =
+            current?.url === videoId &&
+            current.current === true &&
+            items.length === 1 &&
+            (currentPlaylistId() === null ||
+                playerQueueSignature(snapshot) !== previousSignature);
+        if (snapshot.available && refreshed) {
+            return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return false;
+}
+
 async function addQueue(videoIds: string, position: QueuePosition = "end") {
     if (videoIds.length < 1) return;
     // setTimeout (not rAF): background tabs suspend rAF until focused again
@@ -248,6 +333,124 @@ document.addEventListener("DOMContentLoaded", async () => {
             roomId: ROOM_ID,
         });
     };
+
+    type AutoplayResponse =
+        | {
+              status: "ok";
+              videoId: string;
+              song: string;
+              artist: string;
+          }
+        | { status: "no-current-song" | "unavailable" };
+
+    const currentTrack = () => {
+        const playback = getPlaybackState();
+        const videoId = getVideoId();
+        if (!videoId || playback.state === "standby") return null;
+        return { playback, videoId };
+    };
+
+    const getYtMusicApp = (): YtMusicApp | null => {
+        const app = document.querySelector(
+            "ytmusic-app",
+        ) as YtMusicAppCandidate | null;
+        return app && typeof app.handleNavigationEndpoint === "function"
+            ? (app as YtMusicApp)
+            : null;
+    };
+
+    // Both commands replace the player queue. Put songs requested through the
+    // bot back in front of the recommendations.
+    const restoreRequestedSongs = async () => {
+        const missing = getMissingQueueIds(queues);
+        if (missing.length > 0) {
+            await addQueue(missing.join(","), "next");
+        }
+    };
+
+    const applyAutoplay = async (
+        track: NonNullable<ReturnType<typeof currentTrack>>,
+        endpoint: { watchEndpoint: { videoId: string; playlistId?: string } },
+        ready: (previousSignature: string) => Promise<boolean>,
+        label: string,
+    ): Promise<AutoplayResponse> => {
+        const app = getYtMusicApp();
+        if (!app) return { status: "unavailable" };
+
+        const previousQueue = playerQueueSignature();
+        try {
+            app.handleNavigationEndpoint(endpoint);
+        } catch (error) {
+            console.error(`${label} failed`, error);
+            return { status: "unavailable" };
+        }
+
+        if (!(await ready(previousQueue))) {
+            return { status: "unavailable" };
+        }
+
+        await restoreRequestedSongs();
+        publishStatus();
+
+        return {
+            status: "ok",
+            videoId: track.videoId,
+            song: track.playback.song || "",
+            artist: track.playback.artist || "",
+        };
+    };
+
+    /**
+     * `/radio` starts the current song's radio in place. Playback keeps going
+     * while the radio queue replaces the player queue.
+     */
+    const startRadio = async (): Promise<AutoplayResponse> => {
+        const track = currentTrack();
+        if (!track) return { status: "no-current-song" };
+
+        return applyAutoplay(
+            track,
+            {
+                watchEndpoint: {
+                    videoId: track.videoId,
+                    playlistId: `${RADIO_PLAYLIST_PREFIX}${track.videoId}`,
+                },
+            },
+            (previousSignature) =>
+                waitForRadioQueue(track.videoId, previousSignature),
+            "start radio",
+        );
+    };
+
+    /**
+     * `/refresh` reloads the current song as a plain watch queue: one item
+     * followed by YT Music's autoplay recommendations.
+     */
+    const refreshAutoplay = async (): Promise<AutoplayResponse> => {
+        const track = currentTrack();
+        if (!track) return { status: "no-current-song" };
+
+        return applyAutoplay(
+            track,
+            { watchEndpoint: { videoId: track.videoId } },
+            (previousSignature) =>
+                waitForRefreshedQueue(track.videoId, previousSignature),
+            "refresh queue",
+        );
+    };
+
+    socket.on("start-radio", async (ack?: (result: unknown) => void) => {
+        const result = await startRadio();
+        if (typeof ack === "function") ack(result);
+    });
+
+    socket.on(
+        "refresh-autoplay",
+        async (ack?: (result: unknown) => void) => {
+            const result = await refreshAutoplay();
+            if (typeof ack === "function") ack(result);
+        },
+    );
 
     // Prevent YT "Continue watching?" via window._lact (pear-desktop approach)
     // and fall back to auto-clicking the dialog if it still appears.

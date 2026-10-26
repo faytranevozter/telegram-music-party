@@ -31,6 +31,7 @@ import {
 import { firstValueFrom } from 'rxjs';
 import { Inject } from '@nestjs/common';
 import { InlineChatLocation, Song } from 'src/types/cache.type';
+import type { AutoplayResult } from 'src/types/playback.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
 import type { Feature } from '@prisma/client';
@@ -92,6 +93,26 @@ const CONFIG_FIELDS = {
         label: 'Next Only Admin',
         type: 'boolean',
         help: 'Restrict /next to admins',
+    },
+    radioCommand: {
+        label: 'Radio Command',
+        type: 'boolean',
+        help: 'Enable /radio from the current song',
+    },
+    radioOnlyAdmin: {
+        label: 'Radio Only Admin',
+        type: 'boolean',
+        help: 'Restrict /radio to admins',
+    },
+    refreshCommand: {
+        label: 'Refresh Command',
+        type: 'boolean',
+        help: 'Enable /refresh to reset the queue around the current song',
+    },
+    refreshOnlyAdmin: {
+        label: 'Refresh Only Admin',
+        type: 'boolean',
+        help: 'Restrict /refresh to admins',
     },
     previousCommand: {
         label: 'Previous Command',
@@ -265,6 +286,10 @@ export class PlaybackTelegramController {
             this.formatConfigLine(feature, 'nextOnlyAdmin'),
             this.formatConfigLine(feature, 'previousCommand'),
             this.formatConfigLine(feature, 'previousOnlyAdmin'),
+            this.formatConfigLine(feature, 'radioCommand'),
+            this.formatConfigLine(feature, 'radioOnlyAdmin'),
+            this.formatConfigLine(feature, 'refreshCommand'),
+            this.formatConfigLine(feature, 'refreshOnlyAdmin'),
             '',
             htmlBold('Audio'),
             this.formatConfigLine(feature, 'muteCommand'),
@@ -304,6 +329,26 @@ export class PlaybackTelegramController {
                 Markup.button.callback(
                     `${CONFIG_FIELDS.previousOnlyAdmin.label}: ${this.formatConfigValue(feature, 'previousOnlyAdmin')}`,
                     'config:toggle:previousOnlyAdmin',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.radioCommand.label}: ${this.formatConfigValue(feature, 'radioCommand')}`,
+                    'config:toggle:radioCommand',
+                ),
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.radioOnlyAdmin.label}: ${this.formatConfigValue(feature, 'radioOnlyAdmin')}`,
+                    'config:toggle:radioOnlyAdmin',
+                ),
+            ],
+            [
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.refreshCommand.label}: ${this.formatConfigValue(feature, 'refreshCommand')}`,
+                    'config:toggle:refreshCommand',
+                ),
+                Markup.button.callback(
+                    `${CONFIG_FIELDS.refreshOnlyAdmin.label}: ${this.formatConfigValue(feature, 'refreshOnlyAdmin')}`,
+                    'config:toggle:refreshOnlyAdmin',
                 ),
             ],
             [
@@ -771,6 +816,142 @@ export class PlaybackTelegramController {
         }
 
         this.gateway.previousCommand(room.id);
+    }
+
+    private async checkAutoplayAccess(
+        ctx: Context,
+        feature: Feature | null,
+        enabled: boolean,
+        onlyAdmin: boolean,
+    ): Promise<boolean> {
+        if (feature && !enabled) {
+            await ctx.reply('⚠️ This feature is currently disabled.');
+            return false;
+        }
+
+        if (feature && onlyAdmin && ctx.chat?.type !== 'private') {
+            const userId = ctx.from?.id || 0;
+            const chatMember = await ctx.getChatMember(userId);
+            const isAdmin = ['administrator', 'creator'].includes(
+                chatMember?.status,
+            );
+            if (!isAdmin) {
+                await ctx.reply('⚠️ This feature is available for admin only.');
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async replyAutoplayResult(
+        ctx: Context,
+        result: AutoplayResult,
+        mode: 'radio' | 'refresh',
+    ) {
+        const radio = mode === 'radio';
+        switch (result.status) {
+            case 'ok':
+                await ctx.reply(
+                    [
+                        radio
+                            ? `📻 ${htmlBold('Radio started')}`
+                            : `🔄 ${htmlBold('Queue refreshed')}`,
+                        radio
+                            ? `Recommendations now follow ${htmlItalic(result.song || 'the current song')}.`
+                            : `Only ${htmlItalic(result.song || 'the current song')} is queued; autoplay follows it.`,
+                    ].join('\n'),
+                    { parse_mode: 'HTML' },
+                );
+                return;
+            case 'offline':
+                await ctx.reply(
+                    'No player connected. Open YouTube Music and join this room.',
+                );
+                return;
+            case 'timeout':
+                await ctx.reply(
+                    'The player did not respond. Try again shortly, and make sure your extension is up to date.',
+                );
+                return;
+            case 'no-current-song':
+                await ctx.reply(
+                    'Nothing is playing right now. Start a song first.',
+                );
+                return;
+            default:
+                await ctx.reply(
+                    radio
+                        ? 'Could not start radio. Make sure the current song supports radio and your extension is up to date.'
+                        : 'Could not refresh the queue. Make sure something is playing and your extension is up to date.',
+                );
+        }
+    }
+
+    @Command('radio')
+    async radio(@Ctx() ctx: Context) {
+        const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
+        if (!chatId) {
+            await ctx.reply('No chat id');
+            return;
+        }
+
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        if (!room) {
+            await ctx.reply('No room found');
+            return;
+        }
+
+        if (
+            !(await this.checkAutoplayAccess(
+                ctx,
+                room.Feature,
+                room.Feature?.radioCommand === true,
+                room.Feature?.radioOnlyAdmin === true,
+            ))
+        ) {
+            return;
+        }
+
+        const result = await this.gateway.startRadio(room.id);
+        await this.replyAutoplayResult(ctx, result, 'radio');
+    }
+
+    @Command('refresh')
+    async refresh(@Ctx() ctx: Context) {
+        const chatId = ctx.chat?.id.toString() || '';
+        const threadId = getThreadId(ctx);
+        if (!chatId) {
+            await ctx.reply('No chat id');
+            return;
+        }
+
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        if (!room) {
+            await ctx.reply('No room found');
+            return;
+        }
+
+        if (
+            !(await this.checkAutoplayAccess(
+                ctx,
+                room.Feature,
+                room.Feature?.refreshCommand === true,
+                room.Feature?.refreshOnlyAdmin === true,
+            ))
+        ) {
+            return;
+        }
+
+        const result = await this.gateway.refreshAutoplay(room.id);
+        await this.replyAutoplayResult(ctx, result, 'refresh');
     }
 
     @Command('mute')
