@@ -152,7 +152,7 @@ const NUMBER_PRESETS = [0, 1, 3, 5, 10, 25];
 type ConfigKey = keyof typeof CONFIG_FIELDS;
 
 type ButtonStyle = 'primary' | 'success' | 'danger';
-type ConfigButton = ReturnType<typeof Markup.button.callback> & {
+type StyledButton = ReturnType<typeof Markup.button.callback> & {
     style?: ButtonStyle;
 };
 
@@ -345,19 +345,19 @@ export class PlaybackTelegramController {
         ].join('\n');
     }
 
-    private configButton(
+    private styledButton(
         text: string,
         data: string,
         style?: ButtonStyle,
-    ): ConfigButton {
-        const button = Markup.button.callback(text, data) as ConfigButton;
+    ): StyledButton {
+        const button = Markup.button.callback(text, data) as StyledButton;
         if (style) button.style = style;
         return button;
     }
 
     private configToggleButton(feature: Feature, key: ConfigKey) {
         const enabled = feature[key] as boolean;
-        return this.configButton(
+        return this.styledButton(
             `${CONFIG_ICONS[key]} ${CONFIG_BUTTON_LABELS[key]}: ${enabled ? 'on' : 'off'}`,
             `config:toggle:${key}`,
             enabled ? 'success' : 'danger',
@@ -365,7 +365,7 @@ export class PlaybackTelegramController {
     }
 
     private configNumberButton(feature: Feature, key: ConfigKey) {
-        return this.configButton(
+        return this.styledButton(
             `${CONFIG_ICONS[key]} ${CONFIG_BUTTON_LABELS[key]}: ${this.formatConfigValue(feature, key)}`,
             `config:number:${key}`,
             'primary',
@@ -391,7 +391,7 @@ export class PlaybackTelegramController {
             ...NUMBER_CONFIG_KEYS.map((key) => [
                 this.configNumberButton(feature, key),
             ]),
-            [this.configButton('✖️ Close', 'config:close', 'danger')],
+            [this.styledButton('✖️ Close', 'config:close', 'danger')],
         ]);
     }
 
@@ -442,22 +442,22 @@ export class PlaybackTelegramController {
         const min = field.type === 'number' ? field.min : 1;
         const presets = NUMBER_PRESETS.filter((value) => value >= min).map(
             (value) =>
-                this.configButton(
+                this.styledButton(
                     `${value}`,
                     `config:set:${key}:${value}`,
                     'primary',
                 ),
         );
-        const presetRows: ConfigButton[][] = [];
+        const presetRows: StyledButton[][] = [];
         for (let i = 0; i < presets.length; i += 3) {
             presetRows.push(presets.slice(i, i + 3));
         }
         return Markup.inlineKeyboard([
             ...presetRows,
-            [this.configButton('✏️ Custom', `config:custom:${key}`, 'primary')],
+            [this.styledButton('✏️ Custom', `config:custom:${key}`, 'primary')],
             [
-                this.configButton('◀️ Back', 'config:back', 'primary'),
-                this.configButton('✖️ Close', 'config:close', 'danger'),
+                this.styledButton('◀️ Back', 'config:back', 'primary'),
+                this.styledButton('✖️ Close', 'config:close', 'danger'),
             ],
         ]);
     }
@@ -847,74 +847,206 @@ export class PlaybackTelegramController {
         this.gateway.previousCommand(room.id);
     }
 
+    private async autoplayAccessError(
+        ctx: Context,
+        feature: Feature | null,
+        enabled: boolean,
+        onlyAdmin: boolean,
+    ): Promise<'disabled' | 'admin' | null> {
+        if (feature && !enabled) return 'disabled';
+
+        if (feature && onlyAdmin && ctx.chat?.type !== 'private') {
+            const chatId = ctx.chat?.id;
+            const userId = ctx.from?.id || 0;
+            if (!chatId) return 'admin';
+            const chatMember = await ctx.telegram.getChatMember(chatId, userId);
+            if (!['administrator', 'creator'].includes(chatMember?.status)) {
+                return 'admin';
+            }
+        }
+
+        return null;
+    }
+
     private async checkAutoplayAccess(
         ctx: Context,
         feature: Feature | null,
         enabled: boolean,
         onlyAdmin: boolean,
     ): Promise<boolean> {
-        if (feature && !enabled) {
+        const error = await this.autoplayAccessError(
+            ctx,
+            feature,
+            enabled,
+            onlyAdmin,
+        );
+        if (error === 'disabled') {
             await ctx.reply('⚠️ This feature is currently disabled.');
             return false;
         }
-
-        if (feature && onlyAdmin && ctx.chat?.type !== 'private') {
-            const userId = ctx.from?.id || 0;
-            const chatMember = await ctx.getChatMember(userId);
-            const isAdmin = ['administrator', 'creator'].includes(
-                chatMember?.status,
-            );
-            if (!isAdmin) {
-                await ctx.reply('⚠️ This feature is available for admin only.');
-                return false;
-            }
+        if (error === 'admin') {
+            await ctx.reply('⚠️ This feature is available for admin only.');
+            return false;
         }
-
         return true;
     }
 
-    private async replyAutoplayResult(
-        ctx: Context,
+    private buildAutoplayResultText(
         result: AutoplayResult,
         mode: 'radio' | 'refresh',
     ) {
         const radio = mode === 'radio';
         switch (result.status) {
             case 'ok':
-                await ctx.reply(
-                    [
-                        radio
-                            ? `📻 ${htmlBold('Radio started')}`
-                            : `🔄 ${htmlBold('Queue refreshed')}`,
-                        radio
-                            ? `Recommendations now follow ${htmlItalic(result.song || 'the current song')}.`
-                            : `Only ${htmlItalic(result.song || 'the current song')} is queued; autoplay follows it.`,
-                    ].join('\n'),
-                    { parse_mode: 'HTML' },
-                );
-                return;
-            case 'offline':
-                await ctx.reply(
-                    'No player connected. Open YouTube Music and join this room.',
-                );
-                return;
-            case 'timeout':
-                await ctx.reply(
-                    'The player did not respond. Try again shortly, and make sure your extension is up to date.',
-                );
-                return;
-            case 'no-current-song':
-                await ctx.reply(
-                    'Nothing is playing right now. Start a song first.',
-                );
-                return;
-            default:
-                await ctx.reply(
+                return [
                     radio
-                        ? 'Could not start radio. Make sure the current song supports radio and your extension is up to date.'
-                        : 'Could not refresh the queue. Make sure something is playing and your extension is up to date.',
-                );
+                        ? `📻 ${htmlBold('Radio started')}`
+                        : `🔄 ${htmlBold('Queue refreshed')}`,
+                    radio
+                        ? `Recommendations now follow ${htmlItalic(result.song || 'the current song')}.`
+                        : `Only ${htmlItalic(result.song || 'the current song')} is queued; autoplay follows it.`,
+                ].join('\n');
+            case 'offline':
+                return 'No player connected. Open YouTube Music and join this room.';
+            case 'timeout':
+                return 'The player did not respond. Try again shortly, and make sure your extension is up to date.';
+            case 'no-current-song':
+                return 'Nothing is playing right now. Start a song first.';
+            default:
+                return radio
+                    ? 'Could not start radio. Make sure the current song supports radio and your extension is up to date.'
+                    : 'Could not refresh the queue. Make sure something is playing and your extension is up to date.';
         }
+    }
+
+    private async editAutoplayResult(
+        ctx: Context,
+        result: AutoplayResult,
+        mode: 'radio' | 'refresh',
+    ) {
+        await this.safeEdit(() =>
+            ctx.editMessageText(this.buildAutoplayResultText(result, mode), {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: [] },
+            }),
+        );
+    }
+
+    private async askAutoplayConfirmation(
+        ctx: Context,
+        mode: 'radio' | 'refresh',
+    ) {
+        const radio = mode === 'radio';
+        await ctx.reply(
+            [
+                radio
+                    ? `📻 ${htmlBold('Start radio?')}`
+                    : `🔄 ${htmlBold('Refresh queue?')}`,
+                radio
+                    ? 'The player queue will be replaced with a radio based on the current song.'
+                    : 'The player queue will reset to the current song, with autoplay after it.',
+                '',
+                htmlItalic('Songs requested through the bot are kept.'),
+            ].join('\n'),
+            {
+                parse_mode: 'HTML',
+                ...Markup.inlineKeyboard([
+                    [
+                        this.styledButton(
+                            radio ? '📻 Start radio' : '🔄 Refresh queue',
+                            `autoplay:${mode}`,
+                            'primary',
+                        ),
+                    ],
+                    [
+                        this.styledButton(
+                            '✖️ Cancel',
+                            'autoplay:cancel',
+                            'danger',
+                        ),
+                    ],
+                ]),
+            },
+        );
+    }
+
+    @Action(/autoplay:(radio|refresh|cancel)/)
+    async confirmAutoplay(
+        @Ctx()
+        ctx: Context<UpdateType.CallbackQueryUpdate<CallbackQuery>> &
+            Omit<Context<UpdateType>, keyof Context<UpdateType>> & {
+                match: RegExpExecArray;
+            },
+    ) {
+        const action = ctx.match[1] as 'radio' | 'refresh' | 'cancel';
+        const { chatId, threadId } = this.getCallbackLocation(ctx);
+
+        if (action === 'cancel') {
+            await ctx.answerCbQuery('Canceled');
+            await this.safeEdit(() =>
+                ctx.editMessageText('✖️ Canceled.', {
+                    reply_markup: { inline_keyboard: [] },
+                }),
+            );
+            return;
+        }
+
+        const room = await this.playbackService.getRoomByChatId(
+            chatId,
+            threadId,
+        );
+        if (!room) {
+            await ctx.answerCbQuery('No room found');
+            await this.safeEdit(() =>
+                ctx.editMessageText('🏠 No room found.', {
+                    reply_markup: { inline_keyboard: [] },
+                }),
+            );
+            return;
+        }
+
+        const radio = action === 'radio';
+        const error = await this.autoplayAccessError(
+            ctx,
+            room.Feature,
+            radio
+                ? room.Feature?.radioCommand === true
+                : room.Feature?.refreshCommand === true,
+            radio
+                ? room.Feature?.radioOnlyAdmin === true
+                : room.Feature?.refreshOnlyAdmin === true,
+        );
+        if (error === 'disabled') {
+            await ctx.answerCbQuery('Feature disabled');
+            await this.safeEdit(() =>
+                ctx.editMessageText('⚠️ This feature is currently disabled.', {
+                    reply_markup: { inline_keyboard: [] },
+                }),
+            );
+            return;
+        }
+        if (error === 'admin') {
+            await ctx.answerCbQuery('Admin only');
+            return;
+        }
+
+        const messageId = ctx.callbackQuery?.message?.message_id;
+        const lockKey = `autoplay-lock:${chatId}:${threadId ?? 'root'}:${messageId ?? 'unknown'}:${action}`;
+        if (await this.cacheManager.get(lockKey)) {
+            await ctx.answerCbQuery('Already running');
+            return;
+        }
+        await this.cacheManager.set(lockKey, true, 60_000);
+
+        await ctx.answerCbQuery(
+            radio ? 'Starting radio...' : 'Refreshing queue...',
+        );
+
+        const result = radio
+            ? await this.gateway.startRadio(room.id)
+            : await this.gateway.refreshAutoplay(room.id);
+
+        await this.editAutoplayResult(ctx, result, action);
     }
 
     @Command('radio')
@@ -946,8 +1078,7 @@ export class PlaybackTelegramController {
             return;
         }
 
-        const result = await this.gateway.startRadio(room.id);
-        await this.replyAutoplayResult(ctx, result, 'radio');
+        await this.askAutoplayConfirmation(ctx, 'radio');
     }
 
     @Command('refresh')
@@ -979,8 +1110,7 @@ export class PlaybackTelegramController {
             return;
         }
 
-        const result = await this.gateway.refreshAutoplay(room.id);
-        await this.replyAutoplayResult(ctx, result, 'refresh');
+        await this.askAutoplayConfirmation(ctx, 'refresh');
     }
 
     @Command('mute')
