@@ -151,6 +151,48 @@ const NUMBER_PRESETS = [0, 1, 3, 5, 10, 25];
 
 type ConfigKey = keyof typeof CONFIG_FIELDS;
 
+type ButtonStyle = 'primary' | 'success' | 'danger';
+type ConfigButton = ReturnType<typeof Markup.button.callback> & {
+    style?: ButtonStyle;
+};
+
+const CONFIG_ICONS: Record<ConfigKey, string> = {
+    minimumVotes: '🗳️',
+    maxQueueSize: '📋',
+    playNextCommand: '⏭️',
+    dailyPlayNextLimit: '📆',
+    nextCommand: '⏩',
+    nextOnlyAdmin: '🛡️',
+    previousCommand: '⏪',
+    previousOnlyAdmin: '🛡️',
+    radioCommand: '📻',
+    radioOnlyAdmin: '🛡️',
+    refreshCommand: '🔄',
+    refreshOnlyAdmin: '🛡️',
+    muteCommand: '🔇',
+    unmuteCommand: '🔊',
+    volumeCommand: '🎚️',
+};
+
+/** Short labels so buttons stay readable in narrow Telegram clients. */
+const CONFIG_BUTTON_LABELS: Record<ConfigKey, string> = {
+    minimumVotes: 'Min votes',
+    maxQueueSize: 'Max queue',
+    playNextCommand: 'Play Next',
+    dailyPlayNextLimit: 'Daily limit',
+    nextCommand: 'Next',
+    nextOnlyAdmin: 'Next admin',
+    previousCommand: 'Prev',
+    previousOnlyAdmin: 'Prev admin',
+    radioCommand: 'Radio',
+    radioOnlyAdmin: 'Radio admin',
+    refreshCommand: 'Refresh',
+    refreshOnlyAdmin: 'Refresh admin',
+    muteCommand: 'Mute',
+    unmuteCommand: 'Unmute',
+    volumeCommand: 'Volume',
+};
+
 @Update()
 export class PlaybackTelegramController {
     constructor(
@@ -303,76 +345,53 @@ export class PlaybackTelegramController {
         ].join('\n');
     }
 
+    private configButton(
+        text: string,
+        data: string,
+        style?: ButtonStyle,
+    ): ConfigButton {
+        const button = Markup.button.callback(text, data) as ConfigButton;
+        if (style) button.style = style;
+        return button;
+    }
+
+    private configToggleButton(feature: Feature, key: ConfigKey) {
+        const enabled = feature[key] as boolean;
+        return this.configButton(
+            `${CONFIG_ICONS[key]} ${CONFIG_BUTTON_LABELS[key]}: ${enabled ? 'on' : 'off'}`,
+            `config:toggle:${key}`,
+            enabled ? 'success' : 'danger',
+        );
+    }
+
+    private configNumberButton(feature: Feature, key: ConfigKey) {
+        return this.configButton(
+            `${CONFIG_ICONS[key]} ${CONFIG_BUTTON_LABELS[key]}: ${this.formatConfigValue(feature, key)}`,
+            `config:number:${key}`,
+            'primary',
+        );
+    }
+
     private buildConfigKeyboard(feature: Feature) {
+        const toggle = (key: ConfigKey) =>
+            this.configToggleButton(feature, key);
         return Markup.inlineKeyboard([
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.playNextCommand.label}: ${this.formatConfigValue(feature, 'playNextCommand')}`,
-                    'config:toggle:playNextCommand',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.nextCommand.label}: ${this.formatConfigValue(feature, 'nextCommand')}`,
-                    'config:toggle:nextCommand',
-                ),
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.nextOnlyAdmin.label}: ${this.formatConfigValue(feature, 'nextOnlyAdmin')}`,
-                    'config:toggle:nextOnlyAdmin',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.previousCommand.label}: ${this.formatConfigValue(feature, 'previousCommand')}`,
-                    'config:toggle:previousCommand',
-                ),
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.previousOnlyAdmin.label}: ${this.formatConfigValue(feature, 'previousOnlyAdmin')}`,
-                    'config:toggle:previousOnlyAdmin',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.radioCommand.label}: ${this.formatConfigValue(feature, 'radioCommand')}`,
-                    'config:toggle:radioCommand',
-                ),
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.radioOnlyAdmin.label}: ${this.formatConfigValue(feature, 'radioOnlyAdmin')}`,
-                    'config:toggle:radioOnlyAdmin',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.refreshCommand.label}: ${this.formatConfigValue(feature, 'refreshCommand')}`,
-                    'config:toggle:refreshCommand',
-                ),
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.refreshOnlyAdmin.label}: ${this.formatConfigValue(feature, 'refreshOnlyAdmin')}`,
-                    'config:toggle:refreshOnlyAdmin',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.muteCommand.label}: ${this.formatConfigValue(feature, 'muteCommand')}`,
-                    'config:toggle:muteCommand',
-                ),
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.unmuteCommand.label}: ${this.formatConfigValue(feature, 'unmuteCommand')}`,
-                    'config:toggle:unmuteCommand',
-                ),
-            ],
-            [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS.volumeCommand.label}: ${this.formatConfigValue(feature, 'volumeCommand')}`,
-                    'config:toggle:volumeCommand',
-                ),
-            ],
+            [toggle('playNextCommand')],
+            [toggle('nextCommand')],
+            [toggle('nextOnlyAdmin')],
+            [toggle('previousCommand')],
+            [toggle('previousOnlyAdmin')],
+            [toggle('radioCommand')],
+            [toggle('radioOnlyAdmin')],
+            [toggle('refreshCommand')],
+            [toggle('refreshOnlyAdmin')],
+            [toggle('muteCommand')],
+            [toggle('unmuteCommand')],
+            [toggle('volumeCommand')],
             ...NUMBER_CONFIG_KEYS.map((key) => [
-                Markup.button.callback(
-                    `${CONFIG_FIELDS[key].label}: ${this.formatConfigValue(feature, key)}`,
-                    `config:number:${key}`,
-                ),
+                this.configNumberButton(feature, key),
             ]),
+            [this.configButton('✖️ Close', 'config:close', 'danger')],
         ]);
     }
 
@@ -421,15 +440,25 @@ export class PlaybackTelegramController {
     private buildNumberKeyboard(key: ConfigKey) {
         const field = CONFIG_FIELDS[key];
         const min = field.type === 'number' ? field.min : 1;
-        return Markup.inlineKeyboard([
-            NUMBER_PRESETS.filter((value) => value >= min).map((value) =>
-                Markup.button.callback(
+        const presets = NUMBER_PRESETS.filter((value) => value >= min).map(
+            (value) =>
+                this.configButton(
                     `${value}`,
                     `config:set:${key}:${value}`,
+                    'primary',
                 ),
-            ),
-            [Markup.button.callback('Custom', `config:custom:${key}`)],
-            [Markup.button.callback('Back', 'config:back')],
+        );
+        const presetRows: ConfigButton[][] = [];
+        for (let i = 0; i < presets.length; i += 3) {
+            presetRows.push(presets.slice(i, i + 3));
+        }
+        return Markup.inlineKeyboard([
+            ...presetRows,
+            [this.configButton('✏️ Custom', `config:custom:${key}`, 'primary')],
+            [
+                this.configButton('◀️ Back', 'config:back', 'primary'),
+                this.configButton('✖️ Close', 'config:close', 'danger'),
+            ],
         ]);
     }
 
@@ -1256,6 +1285,16 @@ export class PlaybackTelegramController {
         );
         if (!room?.Feature) {
             await ctx.answerCbQuery('No room found');
+            return;
+        }
+
+        if (action === 'close') {
+            await ctx.answerCbQuery('Closed');
+            await this.safeEdit(() =>
+                ctx.editMessageText('🎛️ Configuration closed.', {
+                    reply_markup: { inline_keyboard: [] },
+                }),
+            );
             return;
         }
 
