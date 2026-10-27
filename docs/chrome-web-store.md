@@ -273,6 +273,30 @@ zip -r ../extension-webstore.zip .
 
 Upload `apps/extension/extension-webstore.zip` in the Chrome Web Store Developer Dashboard.
 
+### Automated Upload (optional)
+
+`.github/workflows/extension-publish.yml` builds and uploads the ZIP through the
+Chrome Web Store API. Add these repository secrets under
+**Settings -> Secrets and variables -> Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `CWS_CLIENT_ID` | OAuth client id from the Developer Dashboard |
+| `CWS_CLIENT_SECRET` | OAuth client secret |
+| `CWS_REFRESH_TOKEN` | Refresh token for the publishing account |
+| `CWS_EXTENSION_ID` | The extension item id |
+
+The publish step is skipped when any secret is missing, so a fork still runs the
+build. Trigger it manually with `workflow_dispatch` (set `publish: true`) or
+push a `v*` tag.
+
+To create the refresh token:
+
+```bash
+# one-time, locally
+npx chrome-webstore-upload-cli login
+```
+
 ## Release Checklist
 
 Before submitting for review:
