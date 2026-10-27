@@ -107,6 +107,17 @@ Leave empty unless there is a polished demo video.
 
 ## Graphic Assets
 
+Ready-to-upload assets live in `docs/images/store/`:
+
+| File | Size | Upload field |
+|------|------|--------------|
+| `icon-128x128.png` | 128x128 | Store icon |
+| `screenshot-01-queue.png` | 1280x800 | Screenshot (popup + queue) |
+| `screenshot-02-playing.png` | 1280x800 | Screenshot (popup, now playing) |
+| `small-promo-440x280.png` | 440x280 | Small promo tile |
+
+Regenerate them with the render script described in `docs/images/store/README.md`.
+
 ### Store Icon
 
 - Required size: `128x128`.
