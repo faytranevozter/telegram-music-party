@@ -4,7 +4,7 @@
 
 This privacy policy describes how the **YouTube Music Party** browser extension (“the Extension”, “we”, “us”) handles information when you use it.
 
-The Extension connects [YouTube Music](https://music.youtube.com) to a Telegram Music Party server so a Telegram group can control playback. It is open source: [github.com/faytranevozter/telegram-music-party](https://github.com/faytranevozter/telegram-music-party).
+The Extension connects [YouTube Music](https://music.youtube.com) to a Telegram Music Party server so a Telegram group can control playback. Website: [ytparty.my.id](https://ytparty.my.id). It is open source: [github.com/faytranevozter/telegram-music-party](https://github.com/faytranevozter/telegram-music-party).
 
 The Extension is not affiliated with YouTube, Google, Chrome, or Telegram.
 
@@ -118,7 +118,9 @@ Source code is available in the project repository. This policy may be updated w
 
 Questions about this policy or the Extension’s privacy practices:
 
+- Website: [ytparty.my.id](https://ytparty.my.id)  
+- Support: [ytparty.my.id/support](https://ytparty.my.id/support)  
 - Open an issue: [github.com/faytranevozter/telegram-music-party/issues](https://github.com/faytranevozter/telegram-music-party/issues)  
-- Project: [github.com/faytranevozter/telegram-music-party](https://github.com/faytranevozter/telegram-music-party)
+- Project source: [github.com/faytranevozter/telegram-music-party](https://github.com/faytranevozter/telegram-music-party)
 
 If you operate a deployed party backend, also document how that deployment stores logs, rooms, and device records for your users.

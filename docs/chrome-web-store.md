@@ -83,16 +83,14 @@ None
 
 ### Homepage URL
 
-Use the project repository unless there is a dedicated landing page:
-
 ```text
-https://github.com/faytranevozter/telegram-music-party
+https://ytparty.my.id
 ```
 
 ### Support URL
 
 ```text
-https://github.com/faytranevozter/telegram-music-party/issues
+https://ytparty.my.id/support
 ```
 
 ### Mature Content
@@ -106,6 +104,17 @@ Off
 Leave empty unless there is a polished demo video.
 
 ## Graphic Assets
+
+Ready-to-upload assets live in `docs/images/store/`:
+
+| File | Size | Upload field |
+|------|------|--------------|
+| `icon-128x128.png` | 128x128 | Store icon |
+| `screenshot-01-queue.png` | 1280x800 | Screenshot (popup + queue) |
+| `screenshot-02-playing.png` | 1280x800 | Screenshot (popup, now playing) |
+| `small-promo-440x280.png` | 440x280 | Small promo tile |
+
+Regenerate them with the render script described in `docs/images/store/README.md`.
 
 ### Store Icon
 
@@ -218,23 +227,13 @@ Only check these if they are true for the extension and backend deployment.
 
 ### Privacy Policy URL
 
-Use a public privacy policy URL. Recommended if you add one to the repository:
-
 ```text
-https://github.com/faytranevozter/telegram-music-party/blob/main/PRIVACY.md
+https://ytparty.my.id/privacy
 ```
 
-Raw URL alternative:
-
-```text
-https://raw.githubusercontent.com/faytranevozter/telegram-music-party/main/PRIVACY.md
-```
-
-Better if you have a website:
-
-```text
-https://your-domain.com/privacy
-```
+The page is generated from the root `PRIVACY.md` — see
+`apps/web-landing/scripts/build-privacy.mjs`. Keep one source of truth so the
+store listing cannot drift from the repository.
 
 The privacy policy should mention:
 
@@ -261,6 +260,30 @@ zip -r ../extension-webstore.zip .
 ```
 
 Upload `apps/extension/extension-webstore.zip` in the Chrome Web Store Developer Dashboard.
+
+### Automated Upload (optional)
+
+`.github/workflows/extension-publish.yml` builds and uploads the ZIP through the
+Chrome Web Store API. Add these repository secrets under
+**Settings -> Secrets and variables -> Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `CWS_CLIENT_ID` | OAuth client id from the Developer Dashboard |
+| `CWS_CLIENT_SECRET` | OAuth client secret |
+| `CWS_REFRESH_TOKEN` | Refresh token for the publishing account |
+| `CWS_EXTENSION_ID` | The extension item id |
+
+The publish step is skipped when any secret is missing, so a fork still runs the
+build. Trigger it manually with `workflow_dispatch` (set `publish: true`) or
+push a `v*` tag.
+
+To create the refresh token:
+
+```bash
+# one-time, locally
+npx chrome-webstore-upload-cli login
+```
 
 ## Release Checklist
 

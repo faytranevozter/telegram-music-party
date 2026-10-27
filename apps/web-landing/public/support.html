@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — YouTube Music Party</title>
+<meta name="description" content="Setup help and support for YouTube Music Party.">
+<link rel="icon" href="/icon-128x128.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<main>
+    <h1>Setup and support</h1>
+
+    <h2>Getting started</h2>
+    <div class="steps">
+        <ol>
+            <li>Install the extension from the Chrome Web Store.</li>
+            <li>Open <code>music.youtube.com</code> and click <strong>Join</strong> in the left sidebar.</li>
+            <li>Enter your <strong>room ID</strong> and the <strong>party server URL</strong>.</li>
+            <li>Add the bot to your Telegram group and control playback from there.</li>
+        </ol>
+    </div>
+
+    <div class="note">
+        One device plays per room. Joining from a second browser or tab replaces the first one —
+        this is enforced by the server.
+    </div>
+
+    <h2>Connection problems</h2>
+    <ul>
+        <li>The party URL must be reachable from your browser. Use an <code>https://</code> URL in production.</li>
+        <li>If you run your own backend, make sure it is running and that the URL is correct.</li>
+        <li>The extension cannot reach a server on a different machine using <code>localhost</code>.</li>
+    </ul>
+
+    <h2>Playback not responding</h2>
+    <ul>
+        <li>Reload the YouTube Music tab after installing or updating the extension.</li>
+        <li>Confirm the tab is joined — the sidebar entry point shows the current room.</li>
+        <li>Leave and rejoin the room to reset the session.</li>
+    </ul>
+
+    <h2>Get help</h2>
+    <p>
+        Report bugs or ask questions on the
+        <a href="https://github.com/faytranevozter/telegram-music-party/issues">issue tracker</a>.
+        Include your browser version, the extension version shown in the popup, and what you expected
+        to happen.
+    </p>
+</main>
+
+<footer>
+    <a href="/">Home</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="https://github.com/faytranevozter/telegram-music-party">Source</a>
+</footer>
+
+</body>
+</html>

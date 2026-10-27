@@ -176,9 +176,21 @@ pnpm --filter=extension build
 ## Structure
 
 ```txt
-apps/backend     NestJS, Telegraf, Socket.IO, Prisma, PostgreSQL, Redis
-apps/extension   React, Vite, Tailwind, HeroUI, MV3 content scripts
-packages         Shared packages placeholder
+apps/backend      NestJS, Telegraf, Socket.IO, Prisma, PostgreSQL, Redis
+apps/extension    React, Vite, Tailwind, HeroUI, MV3 content scripts
+apps/web-landing  Cloudflare Worker serving ytparty.my.id (landing, /privacy, /support)
+packages          Shared packages placeholder
+```
+
+## Website
+
+The public site at `https://ytparty.my.id` is a Cloudflare Worker serving static
+assets. The privacy page is generated from the root `PRIVACY.md`.
+
+```bash
+pnpm --filter=web-landing build:privacy   # regenerate /privacy from PRIVACY.md
+pnpm --filter=web-landing dev             # run locally
+pnpm --filter=web-landing deploy          # deploy to Cloudflare
 ```
 
 ## Release
@@ -215,7 +227,8 @@ timezone boundaries, attribution limits, and retention.
 
 ## Privacy
 
-[Privacy Policy](./PRIVACY.md) for the browser extension.
+[Privacy Policy](./PRIVACY.md) for the browser extension. Published at
+<https://ytparty.my.id/privacy>.
 
 ## License
 

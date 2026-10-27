@@ -1,0 +1,19 @@
+name = "ytparty-web-landing"
+compatibility_date = "2026-01-01"
+main = "src/worker.ts"
+
+# Static assets served from ./public and routed by src/worker.ts.
+# The explicit `binding` is required — wrangler does not inject ASSETS
+# automatically when a `main` Worker is configured.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Production route — uncomment once the Cloudflare zone is connected.
+# [[routes]]
+# pattern = "ytparty.my.id/*"
+# zone_name = "ytparty.my.id"
+
+# Preview environment: `wrangler deploy --env preview`
+[env.preview]
+name = "ytparty-web-landing-preview"

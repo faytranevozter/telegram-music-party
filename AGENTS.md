@@ -13,7 +13,16 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
   - Popup (`vite.config.ts` → `index.html` + `main.js`)
   - MAIN content script (`vite.config.lib.ts` → `content.js`)
   - ISOLATED bridge (`vite.config.bridge.ts` → `content-bridge.js`)
+- `apps/web-landing` — Cloudflare Worker serving `https://ytparty.my.id`. Static assets in `public/`; `src/worker.ts` routes `/`, `/privacy`, `/support`.
+  - **`wrangler.toml` requires explicit `binding = "ASSETS"`** when `main` is set — wrangler does not inject it automatically, and `env.ASSETS` will be `undefined` without it.
+  - `/privacy` is generated from root `PRIVACY.md` by `scripts/build-privacy.mjs`. Run it after editing `PRIVACY.md`.
 - `packages/` — currently empty (reserved).
+
+## Public URLs
+
+- `https://ytparty.my.id` — landing page
+- `https://ytparty.my.id/privacy` — privacy policy (Chrome Web Store Privacy Policy URL)
+- `https://ytparty.my.id/support` — support (Chrome Web Store Support URL)
 
 ## Commands
 
@@ -38,6 +47,11 @@ pnpm --filter=extension dev
 pnpm --filter=extension build   # tsc -b && vite + lib + bridge
 pnpm --filter=extension test
 pnpm --filter=extension lint
+
+# Web landing (Cloudflare Worker)
+pnpm --filter=web-landing dev
+pnpm --filter=web-landing deploy
+pnpm --filter=web-landing build:privacy   # regenerate /privacy from PRIVACY.md
 ```
 
 Run a single backend test file: `pnpm --filter=backend test -- <path-or-pattern>`.
