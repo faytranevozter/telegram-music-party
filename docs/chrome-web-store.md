@@ -83,16 +83,14 @@ None
 
 ### Homepage URL
 
-Use the project repository unless there is a dedicated landing page:
-
 ```text
-https://github.com/faytranevozter/telegram-music-party
+https://ytparty.my.id
 ```
 
 ### Support URL
 
 ```text
-https://github.com/faytranevozter/telegram-music-party/issues
+https://ytparty.my.id/support
 ```
 
 ### Mature Content
@@ -229,23 +227,13 @@ Only check these if they are true for the extension and backend deployment.
 
 ### Privacy Policy URL
 
-Use a public privacy policy URL. Recommended if you add one to the repository:
-
 ```text
-https://github.com/faytranevozter/telegram-music-party/blob/main/PRIVACY.md
+https://ytparty.my.id/privacy
 ```
 
-Raw URL alternative:
-
-```text
-https://raw.githubusercontent.com/faytranevozter/telegram-music-party/main/PRIVACY.md
-```
-
-Better if you have a website:
-
-```text
-https://your-domain.com/privacy
-```
+The page is generated from the root `PRIVACY.md` — see
+`apps/web-landing/scripts/build-privacy.mjs`. Keep one source of truth so the
+store listing cannot drift from the repository.
 
 The privacy policy should mention:
 

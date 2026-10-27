@@ -1,0 +1,14 @@
+{
+    "name": "web-landing",
+    "version": "1.9.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "build:privacy": "node scripts/build-privacy.mjs"
+    },
+    "devDependencies": {
+        "wrangler": "^4.0.0"
+    }
+}
