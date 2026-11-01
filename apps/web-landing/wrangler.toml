@@ -10,9 +10,9 @@ directory = "./public"
 binding = "ASSETS"
 
 # Production route — uncomment once the Cloudflare zone is connected.
-# [[routes]]
-# pattern = "ytparty.my.id/*"
-# zone_name = "ytparty.my.id"
+[[routes]]
+pattern = "ytparty.my.id/*"
+zone_name = "ytparty.my.id"
 
 # Preview environment: `wrangler deploy --env preview`
 [env.preview]

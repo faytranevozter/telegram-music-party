@@ -11,7 +11,8 @@ Telegram Music Party connects a Telegram group to a YouTube Music tab. The bot m
 
 ## Install
 
-Install the published extension from the Chrome Web Store when available. Chrome handles extension updates automatically.
+[Install YouTube Music Party from the Chrome Web Store](https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk).
+Chrome handles extension updates automatically; no ZIP download or Developer mode is needed for the store version.
 
 For local development, build the extension package:
 
