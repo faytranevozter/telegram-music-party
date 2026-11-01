@@ -2,6 +2,17 @@
 
 Use this checklist when publishing the YouTube Music Party browser extension to the Chrome Web Store.
 
+## Published Extension
+
+[YouTube Music Party on the Chrome Web Store](https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk)
+
+- Extension ID: `pdibhcofofkfblpajpjcpopbbbbbncbk`
+- Homepage: <https://ytparty.my.id>
+- Support: <https://ytparty.my.id/support>
+- Privacy policy: <https://ytparty.my.id/privacy>
+
+The extension is published. Use this checklist for future updates; users should install from the store rather than load a release ZIP manually.
+
 ## Auto-Update
 
 Chrome Web Store hosted extensions update automatically. Do not add a custom `update_url` for the Web Store build.

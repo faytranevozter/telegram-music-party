@@ -2,11 +2,16 @@
 
 MV3 browser extension that connects [YouTube Music](https://music.youtube.com) to the Telegram Music Party backend over Socket.IO.
 
+## Install
+
+[Install YouTube Music Party from the Chrome Web Store](https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk).
+Chrome installs updates automatically. For setup instructions, visit [ytparty.my.id/support](https://ytparty.my.id/support).
+
 ## What it does
 
 | Piece | Role |
 |--------|------|
-| **Popup** | Session control center: connection status, now playing, queue, play/pause/next/volume, leave room, update check |
+| **Popup** | Session control center: connection status, now playing, queue, play/pause/next/volume, leave room, current version |
 | **content.js** (MAIN) | Socket.IO client, YT Music DOM control, sidebar Join/Leave |
 | **content-bridge.js** (ISOLATED) | Bridges `chrome.runtime` ↔ MAIN via `window.postMessage` |
 
@@ -68,7 +73,9 @@ On `music.youtube.com` page `localStorage`:
 
 ## Updates
 
-Popup checks GitHub Releases (`src/lib/update.ts`). Unpacked extensions cannot self-install; the UI walks through download ZIP → extract → reload on `chrome://extensions`.
+Chrome Web Store installations update automatically through Chrome. The popup displays the installed version; it does not check GitHub Releases or download updates.
+
+For local development with an unpacked extension, rebuild and reload it on `chrome://extensions`, then refresh the YouTube Music tab.
 
 ## Stack
 
