@@ -26,7 +26,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_PROVIDER: ${{ matrix.provider }}
-      DATABASE_URL: ${{ matrix.provider == 'sqlite' && format('file:{0}/party-ci.db', runner.temp) || 'postgresql://party:party@localhost:5432/party_test?schema=public' }}
+      DATABASE_URL: ${{ matrix.provider == 'sqlite' && 'file:/tmp/party-ci.db' || 'postgresql://party:party@localhost:5432/party_test?schema=public' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
