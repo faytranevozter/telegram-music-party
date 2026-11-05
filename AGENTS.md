@@ -59,8 +59,9 @@ Run a single backend test file: `pnpm --filter=backend test -- <path-or-pattern>
 ## Prisma
 
 - Schema: `apps/backend/prisma/schema.prisma` — PostgreSQL datasource.
+- SQLite is optional: `DATABASE_PROVIDER=sqlite`; see `docs/database.md`. Run `db:generate` instead of raw Prisma generation when selecting a provider. `db:sync` derives `prisma/sqlite/schema.prisma` from the canonical schema; `db:check` verifies parity. Each provider has its own migrations, and the client/build is provider-specific.
 - Migrations live in `apps/backend/prisma/migrations/`.
-- **Always run `pnpm --filter=backend prisma generate` after changing the schema or pulling changes.** The generated client is not committed.
+- **Always run `pnpm --filter=backend db:generate` after changing the schema or pulling changes.** The generated client is not committed.
 - Create a migration: `pnpm --filter=backend prisma migrate dev --name <name>` (from `apps/backend`).
 - In Docker, `prisma migrate deploy` runs at container start (`apps/backend/docker/run.sh`).
 

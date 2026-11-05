@@ -10,6 +10,8 @@ RUN corepack enable \
 
 # --- install, build, prune ---
 FROM base AS build
+ARG DATABASE_PROVIDER=postgresql
+ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -21,7 +23,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 COPY apps/backend ./apps/backend
 
 WORKDIR /app/apps/backend
-RUN pnpm exec prisma generate --schema=./prisma/schema.prisma \
+RUN pnpm db:check && pnpm db:generate \
     && pnpm exec nest build \
     && find dist -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.tsbuildinfo' \) -delete
 
@@ -31,7 +33,7 @@ RUN pnpm --filter=backend deploy --legacy --prod /app/pruned
 
 # Generate Prisma for pruned tree, then strip build-only junk
 WORKDIR /app/pruned
-RUN pnpm exec prisma generate --schema=./prisma/schema.prisma \
+RUN pnpm db:generate \
     && rm -rf /tmp/* \
     # docs / tests / type packages never needed at runtime
     && find node_modules -type f \( \
@@ -62,6 +64,8 @@ RUN pnpm exec prisma generate --schema=./prisma/schema.prisma \
 
 # --- minimal runtime ---
 FROM node:24-alpine AS runtime
+ARG DATABASE_PROVIDER=postgresql
+ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 RUN apk add --no-cache openssl libc6-compat \
     && addgroup -S nodejs \
     && adduser -S nodejs -G nodejs
@@ -74,7 +78,9 @@ COPY --from=build --chown=nodejs:nodejs /app/apps/backend/prisma ./prisma
 COPY --chown=nodejs:nodejs apps/backend/public/index.html ./public/index.html
 COPY --chown=nodejs:nodejs apps/backend/docker ./docker
 
-RUN chmod +x ./docker/run.sh
+RUN chmod +x ./docker/run.sh \
+    && mkdir -p /app/data \
+    && chown nodejs:nodejs /app/data
 
 USER nodejs
 ENTRYPOINT ["./docker/run.sh"]

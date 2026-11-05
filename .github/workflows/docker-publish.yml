@@ -18,7 +18,18 @@ env:
 
 jobs:
   build-and-push:
+    name: Build and push (${{ matrix.provider }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - provider: postgresql
+            suffix: ""
+            rolling-tag: latest
+          - provider: sqlite
+            suffix: "-sqlite"
+            rolling-tag: sqlite
     permissions:
       contents: read
       packages: write
@@ -42,18 +53,22 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Rolling tags are explicit so SQLite never overwrites :latest.
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
-            type=sha,format=short,prefix=
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
+            type=raw,value=${{ matrix.rolling-tag }}
+            type=sha,format=short,prefix=,suffix=${{ matrix.suffix }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/backend/Dockerfile
+          build-args: |
+            DATABASE_PROVIDER=${{ matrix.provider }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend-${{ matrix.provider }}
+          cache-to: type=gha,mode=max,scope=backend-${{ matrix.provider }}

@@ -4,14 +4,8 @@ set -eu
 echo "🚀 Container starting..."
 
 echo "📦 Running Prisma migrations..."
-if [ -x "./node_modules/.bin/prisma" ]; then
-    ./node_modules/.bin/prisma migrate deploy
-elif [ -f "./node_modules/prisma/build/index.js" ]; then
-    node ./node_modules/prisma/build/index.js migrate deploy
-else
-    echo "❌ prisma CLI not found in node_modules"
-    exit 1
-fi
+node -e 'const { PrismaService } = require("./dist/platform/prisma.service"); const db = new PrismaService(); db.onModuleInit();'
+node scripts/database.mjs deploy
 echo "✅ Migration complete"
 
 echo "▶️ Starting Node app..."

@@ -4,6 +4,10 @@
 **/node_modules
 **/dist
 **/.env
+**/*.db
+**/*.db-journal
+**/*.db-shm
+**/*.db-wal
 **/.env.*
 !**/.env.example
 **/coverage
