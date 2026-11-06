@@ -1,0 +1,1 @@
+ALTER TABLE "Feature" ADD COLUMN "allowVideoSearch" BOOLEAN NOT NULL DEFAULT false;

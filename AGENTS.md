@@ -91,7 +91,7 @@ See `apps/backend/.env.example`.
 - **AnalyticsModule** (`src/app/analytics/`) — `AnalyticsService` records durable `SongRequest` and confirmed `PlaybackSession` rows, runs room-scoped queries, and prunes raw events by `ANALYTICS_RETENTION_DAYS`. Definitions and counting rules: `docs/analytics.md`.
 - **HTML helpers** (`src/helpers/util.ts`): `escapeHtml`, `htmlBold`, `htmlCode`, etc. Never spread a joined string into a message array (`...map().join()` spreads characters and breaks HTML tags).
 - **`/info`**: uses Bot API `sendRichMessage` with rich HTML `<table>` (telegraf has no typed helper yet — `callApi('sendRichMessage', …)`).
-- **Platform**: `prisma.service.ts`, `yt-music.service.ts` (`ytmusic-api`).
+- **Platform**: `prisma.service.ts`, `yt-music.service.ts` (`youtubei.js`; song-only search by default, `#video <query>` for room-enabled video results).
 - **Config**: `src/config/env.ts` → `ENV.*`. Path alias `src/` via `baseUrl: "./"`.
 
 ### Extension

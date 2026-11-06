@@ -1,13 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import Keyv from 'keyv';
 import {
+    normalizeSongs,
     normalizeVideos,
     SearchProviderError,
     VideoSearchResult,
+    VideoSearchType,
 } from './video-search';
 
 export interface VideoSearchClient {
     search(query: string, filters: { type: 'video' }): Promise<unknown>;
+    music: {
+        search(query: string, filters: { type: 'song' }): Promise<unknown>;
+    };
 }
 
 // CommonJS tsc rewrites import() to require(). Preserve the native ESM loader
@@ -76,19 +81,24 @@ export class YTMusicService {
         }
     }
 
-    async searchSongs(keyword: string): Promise<VideoSearchResult[]> {
+    async searchSongs(
+        keyword: string,
+        type: VideoSearchType = 'song',
+    ): Promise<VideoSearchResult[]> {
         const query = keyword.trim().replace(/\s+/g, ' ').slice(0, 200);
         if (query.length < 3) return [];
-        const key = `video-search:v1:${query.toLowerCase()}`;
+        const key = `video-search:v2:${type}:${query.toLowerCase()}`;
         const cached = await this.cache.get<VideoSearchResult[]>(key);
         if (cached) return cached;
         const pending = this.pending.get(key);
         if (pending) return pending;
         if (Date.now() < this.retryAfter || this.pending.size >= 4) return [];
-        const operation = this.searchProvider(query).then(async (results) => {
-            if (results.length) await this.cache.set(key, results, 30_000);
-            return results;
-        });
+        const operation = this.searchProvider(query, type).then(
+            async (results) => {
+                if (results.length) await this.cache.set(key, results, 30_000);
+                return results;
+            },
+        );
         this.pending.set(key, operation);
         try {
             return await operation;
@@ -97,7 +107,10 @@ export class YTMusicService {
         }
     }
 
-    private async searchProvider(query: string): Promise<VideoSearchResult[]> {
+    private async searchProvider(
+        query: string,
+        type: VideoSearchType,
+    ): Promise<VideoSearchResult[]> {
         try {
             if (!this.client) {
                 this.client = this.bounded(this.createClient()).catch(
@@ -112,7 +125,9 @@ export class YTMusicService {
             let response: unknown;
             try {
                 response = await this.bounded(
-                    client.search(query, { type: 'video' }),
+                    type === 'song'
+                        ? client.music.search(query, { type: 'song' })
+                        : client.search(query, { type: 'video' }),
                 );
             } catch (error: unknown) {
                 if (error instanceof SearchProviderError) throw error;
@@ -133,12 +148,14 @@ export class YTMusicService {
                           : 'network',
                 );
             }
-            return normalizeVideos(response);
+            return type === 'song'
+                ? normalizeSongs(response)
+                : normalizeVideos(response);
         } catch (error) {
             if (!(error instanceof SearchProviderError)) throw error;
             this.retryAfter =
                 Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000);
-            this.logger.warn(`Video search failed: ${error.kind}`);
+            this.logger.warn(`Search failed: ${error.kind}`);
             return [];
         }
     }

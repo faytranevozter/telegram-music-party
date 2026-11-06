@@ -9,33 +9,62 @@ class TestService extends YTMusicService {
     }
 }
 
-describe('video search availability', () => {
+const song = (id = 'dQw4w9WgXcQ') => ({
+    item_type: 'song',
+    id,
+    title: 'Title',
+    artists: [{ name: 'Artist' }],
+});
+
+describe('song search availability', () => {
     let service: TestService;
-    let search: jest.Mock;
+    let songSearch: jest.Mock;
+    let videoSearch: jest.Mock;
     beforeEach(() => {
         jest.useFakeTimers();
         jest.spyOn(Logger.prototype, 'warn').mockImplementation(
             () => undefined,
         );
         service = new TestService(new Keyv());
-        search = jest.fn().mockResolvedValue({ videos: [] });
-        service.initialize.mockResolvedValue({ search });
+        songSearch = jest.fn().mockResolvedValue({ songs: { contents: [] } });
+        videoSearch = jest.fn().mockResolvedValue({ videos: [] });
+        service.initialize.mockResolvedValue({
+            search: videoSearch,
+            music: { search: songSearch },
+        });
     });
     afterEach(() => {
         jest.useRealTimers();
         jest.restoreAllMocks();
     });
 
-    it('initializes lazily, searches videos and caches normalized queries', async () => {
+    it('defaults to song-only search and caches normalized queries', async () => {
         expect(service.initialize).not.toHaveBeenCalled();
-        search.mockResolvedValue({
-            videos: [{ video_id: 'dQw4w9WgXcQ', title: { text: 'Title' } }],
-        });
+        songSearch.mockResolvedValue({ songs: { contents: [song()] } });
         expect(await service.searchSongs('  Rick   Astley  ')).toHaveLength(1);
         expect(await service.searchSongs('rick astley')).toHaveLength(1);
-        expect(search).toHaveBeenCalledTimes(1);
-        expect(search).toHaveBeenCalledWith('Rick Astley', { type: 'video' });
+        expect(songSearch).toHaveBeenCalledTimes(1);
+        expect(songSearch).toHaveBeenCalledWith('Rick Astley', {
+            type: 'song',
+        });
+        expect(videoSearch).not.toHaveBeenCalled();
         expect(service.initialize).toHaveBeenCalledTimes(1);
+    });
+    it('searches ordinary videos when requested and caches them separately', async () => {
+        videoSearch.mockResolvedValue({
+            videos: [{ video_id: 'dQw4w9WgXcQ', title: { text: 'Title' } }],
+        });
+        const results = await service.searchSongs('Rick Astley', 'video');
+        expect(videoSearch).toHaveBeenCalledWith('Rick Astley', {
+            type: 'video',
+        });
+        expect(songSearch).not.toHaveBeenCalled();
+        expect(results[0]).toMatchObject({
+            videoId: 'dQw4w9WgXcQ',
+            channelName: 'Unknown channel',
+        });
+        await service.searchSongs('Rick Astley', 'song');
+        expect(songSearch).toHaveBeenCalledTimes(1);
     });
     it('survives initialization failure and retries only after cooldown', async () => {
         service.initialize.mockRejectedValueOnce(new Error('offline'));
@@ -45,20 +74,20 @@ describe('video search availability', () => {
         jest.advanceTimersByTime(5001);
         expect(await service.searchSongs('hello')).toEqual([]);
         expect(service.initialize).toHaveBeenCalledTimes(2);
-        expect(search).toHaveBeenCalledTimes(1);
+        expect(songSearch).toHaveBeenCalledTimes(1);
     });
     it.each([
         new Error('network'),
         { status: 429 },
         { info: { status_code: 429 } },
     ])('handles external failure %j', async (error) => {
-        search.mockRejectedValueOnce(error);
+        songSearch.mockRejectedValueOnce(error);
         expect(await service.searchSongs('hello')).toEqual([]);
         expect(await service.searchSongs('other query')).toEqual([]);
-        expect(search).toHaveBeenCalledTimes(1);
+        expect(songSearch).toHaveBeenCalledTimes(1);
         jest.advanceTimersByTime(30_001);
         await service.searchSongs('hello');
-        expect(search).toHaveBeenCalledTimes(2);
+        expect(songSearch).toHaveBeenCalledTimes(2);
     });
     it.each(['initialization', 'search'])(
         'bounds a stalled %s and settles late rejection',
@@ -69,7 +98,7 @@ describe('video search availability', () => {
             });
             if (phase === 'initialization')
                 service.initialize.mockReturnValueOnce(stalled);
-            else search.mockReturnValueOnce(stalled);
+            else songSearch.mockReturnValueOnce(stalled);
             const result = service.searchSongs('hello');
             await jest.advanceTimersByTimeAsync(8001);
             expect(await result).toEqual([]);
@@ -81,17 +110,17 @@ describe('video search availability', () => {
     );
     it('handles empty/malformed provider responses', async () => {
         expect(await service.searchSongs('empty')).toEqual([]);
-        search.mockResolvedValueOnce({});
+        songSearch.mockResolvedValueOnce({});
         expect(await service.searchSongs('malformed')).toEqual([]);
     });
     it('coalesces queries and limits concurrent provider work', async () => {
-        search.mockReturnValue(new Promise(() => undefined));
+        songSearch.mockReturnValue(new Promise(() => undefined));
         const requests = ['one', 'one', 'two', 'three', 'four', 'five'].map(
             (query) => service.searchSongs(query),
         );
         await jest.advanceTimersByTimeAsync(8001);
         expect(await Promise.all(requests)).toEqual([[], [], [], [], [], []]);
-        expect(search).toHaveBeenCalledTimes(4);
+        expect(songSearch).toHaveBeenCalledTimes(4);
     });
     it('does not mask cache/programming errors as provider outages', async () => {
         const cache = new Keyv();
