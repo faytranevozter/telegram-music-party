@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Socket } from "socket.io-client";
 import { detect } from "detect-browser";
-import { Config, DEFAULT_PARTY_URL } from "../constants/config";
+import { Config, DEFAULT_PARTY_URL, saveRoomConfig } from "../constants/config";
 
 const DEVICE_ID_KEY = "ytmp_device_id";
 
@@ -129,13 +129,11 @@ export function createJoinButton() {
                 );
                 if (!partyUrl) return;
 
-                // save roomId and partyUrl into local storage
-                localStorage.setItem("roomId", roomId);
-                localStorage.setItem("partyUrl", partyUrl);
-
-                // reload after saving onto local storage
-                if (roomId && partyUrl) {
+                try {
+                    saveRoomConfig(roomId, partyUrl);
                     window.location.reload();
+                } catch (error) {
+                    alert(error instanceof Error ? error.message : "Could not save room configuration.");
                 }
             },
             join: true,

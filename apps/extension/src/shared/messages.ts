@@ -46,6 +46,7 @@ export type BridgeRequest =
     | { type: "CONTROL"; action: ControlAction }
     | { type: "LEAVE" }
     | { type: "JOIN" }
+    | { type: "JOIN_ROOM"; roomId: string; partyUrl: string }
     | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean };
 
 export type BridgeResponse =

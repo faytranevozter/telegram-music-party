@@ -31,10 +31,10 @@ The Web Store build should not include a manual ZIP downloader or release checke
 ```text
 YouTube Music Party connects one browser tab to a room controlled from a Telegram group, so participants can manage a shared listening session.
 
-Use it to join a room from music.youtube.com, connect to your backend, and let group members add tracks, use playback controls, vote, and manage the queue.
+Open music.youtube.com and join a room from the extension popup or the music page sidebar. Connect to your backend and let group members add tracks, use playback controls, vote, and manage the queue.
 
 Features:
-- Join or leave a room from the music page
+- Join or leave a room from the popup or the music page sidebar
 - Connect to a configurable party backend
 - Control play, pause, next, previous, mute, and volume
 - View current room, connection status, now playing, and queue from the popup
@@ -42,10 +42,13 @@ Features:
 - Works with the companion bot/backend in this project
 
 How it works:
-1. Open music.youtube.com
-2. Click Join on the YouTube Music page
-3. Enter your room ID and use https://music.ytparty.my.id as the party server URL, or enter your own trusted server
-4. Use the Telegram bot in your group to control playback
+1. Add the companion bot to your Telegram group and run /register to get a room ID
+2. Open music.youtube.com, then open the extension popup
+3. Enter your room ID; expand Advanced / custom server to change the default https://music.ytparty.my.id server if needed
+4. Click Join Room; the music tab refreshes and may briefly interrupt playback
+5. Wait for Connected, then use the Telegram bot in your group to control playback
+
+Joining continues if you close the popup. Only one device can own a room; if the room is busy, leave on the current device before retrying. The music page sidebar remains an alternative way to join.
 
 This extension only runs on music.youtube.com. It does not collect account credentials, passwords, or personal browsing history.
 
@@ -336,7 +339,11 @@ Before submitting for review:
 - Run `pnpm --filter=extension test`.
 - Run `pnpm --filter=extension build`.
 - Load `apps/extension/dist` as an unpacked extension locally.
-- Test joining a room on `music.youtube.com`.
+- Test first-time joining from the popup with a loaded `music.youtube.com` tab, then test the sidebar prompts.
+- Test the default server, a custom/local HTTP server, and invalid room ID/server input.
+- Test no-tab and bridge-unavailable recovery, room-busy retry, unreachable servers, and the 30-second admission timeout.
+- Close and reopen the popup during joining; confirm it reflects the saved/current session.
+- Test leaving and joining another room, and confirm multiple music tabs cannot cross-update the selected popup session.
 - Test popup status, queue, playback controls, and leave.
 - Test Telegram commands reaching the extension through the backend.
 - Upload the ZIP to Chrome Web Store.

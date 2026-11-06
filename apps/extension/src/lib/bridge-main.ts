@@ -3,6 +3,7 @@ import { readPlayerQueue, watchPlayerQueue } from "./player-queue";
 import { getDeviceInfo } from "./browser";
 import {
     getConfig,
+    saveRoomConfig,
     isContinueWatchingBypassEnabled,
     setContinueWatchingBypass,
 } from "../constants/config";
@@ -148,7 +149,6 @@ function leaveRoom() {
     session.queues = [];
     session.roomId = null;
     publishStatus();
-    window.location.reload();
 }
 
 function handleRequest(request: BridgeRequestMessage): BridgeResponse {
@@ -193,6 +193,13 @@ function handleRequest(request: BridgeRequestMessage): BridgeResponse {
             publishStatus();
             return { type: "OK" };
         }
+        case "JOIN_ROOM": {
+            if (session.joined) {
+                return { type: "ERROR", message: "Leave the current room before joining another room." };
+            }
+            saveRoomConfig(request.roomId, request.partyUrl);
+            return { type: "OK" };
+        }
         case "SET_CONTINUE_WATCHING_BYPASS":
             setContinueWatchingBypass(request.enabled);
             applyContinueWatchingSetting();
@@ -228,6 +235,14 @@ export function startMainBridge() {
             ...response,
         };
         window.postMessage(message, "*");
+        if (
+            response.type === "OK" &&
+            (data.type === "JOIN_ROOM" || data.type === "LEAVE")
+        ) {
+            // Allow MAIN → ISOLATED → popup acknowledgement to finish before navigation.
+            // This page-side task survives closing the popup.
+            setTimeout(() => window.location.reload(), 200);
+        }
     });
 }
 

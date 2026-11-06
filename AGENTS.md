@@ -4,7 +4,7 @@
 
 pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube Music playback in a Telegram group via bot commands; a browser extension on `music.youtube.com` receives playback commands over Socket.IO.
 
-**One active device per room** — a new `join` kicks other sockets/devices for that room.
+**One active device per room** — `join` rejects a different device with `join-rejected` (`room-busy`); it does not replace the current player.
 
 ## Workspace Layout
 
@@ -85,7 +85,7 @@ See `apps/backend/.env.example`.
 - **AppModule**: CacheModule (Redis/Keyv), ServeStaticModule, PlaybackModule, TelegrafModule.
 - **PlaybackModule** (`src/app/playback/`):
   - `playback.controller.ts` — Telegram handlers (`@Update()`). Commands: play/pause/next/prev, queue, register, config, info, devices, inline search, etc. **No `/set`** — use `/config`.
-  - `playback.gateway.ts` — Socket.IO. On `join`: enforce single device (remove other devices + emit `leave` to other sockets). Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title` + `requestId`)/`leave`. Accepts `playback-report` only from the admitted device.
+  - `playback.gateway.ts` — Socket.IO. On `join`: reject another device with `join-rejected` (`room-busy`); the existing device must leave or disconnect first. Unknown rooms currently return without an admission response. Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title` + `requestId`)/`leave`. Accepts `playback-report` only from the admitted device.
   - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features.
   - `playback.stats.controller.ts` — room analytics commands: `/stats`, `/top`, `/history`, `/mystats`.
 - **AnalyticsModule** (`src/app/analytics/`) — `AnalyticsService` records durable `SongRequest` and confirmed `PlaybackSession` rows, runs room-scoped queries, and prunes raw events by `ANALYTICS_RETENTION_DAYS`. Definitions and counting rules: `docs/analytics.md`.
@@ -106,11 +106,13 @@ Popup (React) ──chrome.tabs.sendMessage──► content-bridge.js (ISOLATED
                                            Backend
 ```
 
-- **Popup** (`src/App.tsx`): control center — connection state, now playing, queue titles, transport controls, leave, GitHub update check. Not static install docs.
+- **Popup** (`src/App.tsx`): control center — room join form with advanced/custom server URL, connection state, now playing, queue titles, transport controls, leave, installed version. Status pushes are filtered to the selected music tab and do not overwrite edited form fields.
 - **MAIN content** (`src/lib/index.ts` + `playback.ts` + `browser.ts`): Socket.IO client, YT Music DOM, sidebar Join/Leave (`prompt` for room ID + party URL → `localStorage`).
-- **Bridge** (`src/lib/bridge-main.ts`, `src/lib/bridge-isolated.ts`, `src/shared/messages.ts`): request/response + `STATUS_PUSH` on socket/DOM events (no popup polling).
+- **Bridge** (`src/lib/bridge-main.ts`, `src/lib/bridge-isolated.ts`, `src/shared/messages.ts`): shared `BridgeRequest` union; `JOIN_ROOM` validates/saves `roomId` + `partyUrl` in MAIN and acknowledges before scheduling a page reload. It rejects configuration changes while admitted. Payload-free `JOIN` retries the saved session. An acknowledgement is not admission; wait for `connected` / server `joined`.
+- **Recovery** (`src/lib/popup-bridge.ts`, `src/App.tsx`): at most eight bridge-readiness attempts after opening/reloading; steady-state status comes from `STATUS_PUSH`, not polling. Admission waiting is bounded to 30 seconds; timeout must not claim the room definitely does not exist. Closing the popup does not cancel page-side joining.
 - **Config**: page `localStorage` keys `roomId`, `partyUrl`, `ytmp_device_id`, `ytmp_bypass_continue_watching` (`"false"` disables; unset = enabled) on `music.youtube.com`. Helpers in `src/constants/config.ts` (`isContinueWatchingBypassEnabled` / `setContinueWatchingBypass`); popup switch sends `SET_CONTINUE_WATCHING_BYPASS` via bridge → `applyContinueWatchingSetting()` gates watcher + `_lact` keep-alive live.
 - **Leave payload**: `{ roomId, fingerprint }` (not `id`).
+- **Join config**: `validateRoomConfig` / `saveRoomConfig` in `src/constants/config.ts` are shared by MAIN and the sidebar. Trim room ID and URL, require nonempty room ID and HTTP(S) URL, and preserve custom hosts, ports, and paths. Allow HTTP for local development.
 - **Updates**: Chrome Web Store builds rely on native browser auto-update. Do not add a manual ZIP downloader or GitHub release checker to the extension popup.
 - **Build**: `base: "./"` in popup Vite config so assets work under `chrome-extension://`.
 

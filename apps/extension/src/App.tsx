@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Button,
     Card,
     CardBody,
     Chip,
     Divider,
+    Input,
     Spinner,
     Switch,
 } from "@heroui/react";
 import type {
-    BridgeResponse,
     ControlAction,
     PopupStatusMessage,
     QueueItem,
@@ -17,6 +17,8 @@ import type {
 } from "./shared/messages";
 
 import { splitQueue } from "./lib/player-queue";
+import { DEFAULT_PARTY_URL, validateRoomConfig } from "./constants/config";
+import { sendToTab, waitForTabStatus } from "./lib/popup-bridge";
 type TabState = "loading" | "no-tab" | "ready";
 
 const emptyStatus: SessionStatus = {
@@ -43,18 +45,6 @@ async function findYoutubeMusicTab(): Promise<chrome.tabs.Tab | null> {
     if (active?.id != null) return active;
 
     return tabs.find((tab) => tab.id != null) ?? null;
-}
-
-async function sendToTab(
-    tabId: number,
-    message:
-        | { type: "GET_STATUS" }
-        | { type: "CONTROL"; action: ControlAction }
-        | { type: "LEAVE" }
-        | { type: "JOIN" }
-        | { type: "SET_CONTINUE_WATCHING_BYPASS"; enabled: boolean },
-): Promise<BridgeResponse> {
-    return chrome.tabs.sendMessage(tabId, message) as Promise<BridgeResponse>;
 }
 
 function hostFromUrl(url: string | null): string {
@@ -134,33 +124,79 @@ function App() {
     const [status, setStatus] = useState<SessionStatus>(emptyStatus);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [roomIdInput, setRoomIdInput] = useState("");
+    const [partyUrlInput, setPartyUrlInput] = useState(DEFAULT_PARTY_URL);
+    const [connecting, setConnecting] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+    const [admissionTimedOut, setAdmissionTimedOut] = useState(false);
+    const selectedTab = useRef<number | null>(null);
+    const formEdited = useRef({ roomId: false, partyUrl: false });
+    const submitting = useRef(false);
+    const recovery = useRef<AbortController | null>(null);
+    const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mounted = useRef(false);
     const currentVersion = chrome.runtime.getManifest().version;
 
     const applyStatus = useCallback((next: SessionStatus) => {
         setStatus(next);
-        setError(null);
+        if (!formEdited.current.roomId) {
+            setRoomIdInput(next.roomId ?? "");
+        }
+        if (!formEdited.current.partyUrl) {
+            setPartyUrlInput(next.partyUrl || DEFAULT_PARTY_URL);
+        }
+        if (next.connected || next.joinRejected) {
+            setConnecting(false);
+            setAdmissionTimedOut(false);
+            setError(null);
+        }
     }, []);
+
+    const recoverBridge = useCallback(async (id: number) => {
+        recovery.current?.abort();
+        const controller = new AbortController();
+        recovery.current = controller;
+        try {
+            const next = await waitForTabStatus(id, controller.signal);
+            if (next && selectedTab.current === id) applyStatus(next);
+        } catch (err) {
+            if (!controller.signal.aborted) {
+                setConnecting(false);
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Could not reach YouTube Music. Reload the tab and retry connection.",
+                );
+            }
+        }
+    }, [applyStatus]);
+
+    const recoverAfterReload = (id: number) => {
+        if (!mounted.current) return;
+        recovery.current?.abort();
+        if (reloadTimer.current) clearTimeout(reloadTimer.current);
+        reloadTimer.current = setTimeout(() => {
+            void recoverBridge(id);
+        }, 750);
+    };
 
     const refresh = useCallback(async () => {
         try {
             const tab = await findYoutubeMusicTab();
-            if (!tab?.id) {
+            if (!mounted.current) return;
+            if (tab?.id == null) {
                 setTabState("no-tab");
                 setTabId(null);
+                selectedTab.current = null;
                 setStatus(emptyStatus);
                 setError(null);
                 return;
             }
 
             setTabId(tab.id);
+            selectedTab.current = tab.id;
             setTabState("ready");
-
-            const response = await sendToTab(tab.id, { type: "GET_STATUS" });
-            if (response.type === "STATUS") {
-                applyStatus(response.status);
-            } else if (response.type === "ERROR") {
-                setError(response.message);
-            }
+            await recoverBridge(tab.id);
         } catch (err) {
             setError(
                 err instanceof Error
@@ -170,15 +206,40 @@ function App() {
             setStatus(emptyStatus);
             setTabState((prev) => (prev === "loading" ? "no-tab" : prev));
         }
-    }, [applyStatus]);
+    }, [recoverBridge]);
 
     useEffect(() => {
+        mounted.current = true;
         void refresh();
+        return () => {
+            mounted.current = false;
+            recovery.current?.abort();
+            if (reloadTimer.current) clearTimeout(reloadTimer.current);
+        };
     }, [refresh]);
 
     useEffect(() => {
-        const onMessage = (message: PopupStatusMessage) => {
+        if (
+            admissionTimedOut ||
+            status.connected ||
+            status.joinRejected ||
+            (!status.hasRoom && !connecting)
+        ) return;
+        const timer = setTimeout(() => {
+            setConnecting(false);
+            setAdmissionTimedOut(true);
+            setError("Room admission was not confirmed. Check the room ID and server, then retry join or edit the configuration below.");
+        }, 30000);
+        return () => clearTimeout(timer);
+    }, [status.connected, status.joinRejected, status.hasRoom, connecting, attempt, admissionTimedOut]);
+
+    useEffect(() => {
+        const onMessage = (
+            message: PopupStatusMessage,
+            sender: chrome.runtime.MessageSender,
+        ) => {
             if (message?.type !== "STATUS_PUSH" || !message.status) return;
+            if (sender.tab?.id !== selectedTab.current) return;
             setTabState("ready");
             applyStatus(message.status);
         };
@@ -225,6 +286,10 @@ function App() {
                 setError(response.message);
             } else {
                 setError(null);
+                setConnecting(false);
+                setAdmissionTimedOut(false);
+                setStatus(emptyStatus);
+                recoverAfterReload(tabId);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Leave failed");
@@ -242,10 +307,46 @@ function App() {
                 setError(response.message);
             } else {
                 setError(null);
+                setAdmissionTimedOut(false);
+                setAttempt((value) => value + 1);
+                // JOIN retries the saved session; it is not a new configuration.
+                setStatus((previous) => ({ ...previous, joinRejected: false }));
+                setConnecting(true);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Join failed");
         } finally {
+            setBusy(false);
+        }
+    };
+
+    const joinRoom = async () => {
+        if (tabId == null || submitting.current || busy || connecting) return;
+        let config: ReturnType<typeof validateRoomConfig>;
+        try {
+            config = validateRoomConfig(roomIdInput, partyUrlInput);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Check the room ID and party URL.");
+            return;
+        }
+        submitting.current = true;
+        setBusy(true);
+        setError(null);
+        try {
+            const response = await sendToTab(tabId, { type: "JOIN_ROOM", ...config });
+            if (response.type === "ERROR") {
+                setError(response.message);
+                return;
+            }
+            setAdmissionTimedOut(false);
+            setConnecting(true);
+            setAttempt((value) => value + 1);
+            // Acknowledgement means saved, not admitted. Wait for the reloaded page.
+            recoverAfterReload(tabId);
+        } catch {
+            setError("Could not reach YouTube Music. Reload the tab, then retry connection. Your entries are kept here.");
+        } finally {
+            submitting.current = false;
             setBusy(false);
         }
     };
@@ -288,15 +389,18 @@ function App() {
         busy ||
         tabState !== "ready" ||
         !status.socketConnected;
-    const conn = connectionMeta(status, tabState);
+    const conn = connecting
+        ? { label: "Connecting…", color: "warning" as const }
+        : connectionMeta(status, tabState);
     const playChip = playbackChip(status.playback);
-    const showNotJoined = tabState === "ready" && !status.hasRoom;
+    const showJoinForm = tabState === "ready" && !status.connected;
     const showJoinRejected = tabState === "ready" && status.joinRejected;
     const showDisconnected =
         tabState === "ready" &&
         status.hasRoom &&
         !status.joinRejected &&
-        !status.socketConnected;
+        !status.socketConnected &&
+        !connecting;
 
     return (
         <div className="dark w-[380px] min-h-[420px] bg-zinc-950 text-zinc-100 overflow-x-hidden">
@@ -322,8 +426,20 @@ function App() {
 
                 {error && (
                     <Card className="bg-danger-50/10 border border-danger-400/30 shadow-none">
-                        <CardBody className="py-2 text-xs text-danger-300">
-                            {error}
+                        <CardBody className="gap-2 py-2 text-xs text-danger-300">
+                            <p role="alert">{error}</p>
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                isDisabled={busy || connecting}
+                                onPress={() => {
+                                    setError(null);
+                                    if (tabId != null) void recoverBridge(tabId);
+                                    else void refresh();
+                                }}
+                            >
+                                Retry connection
+                            </Button>
                         </CardBody>
                     </Card>
                 )}
@@ -339,7 +455,7 @@ function App() {
                         <CardBody className="gap-3">
                             <p className="text-sm text-zinc-300">
                                 Open YouTube Music to control playback and join
-                                a party room.
+                                a party room. Once it loads, reopen this popup to join.
                             </p>
                             <Button
                                 color="primary"
@@ -397,21 +513,57 @@ function App() {
                             </CardBody>
                         </Card>
 
-                        {showNotJoined && (
-                            <Card className="bg-amber-500/10 border border-amber-500/30 shadow-none">
-                                <CardBody className="gap-1 py-3">
-                                    <p className="text-sm font-medium text-amber-200">
-                                        Not in a room
-                                    </p>
-                                    <p className="text-xs text-amber-100/80 leading-relaxed">
-                                        On YouTube Music, open the left sidebar
-                                        and click <strong>Join Room</strong>.
-                                        Enter the room ID from Telegram{" "}
-                                        <code className="rounded bg-black/30 px-1">
-                                            /register
-                                        </code>
-                                        .
-                                    </p>
+                        {showJoinForm && (
+                            <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                                <CardBody className="gap-3 py-3">
+                                    <form
+                                        noValidate
+                                        className="flex flex-col gap-3"
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            void joinRoom();
+                                        }}
+                                    >
+                                        <Input
+                                            label="Room ID"
+                                            placeholder="From Telegram /register"
+                                            size="sm"
+                                            isRequired
+                                            value={roomIdInput}
+                                            isDisabled={busy || connecting}
+                                            onValueChange={(value) => {
+                                                formEdited.current.roomId = true;
+                                                setRoomIdInput(value);
+                                            }}
+                                        />
+                                        <details>
+                                            <summary className="cursor-pointer text-xs text-zinc-400">Advanced / custom server</summary>
+                                            <Input
+                                                className="mt-2"
+                                                label="Party server URL"
+                                                size="sm"
+                                                type="url"
+                                                isRequired
+                                                value={partyUrlInput}
+                                                isDisabled={busy || connecting}
+                                                onValueChange={(value) => {
+                                                    formEdited.current.partyUrl = true;
+                                                    setPartyUrlInput(value);
+                                                }}
+                                            />
+                                        </details>
+                                        <p className="text-xs text-zinc-400 leading-relaxed">Joining refreshes the YouTube Music tab and may briefly interrupt playback.</p>
+                                        <Button
+                                            type="submit"
+                                            color="primary"
+                                            size="sm"
+                                            isLoading={connecting || busy}
+                                            isDisabled={busy || connecting || !roomIdInput.trim() || !partyUrlInput.trim()}
+                                        >
+                                            {connecting ? "Connecting…" : "Join Room"}
+                                        </Button>
+                                        {connecting && <p role="status" className="text-xs text-zinc-400">Waiting for room admission. You can close this popup; joining will continue.</p>}
+                                    </form>
                                 </CardBody>
                             </Card>
                         )}
@@ -432,7 +584,7 @@ function App() {
                                         size="sm"
                                         variant="flat"
                                         className="w-fit"
-                                        isDisabled={busy}
+                                        isDisabled={busy || connecting}
                                         onPress={() => {
                                             void retryJoin();
                                         }}
@@ -451,15 +603,20 @@ function App() {
                                     </p>
                                     <p className="text-xs text-danger-200/80 leading-relaxed">
                                         Room is configured but the party server
-                                        is offline. Check that the backend is
+                                        cannot be reached yet. Check that the backend is
                                         running at{" "}
                                         <span className="font-mono">
                                             {hostFromUrl(status.partyUrl)}
                                         </span>
                                         .
                                     </p>
+                                    <Button size="sm" variant="flat" isDisabled={busy} onPress={() => { void retryJoin(); }}>Retry join</Button>
                                 </CardBody>
                             </Card>
+                        )}
+
+                        {admissionTimedOut && status.hasRoom && status.socketConnected && !status.connected && (
+                            <Button size="sm" variant="flat" isDisabled={busy || connecting} onPress={() => { void retryJoin(); }}>Retry join</Button>
                         )}
 
                         <Card className="bg-zinc-900 border border-zinc-800 shadow-none">

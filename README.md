@@ -47,11 +47,21 @@ Register the group.
 /register
 ```
 
-Open YouTube Music and join the room.
+Open YouTube Music, then open the extension popup and join the room.
 
 ```txt
-music.youtube.com -> Join Room -> paste Room ID -> use https://music.ytparty.my.id
+music.youtube.com -> extension popup -> paste Room ID -> Join Room
 ```
+
+The popup uses `https://music.ytparty.my.id` by default. Expand **Advanced / custom
+server** to edit the server URL. The YouTube Music sidebar's **Join Room** prompts
+remain available as an alternative.
+
+Joining refreshes the YouTube Music tab and may briefly interrupt playback. Wait
+for **Connected** to confirm room admission; saving the configuration alone does
+not mean the room has admitted the device. You can close the popup while joining
+and reopen it to see the resulting session. If no music tab is open, use **Open
+YouTube Music**, wait for it to load, then reopen the popup to join.
 
 Queue a song from Telegram.
 
@@ -65,11 +75,16 @@ Start playback.
 /play
 ```
 
-Only one device can be active in a room. Joining from another browser replaces the previous device.
+Only one device can be active in a room. If another device owns it, the popup
+shows **Room busy**. Leave the room on that device before choosing **Retry join**;
+joining does not replace the existing player.
 
 The default party server is `https://music.ytparty.my.id`. Self-hosted servers are
-still supported: enter your own trusted HTTPS server URL when joining. Saved
-server URLs are preserved; leave and rejoin to change an existing configuration.
+still supported: enter your own trusted HTTPS server URL when joining, or an
+HTTP URL such as `http://localhost:3000` for local development. Saved server URLs
+are preserved, including custom ports and paths. While connected, use **Leave
+room** before joining another room or changing servers. For connection recovery,
+see [setup and support](https://ytparty.my.id/support).
 
 ## Screenshots
 
@@ -100,7 +115,7 @@ server URLs are preserved; leave and rejoin to change an existing configuration.
 - Vote-to-skip with `/vote_next`
 - Admin room configuration with `/config`
 - Room analytics: requests, plays, top songs/artists, listening time
-- Extension popup for status, now playing, queue, controls, and leave
+- Extension popup for joining, status, now playing, queue, controls, and leave
 - One active player device per room
 
 ## Commands
