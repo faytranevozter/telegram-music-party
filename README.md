@@ -31,6 +31,10 @@ Use the extracted extension folder, or load `apps/extension/dist` after a local 
 
 ## Quickstart
 
+Self-hosting: the backend supports PostgreSQL (default) and SQLite. See
+[database setup and deployment](docs/database.md) for SQLite configuration,
+provider-specific builds, migrations, and persistent Docker storage.
+
 Add the bot to a Telegram group.
 
 ```txt

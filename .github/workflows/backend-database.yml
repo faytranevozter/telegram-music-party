@@ -1,0 +1,47 @@
+name: Backend databases
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        provider: [postgresql, sqlite]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: party
+          POSTGRES_PASSWORD: party
+          POSTGRES_DB: party_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U party -d party_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_PROVIDER: ${{ matrix.provider }}
+      DATABASE_URL: ${{ matrix.provider == 'sqlite' && 'file:/tmp/party-ci.db' || 'postgresql://party:party@localhost:5432/party_test?schema=public' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter=backend db:check
+      - run: pnpm --filter=backend db:generate
+      - run: pnpm --filter=backend db:deploy
+      - run: pnpm --filter=backend db:deploy
+      - name: Verify SQLite migrations match the schema
+        if: matrix.provider == 'sqlite'
+        run: pnpm --filter=backend exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/sqlite/schema.prisma --exit-code
+      - run: pnpm --filter=backend build
+      - run: pnpm --filter=backend test --runInBand
+      - run: pnpm --filter=backend test:database

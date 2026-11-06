@@ -1,11 +1,18 @@
 {
   "name": "backend",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "description": "",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "scripts": {
+    "scripts": {
+        "db:sync": "node scripts/database.mjs sync",
+        "db:check": "node scripts/database.mjs check",
+        "db:generate": "node scripts/database.mjs generate",
+        "db:migrate": "node scripts/database.mjs migrate",
+        "db:deploy": "node scripts/database.mjs deploy",
+        "db:studio": "node scripts/database.mjs studio",
+        "test:database": "node scripts/test-database.mjs",
     "dev": "nest start --watch",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

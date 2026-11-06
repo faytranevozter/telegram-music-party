@@ -5,3 +5,7 @@ dist
 .turbo
 # OpenChamber session artifacts
 .openchamber/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
