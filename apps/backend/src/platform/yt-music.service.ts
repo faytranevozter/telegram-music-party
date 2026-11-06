@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import Keyv from 'keyv';
+import { SONG_SEARCH_INSTANCES } from 'src/config/search';
 import {
-    normalizeSongs,
+    normalizePipedSongs,
     normalizeVideos,
     SearchProviderError,
     VideoSearchResult,
@@ -10,9 +11,6 @@ import {
 
 export interface VideoSearchClient {
     search(query: string, filters: { type: 'video' }): Promise<unknown>;
-    music: {
-        search(query: string, filters: { type: 'song' }): Promise<unknown>;
-    };
 }
 
 // CommonJS tsc rewrites import() to require(). Preserve the native ESM loader
@@ -31,7 +29,7 @@ export class YTMusicService {
     private readonly logger = new Logger(YTMusicService.name);
     private client: Promise<VideoSearchClient> | null = null;
     private readonly pending = new Map<string, Promise<VideoSearchResult[]>>();
-    private retryAfter = 0;
+    private readonly retryAfter = new Map<VideoSearchType, number>();
     private readonly timeoutMs = 8_000;
 
     constructor(@Inject('KEYV_CACHE') private readonly cache: Keyv) {}
@@ -92,7 +90,11 @@ export class YTMusicService {
         if (cached) return cached;
         const pending = this.pending.get(key);
         if (pending) return pending;
-        if (Date.now() < this.retryAfter || this.pending.size >= 4) return [];
+        if (
+            Date.now() < (this.retryAfter.get(type) ?? 0) ||
+            this.pending.size >= 4
+        )
+            return [];
         const operation = this.searchProvider(query, type).then(
             async (results) => {
                 if (results.length) await this.cache.set(key, results, 30_000);
@@ -112,51 +114,91 @@ export class YTMusicService {
         type: VideoSearchType,
     ): Promise<VideoSearchResult[]> {
         try {
-            if (!this.client) {
-                this.client = this.bounded(this.createClient()).catch(
-                    (error: unknown) => {
-                        this.client = null;
-                        if (error instanceof SearchProviderError) throw error;
-                        throw new SearchProviderError('initialization');
-                    },
-                );
-            }
-            const client = await this.client;
-            let response: unknown;
-            try {
-                response = await this.bounded(
-                    type === 'song'
-                        ? client.music.search(query, { type: 'song' })
-                        : client.search(query, { type: 'video' }),
-                );
-            } catch (error: unknown) {
-                if (error instanceof SearchProviderError) throw error;
-                const detail = error as {
-                    info?: { status_code?: number };
-                    status?: number;
-                    name?: string;
-                } | null;
-                const status = detail?.info?.status_code ?? detail?.status;
-                const timeout =
-                    detail?.name === 'TimeoutError' ||
-                    detail?.name === 'AbortError';
-                throw new SearchProviderError(
-                    status === 429
-                        ? 'rate-limit'
-                        : timeout
-                          ? 'timeout'
-                          : 'network',
-                );
-            }
             return type === 'song'
-                ? normalizeSongs(response)
-                : normalizeVideos(response);
+                ? await this.searchPiped(query)
+                : await this.searchYoutubeVideos(query);
         } catch (error) {
             if (!(error instanceof SearchProviderError)) throw error;
-            this.retryAfter =
-                Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000);
-            this.logger.warn(`Search failed: ${error.kind}`);
+            this.retryAfter.set(
+                type,
+                Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000),
+            );
+            this.logger.warn(`Search failed (${type}): ${error.kind}`);
             return [];
         }
+    }
+
+    /**
+     * YouTube Music blocks some cloud regions (the current Tencent host answers
+     * "not available in your area"), so songs come from a keyless Piped API.
+     * Each configured instance is tried in order; positive results are cached.
+     */
+    private async searchPiped(query: string): Promise<VideoSearchResult[]> {
+        let last: SearchProviderError | null = null;
+        for (const instance of SONG_SEARCH_INSTANCES) {
+            const base = instance.replace(/\/+$/, '');
+            try {
+                const response = await this.bounded(
+                    fetch(
+                        `${base}/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+                        {
+                            headers: { Accept: 'application/json' },
+                            signal: AbortSignal.timeout(this.timeoutMs),
+                        },
+                    ),
+                );
+                if (response.status === 429) {
+                    throw new SearchProviderError('rate-limit');
+                }
+                if (!response.ok) {
+                    throw new SearchProviderError('network');
+                }
+                return normalizePipedSongs(await response.json());
+            } catch (error) {
+                last = this.toSearchError(error);
+            }
+        }
+        throw last ?? new SearchProviderError('network');
+    }
+
+    private async searchYoutubeVideos(
+        query: string,
+    ): Promise<VideoSearchResult[]> {
+        if (!this.client) {
+            this.client = this.bounded(this.createClient()).catch(
+                (error: unknown) => {
+                    this.client = null;
+                    throw this.toSearchError(error, 'initialization');
+                },
+            );
+        }
+        const client = await this.client;
+        let response: unknown;
+        try {
+            response = await this.bounded(
+                client.search(query, { type: 'video' }),
+            );
+        } catch (error) {
+            throw this.toSearchError(error);
+        }
+        return normalizeVideos(response);
+    }
+
+    private toSearchError(
+        error: unknown,
+        fallback: 'network' | 'initialization' = 'network',
+    ): SearchProviderError {
+        if (error instanceof SearchProviderError) return error;
+        const detail = error as {
+            info?: { status_code?: number };
+            status?: number;
+            name?: string;
+        } | null;
+        const status = detail?.info?.status_code ?? detail?.status;
+        const timeout =
+            detail?.name === 'TimeoutError' || detail?.name === 'AbortError';
+        return new SearchProviderError(
+            status === 429 ? 'rate-limit' : timeout ? 'timeout' : fallback,
+        );
     }
 }
