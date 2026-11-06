@@ -5,7 +5,6 @@ import {
     CardBody,
     Chip,
     Divider,
-    Input,
     Spinner,
     Switch,
 } from "@heroui/react";
@@ -525,35 +524,36 @@ function App() {
                                             void joinRoom();
                                         }}
                                     >
-                                        <Input
-                                            label="Room ID"
-                                            labelPlacement="outside"
+                                        <label className="join-field">
+                                            <span>Room ID</span>
+                                        <input
+                                            aria-label="Room ID"
                                             placeholder="From Telegram /register"
-                                            size="sm"
-                                            isRequired
+                                            required
                                             value={roomIdInput}
-                                            isDisabled={busy || connecting}
-                                            onValueChange={(value) => {
+                                            disabled={busy || connecting}
+                                            onChange={(event) => {
                                                 formEdited.current.roomId = true;
-                                                setRoomIdInput(value);
+                                                setRoomIdInput(event.target.value);
                                             }}
                                         />
+                                        </label>
                                         <details>
                                             <summary className="cursor-pointer text-xs text-zinc-400">Advanced / custom server</summary>
-                                            <Input
-                                                className="mt-2"
-                                                label="Party server URL"
-                                                labelPlacement="outside"
-                                                size="sm"
+                                            <label className="join-field join-server-field">
+                                                <span>Party server URL</span>
+                                            <input
+                                                aria-label="Party server URL"
                                                 type="url"
-                                                isRequired
+                                                required
                                                 value={partyUrlInput}
-                                                isDisabled={busy || connecting}
-                                                onValueChange={(value) => {
+                                                disabled={busy || connecting}
+                                                onChange={(event) => {
                                                     formEdited.current.partyUrl = true;
-                                                    setPartyUrlInput(value);
+                                                    setPartyUrlInput(event.target.value);
                                                 }}
                                             />
+                                            </label>
                                         </details>
                                         <p className="text-xs text-zinc-400 leading-relaxed">Joining refreshes the YouTube Music tab and may briefly interrupt playback.</p>
                                         <Button
