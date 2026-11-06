@@ -17,20 +17,28 @@
     <div class="steps">
         <ol>
             <li><a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Install the extension from the Chrome Web Store</a>. Chrome handles updates automatically.</li>
-            <li>Open <code>music.youtube.com</code> and click <strong>Join</strong> in the left sidebar.</li>
-            <li>Enter your <strong>room ID</strong> and use <code>https://music.ytparty.my.id</code> as the <strong>party server URL</strong>, or enter your own trusted server.</li>
-            <li>Add the bot to your Telegram group and control playback from there.</li>
+            <li>Add <a href="https://t.me/xmsc_bot">@xmsc_bot</a> to your Telegram group and run <code>/register</code> to get the room ID.</li>
+            <li>Open <code>music.youtube.com</code>, then open the extension popup from your browser toolbar.</li>
+            <li>Enter the <strong>Room ID</strong>. The party server defaults to <code>https://music.ytparty.my.id</code>; expand <strong>Advanced / custom server</strong> to use your own trusted server.</li>
+            <li>Click <strong>Join Room</strong>. The music tab refreshes, which may briefly interrupt playback. Wait for <strong>Connected</strong>, then control playback from Telegram.</li>
         </ol>
     </div>
 
     <div class="note">
-        One device plays per room. Joining from a second browser or tab replaces the first one —
-        this is enforced by the server.
+        One device plays per room. If another device owns the room, joining shows
+        <strong>Room busy</strong> rather than replacing the current player. Leave the room
+        on that device before clicking <strong>Retry join</strong>.
     </div>
+
+    <p>You can close the popup while joining; joining continues in the music tab. Reopen the popup to see the result. The YouTube Music sidebar's <strong>Join Room</strong> prompts are still available as an alternative.</p>
 
     <h2>Connection problems</h2>
     <ul>
-        <li>The party URL must be reachable from your browser. The default is <code>https://music.ytparty.my.id</code>. If a different URL was previously saved, leave the room and join again to change it. Use an <code>https://</code> URL in production.</li>
+        <li><strong>No tab:</strong> click <strong>Open YouTube Music</strong>, wait for it to load, then reopen the popup to join.</li>
+        <li><strong>Bridge unavailable:</strong> reload the YouTube Music tab, then click <strong>Retry connection</strong> in the popup. After installing or updating the extension, existing music tabs may need a refresh.</li>
+        <li><strong>Server unreachable:</strong> check the party URL and network connection. The default is <code>https://music.ytparty.my.id</code>. Use an <code>https://</code> URL in production; HTTP URLs such as <code>http://localhost:3000</code> are supported for local development.</li>
+        <li><strong>Admission not confirmed:</strong> waiting is limited to 30 seconds. Check the room ID from <code>/register</code> and the server URL, then click <strong>Retry join</strong> or edit the form and click <strong>Join Room</strong> again. A timeout does not prove the room does not exist.</li>
+        <li>Saved server URLs are preserved, including custom ports and paths. While connected, use <strong>Leave room</strong> before joining another room or changing servers. When not admitted, the form remains available to correct the configuration.</li>
         <li>If you run your own backend, make sure it is running and that the URL is correct.</li>
         <li>The extension cannot reach a server on a different machine using <code>localhost</code>.</li>
     </ul>
@@ -38,7 +46,8 @@
     <h2>Playback not responding</h2>
     <ul>
         <li>Reload the YouTube Music tab after installing or updating the extension.</li>
-        <li>Confirm the tab is joined — the sidebar entry point shows the current room.</li>
+        <li>Confirm the popup shows <strong>Connected</strong> and the expected room ID. <strong>Connecting…</strong> means admission is still pending.</li>
+        <li>If several YouTube Music tabs are open, activate the one you want to control before opening the popup. The popup follows that selected tab; updates from other tabs do not replace its status.</li>
         <li>Leave and rejoin the room to reset the session.</li>
     </ul>
 

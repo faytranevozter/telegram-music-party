@@ -2,6 +2,34 @@ import { getDeviceId } from "../lib/browser";
 
 export const DEFAULT_PARTY_URL = "https://music.ytparty.my.id";
 
+export function validateRoomConfig(roomId: string, partyUrl: string) {
+    if (typeof roomId !== "string" || !roomId.trim()) {
+        throw new Error("Enter a room ID from Telegram /register.");
+    }
+    if (typeof partyUrl !== "string") {
+        throw new Error("Enter a valid HTTP(S) party server URL.");
+    }
+    const trimmedUrl = partyUrl.trim();
+    let url: URL;
+    try {
+        url = new URL(trimmedUrl);
+    } catch {
+        throw new Error("Enter a valid HTTP(S) party server URL.");
+    }
+    if (!["http:", "https:"].includes(url.protocol) || !url.hostname) {
+        throw new Error("Enter a valid HTTP(S) party server URL.");
+    }
+    // Keep custom paths and ports intact; Socket.IO may use the path as a namespace.
+    return { roomId: roomId.trim(), partyUrl: trimmedUrl };
+}
+
+export function saveRoomConfig(roomId: string, partyUrl: string) {
+    const config = validateRoomConfig(roomId, partyUrl);
+    localStorage.setItem("partyUrl", config.partyUrl);
+    localStorage.setItem("roomId", config.roomId);
+    return config;
+}
+
 export type Config = {
     partyUrl: string | null;
     roomId: string | null;
