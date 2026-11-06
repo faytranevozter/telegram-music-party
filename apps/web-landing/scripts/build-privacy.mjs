@@ -148,7 +148,12 @@ const html = `<!DOCTYPE html>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<main>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+    <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
+    <nav aria-label="Main navigation"><a href="/#setup">Set up your room</a><a href="/support">Support</a></nav>
+</header>
+<main id="main">
 ${updated ? `<p class="updated">Last updated: ${escapeHtml(updated)}</p>` : ""}
 ${body}
 </main>

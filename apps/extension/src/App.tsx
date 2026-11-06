@@ -403,15 +403,16 @@ function App() {
         !connecting;
 
     return (
-        <div className="dark w-[380px] min-h-[420px] bg-zinc-950 text-zinc-100 overflow-x-hidden">
-            <div className="flex flex-col gap-3 p-4 box-border">
+        <div className="dark party-popup">
+            <div className="popup-layout">
                 <header className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                        <h1 className="text-base font-semibold tracking-tight truncate">
+                        <h1 className="popup-brand">
+                            <img src="/app-icon.png" width="28" height="28" alt="" />
                             YouTube Music Party
                         </h1>
                         <p className="text-xs text-zinc-400">
-                            Session control center
+                            The group’s music, your player.
                         </p>
                     </div>
                     <Chip
@@ -471,7 +472,7 @@ function App() {
 
                 {tabState === "ready" && (
                     <>
-                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                        <Card className="session-details bg-zinc-900 border border-zinc-800 shadow-none">
                             <CardBody className="gap-2 py-3">
                                 <div className="flex items-center justify-between gap-3 text-xs">
                                     <span className="shrink-0 text-zinc-400">
@@ -526,6 +527,7 @@ function App() {
                                     >
                                         <Input
                                             label="Room ID"
+                                            labelPlacement="outside"
                                             placeholder="From Telegram /register"
                                             size="sm"
                                             isRequired
@@ -541,6 +543,7 @@ function App() {
                                             <Input
                                                 className="mt-2"
                                                 label="Party server URL"
+                                                labelPlacement="outside"
                                                 size="sm"
                                                 type="url"
                                                 isRequired
@@ -619,12 +622,12 @@ function App() {
                             <Button size="sm" variant="flat" isDisabled={busy || connecting} onPress={() => { void retryJoin(); }}>Retry join</Button>
                         )}
 
-                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                        <Card className="now-playing bg-zinc-900 border border-zinc-800 shadow-none">
                             <CardBody className="gap-1 py-3">
-                                <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                                <p className="track-label">
                                     Now playing
                                 </p>
-                                <p className="text-sm font-semibold leading-snug break-words">
+                                <p className="track-title">
                                     {status.playback?.song?.trim() ||
                                         "Nothing playing"}
                                 </p>
@@ -642,32 +645,7 @@ function App() {
                             </CardBody>
                         </Card>
 
-                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
-                            <CardBody className="gap-1 py-3">
-                                <Switch
-                                    size="sm"
-                                    isSelected={
-                                        status.bypassContinueWatching
-                                    }
-                                    isDisabled={busy}
-                                    onValueChange={(enabled) => {
-                                        void setBypassContinueWatching(
-                                            enabled,
-                                        );
-                                    }}
-                                >
-                                    <span className="text-sm text-zinc-200">
-                                        Bypass "continue watching"
-                                    </span>
-                                </Switch>
-                                <p className="text-[10px] text-zinc-500 leading-relaxed">
-                                    Auto-dismisses YouTube Music's idle dialog
-                                    and keeps the tab active.
-                                </p>
-                            </CardBody>
-                        </Card>
-
-                        <div className="flex flex-col gap-2">
+                        <div className="transport flex flex-col gap-2">
                             <div className="flex items-center gap-2">
                                 <Button
                                     size="sm"
@@ -744,10 +722,10 @@ function App() {
                             </div>
                         </div>
 
-                        <Card className="bg-zinc-900 border border-zinc-800 shadow-none">
+                        <Card className="queue-panel bg-zinc-900 border border-zinc-800 shadow-none">
                             <CardBody className="gap-2 py-3">
                                 <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                                    <p className="queue-heading">
                                         YouTube Music queue
                                     </p>
                                     <span className="text-[10px] text-zinc-500 shrink-0">
@@ -766,7 +744,7 @@ function App() {
                                     <div key={group.label} className="space-y-2">
                                     <p className="text-xs font-medium text-zinc-400">{group.label}</p>
                                     {group.items.length === 0 && <p className="text-xs text-zinc-500">No upcoming tracks.</p>}
-                                    <ul className="max-h-36 space-y-2 overflow-y-auto pr-1">
+                                    <ul className="queue-tracks space-y-2 overflow-y-auto pr-1">
                                         {group.items.map((item, index) => {
                                             const label = parseQueueLabel(item);
                                             return (
@@ -798,6 +776,21 @@ function App() {
                                 )}
                             </CardBody>
                         </Card>
+
+                        <details className="player-settings">
+                            <summary>Player settings</summary>
+                            <Switch
+                                size="sm"
+                                isSelected={status.bypassContinueWatching}
+                                isDisabled={busy}
+                                onValueChange={(enabled) => {
+                                    void setBypassContinueWatching(enabled);
+                                }}
+                            >
+                                <span className="text-sm text-zinc-200">Bypass "continue watching"</span>
+                            </Switch>
+                            <p className="text-xs text-zinc-400">Auto-dismisses YouTube Music's idle dialog and keeps the tab active.</p>
+                        </details>
 
                         {status.hasRoom && (
                             <>
