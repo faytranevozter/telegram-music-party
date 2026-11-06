@@ -22,8 +22,19 @@ def request(url, *, data=None, token=None, content_type=None):
         with urllib.request.urlopen(req, timeout=60) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
-        # Do not print response bodies: OAuth errors can contain credentials.
-        raise RuntimeError(f'API request failed with HTTP {error.code}; check credentials and the Developer Dashboard.') from None
+        safe_codes = {'invalid_grant', 'invalid_client', 'invalid_request',
+                      'unauthorized_client', 'access_denied', 'invalid_scope',
+                      'PERMISSION_DENIED', 'NOT_FOUND', 'INVALID_ARGUMENT',
+                      'UNAUTHENTICATED', 'RESOURCE_EXHAUSTED'}
+        code = None
+        try:
+            detail = json.loads(error.read(65536)).get('error')
+            code = detail.get('status') if isinstance(detail, dict) else detail
+        except (ValueError, AttributeError):
+            pass
+        suffix = f' ({code})' if isinstance(code, str) and code in safe_codes else ''
+        endpoint = 'OAuth token exchange' if url == 'https://oauth2.googleapis.com/token' else 'Chrome Web Store API'
+        raise RuntimeError(f'{endpoint} failed with HTTP {error.code}{suffix}; check credentials and the Developer Dashboard.') from None
 
 
 def main():
