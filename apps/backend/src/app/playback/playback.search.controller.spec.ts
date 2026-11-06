@@ -7,7 +7,8 @@ import { VideoSearchResult } from 'src/platform/video-search';
 const result: VideoSearchResult = {
     videoId: 'dQw4w9WgXcQ',
     title: 'Title <live>',
-    channelName: 'A & B',
+    artistName: 'A & B',
+    channelName: null,
     durationSeconds: null,
     thumbnailUrl: null,
 };
@@ -22,6 +23,7 @@ function setup() {
                 maxQueueSize: 10,
                 playNextCommand: true,
                 dailyPlayNextLimit: 0,
+                allowVideoSearch: false,
             },
         }),
         getQueues: jest.fn().mockResolvedValue([]),
@@ -50,19 +52,20 @@ function setup() {
     return { cache, gateway, playback, analytics, provider, controller, ctx };
 }
 
-describe('inline video search and queue contract', () => {
+describe('inline song search and queue contract', () => {
     it('answers with article, safe optional metadata, keyboard and awaited callback cache', async () => {
-        const { controller, cache, ctx } = setup();
+        const { controller, cache, provider, ctx } = setup();
         await controller.search(ctx);
+        expect(provider.searchSongs).toHaveBeenCalledWith('a title', 'song');
         const [articles, options] = ctx.answerInlineQuery.mock.calls[0];
         expect(articles).toHaveLength(1);
         expect(articles[0]).toMatchObject({
             id: 'query:dQw4w9WgXcQ',
             type: 'article',
             title: result.title,
-            description: 'A & B • Duration unavailable',
+            description: 'Artist: A & B • Duration unavailable',
             input_message_content: {
-                message_text: 'Title <live> • Channel: A & B',
+                message_text: 'Title <live> • Artist: A & B',
             },
         });
         expect(articles[0].thumbnail_url).toBeUndefined();
@@ -73,7 +76,7 @@ describe('inline video search and queue contract', () => {
             }),
         );
         expect(options).toEqual({ cache_time: 30, is_personal: true });
-        expect(await cache.get('songs:v2:query')).toEqual([result]);
+        expect(await cache.get('songs:v3:query')).toEqual([result]);
         ctx.update = {
             chosen_inline_result: {
                 inline_message_id: 'inline',
@@ -82,7 +85,7 @@ describe('inline video search and queue contract', () => {
             },
         };
         await controller.chosenInlineResult(ctx);
-        expect(await cache.get('song:v2:inline:dQw4w9WgXcQ')).toEqual(result);
+        expect(await cache.get('song:v3:inline:dQw4w9WgXcQ')).toEqual(result);
     });
     it('includes Play Next for an eligible known room and thumbnail/duration when present', async () => {
         const { controller, cache, provider, ctx } = setup();
@@ -108,6 +111,48 @@ describe('inline video search and queue contract', () => {
             }),
         );
     });
+    it('allows #video only when the last room enables Video Search', async () => {
+        const { controller, cache, playback, provider, ctx } = setup();
+        await cache.set('user-loc:42', { chatId: '-100', threadId: null });
+        playback.getRoomByChatId.mockResolvedValue({
+            id: 'room',
+            Feature: {
+                maxQueueSize: 10,
+                playNextCommand: true,
+                dailyPlayNextLimit: 0,
+                allowVideoSearch: true,
+            },
+        });
+        provider.searchSongs.mockResolvedValue([
+            { ...result, artistName: null, channelName: 'Channel' },
+        ]);
+        ctx.update.inline_query.query = '#video  a title';
+        await controller.search(ctx);
+        expect(provider.searchSongs).toHaveBeenCalledWith('a title', 'video');
+        const article = ctx.answerInlineQuery.mock.calls[0][0][0];
+        expect(article.description).toContain('Channel: Channel');
+    });
+    it.each(['disabled', 'no known room'])(
+        'rejects #video when Video Search is %s',
+        async (mode) => {
+            const { controller, cache, provider, ctx } = setup();
+            if (mode === 'disabled') {
+                await cache.set('user-loc:42', {
+                    chatId: '-100',
+                    threadId: null,
+                });
+            }
+            ctx.update.inline_query.query = '#video a title';
+            await controller.search(ctx);
+            expect(provider.searchSongs).not.toHaveBeenCalled();
+            const [articles, options] = ctx.answerInlineQuery.mock.calls[0];
+            expect(articles[0]).toMatchObject({
+                type: 'article',
+                title: 'Video search is disabled',
+            });
+            expect(options).toEqual({ cache_time: 5, is_personal: true });
+        },
+    );
     it.each(['short', 'empty/outage'])(
         'answers %s queries with a short personal cache',
         async (mode) => {
@@ -127,11 +172,11 @@ describe('inline video search and queue contract', () => {
         await expect(controller.search(ctx)).rejects.toThrow('bug');
     });
     it.each(['completeAddToQueue', 'completePlayNext'])(
-        'preserves %s action and keeps channels out of artist analytics',
+        'preserves %s action, records song artists and leaves channels unknown',
         async (action) => {
             const { controller, cache, ctx, gateway, analytics, playback } =
                 setup();
-            await cache.set('song:v2:inline:dQw4w9WgXcQ', result);
+            await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
             jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
                 true,
             );
@@ -153,13 +198,13 @@ describe('inline video search and queue contract', () => {
                 'room',
                 result.videoId,
                 next ? 'next' : 'end',
-                expect.stringContaining('Channel: A & B'),
+                expect.stringContaining('Artist: A & B'),
                 'request',
             );
             expect(analytics.recordRequest).toHaveBeenCalledWith(
                 expect.objectContaining({
                     title: result.title,
-                    artist: '',
+                    artist: 'A & B',
                     source: next ? 'play_next' : 'queue',
                 }),
             );
@@ -167,8 +212,31 @@ describe('inline video search and queue contract', () => {
                 '&lt;live&gt;',
             );
             expect(
-                await cache.get('song:v2:inline:dQw4w9WgXcQ'),
+                await cache.get('song:v3:inline:dQw4w9WgXcQ'),
             ).toBeUndefined();
         },
     );
+    it('labels video channels without claiming an artist', async () => {
+        const { controller, cache, analytics, ctx } = setup();
+        const video: VideoSearchResult = {
+            ...result,
+            artistName: null,
+            channelName: 'A & B',
+        };
+        await cache.set('song:v3:inline:dQw4w9WgXcQ', video);
+        jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(true);
+        await (controller as any).completeAddToQueue(ctx, {
+            videoId: video.videoId,
+            inlineMessageId: 'inline',
+            chatId: '-100',
+            threadId: null,
+            userId: 42,
+        });
+        expect(analytics.recordRequest).toHaveBeenCalledWith(
+            expect.objectContaining({ artist: '' }),
+        );
+        expect(ctx.telegram.editMessageText.mock.calls[0][3]).toContain(
+            'Channel: A &amp; B',
+        );
+    });
 });

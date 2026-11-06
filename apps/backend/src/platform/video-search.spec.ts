@@ -1,9 +1,27 @@
-import { normalizeVideos, SearchProviderError } from './video-search';
+import {
+    creditLabel,
+    normalizeSongs,
+    normalizeVideos,
+    SearchProviderError,
+} from './video-search';
 
 const video = (overrides = {}) => ({
     video_id: 'dQw4w9WgXcQ',
     title: { text: 'Never Gonna Give You Up' },
     author: { name: 'Rick Astley' },
+    duration: { text: '3:33', seconds: 213 },
+    thumbnails: [
+        { url: 'https://img.test/small', width: 120 },
+        { url: 'https://img.test/large', width: 480 },
+    ],
+    ...overrides,
+});
+
+const song = (overrides = {}) => ({
+    item_type: 'song',
+    id: 'dQw4w9WgXcQ',
+    title: 'Never Gonna Give You Up',
+    artists: [{ name: 'Rick Astley', channel_id: 'UC123' }],
     duration: { text: '3:33', seconds: 213 },
     thumbnails: [
         { url: 'https://img.test/small', width: 120 },
@@ -46,6 +64,7 @@ describe('ordinary video normalization', () => {
         expect(normalizeVideos({ videos: [lockup] })[0]).toMatchObject({
             videoId: 'dQw4w9WgXcQ',
             title: 'Title',
+            artistName: null,
             channelName: 'Channel',
             durationSeconds: 213,
         });
@@ -60,6 +79,7 @@ describe('ordinary video normalization', () => {
             {
                 videoId: 'dQw4w9WgXcQ',
                 title: 'Never Gonna Give You Up',
+                artistName: null,
                 channelName: 'Rick Astley',
                 durationSeconds: 213,
                 thumbnailUrl: 'https://img.test/large',
@@ -123,5 +143,115 @@ describe('ordinary video normalization', () => {
                 ),
             }),
         ).toHaveLength(20);
+    });
+});
+
+describe('YouTube Music song normalization', () => {
+    it('keeps only audio-track songs with artist metadata', () => {
+        expect(
+            normalizeSongs({
+                songs: {
+                    contents: [
+                        song(),
+                        {
+                            ...song({ id: 'abcdefghijk' }),
+                            item_type: 'video',
+                        },
+                    ],
+                },
+            }),
+        ).toEqual([
+            {
+                videoId: 'dQw4w9WgXcQ',
+                title: 'Never Gonna Give You Up',
+                artistName: 'Rick Astley',
+                channelName: null,
+                durationSeconds: 213,
+                thumbnailUrl: 'https://img.test/large',
+            },
+        ]);
+    });
+    it('finds songs inside contents shelves even without the named getter', () => {
+        expect(
+            normalizeSongs({
+                contents: [
+                    { contents: [song()] },
+                    { contents: [{ item_type: 'album', id: 'MPR123' }] },
+                ],
+            }),
+        ).toHaveLength(1);
+    });
+    it('joins multiple artists and tolerates missing metadata', () => {
+        expect(
+            normalizeSongs({
+                songs: {
+                    contents: [
+                        song({
+                            artists: [
+                                { name: 'Artist A' },
+                                { name: 'Artist B' },
+                            ],
+                        }),
+                        song({
+                            id: 'abcdefghijk',
+                            artists: [],
+                            duration: null,
+                            thumbnails: [{ url: 'javascript:bad' }],
+                        }),
+                    ],
+                },
+            }),
+        ).toMatchObject([
+            { artistName: 'Artist A, Artist B' },
+            {
+                artistName: null,
+                durationSeconds: null,
+                thumbnailUrl: null,
+            },
+        ]);
+    });
+    it('deduplicates, rejects malformed rows and caps at 20', () => {
+        expect(
+            normalizeSongs({
+                songs: {
+                    contents: [
+                        null,
+                        {},
+                        song({ id: 'bad' }),
+                        song({ title: '' }),
+                        song(),
+                        song(),
+                        ...Array.from({ length: 30 }, (_, i) =>
+                            song({ id: String(i).padStart(11, '0') }),
+                        ),
+                    ],
+                },
+            }),
+        ).toHaveLength(20);
+        expect(normalizeSongs({ songs: { contents: [] } })).toEqual([]);
+        expect(normalizeSongs({ contents: [] })).toEqual([]);
+        expect(() => normalizeSongs({})).toThrow(SearchProviderError);
+    });
+    it('labels song artists and video channels differently', () => {
+        expect(
+            creditLabel({
+                videoId: 'dQw4w9WgXcQ',
+                title: 'Song',
+                artistName: 'Artist',
+                channelName: null,
+                durationSeconds: null,
+                thumbnailUrl: null,
+            }),
+        ).toBe('Artist: Artist');
+        expect(
+            creditLabel({
+                videoId: 'dQw4w9WgXcQ',
+                title: 'Video',
+                artistName: null,
+                channelName: 'Channel',
+                durationSeconds: null,
+                thumbnailUrl: null,
+            }),
+        ).toBe('Channel: Channel');
     });
 });

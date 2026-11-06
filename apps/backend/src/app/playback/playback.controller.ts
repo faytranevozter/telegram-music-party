@@ -20,6 +20,7 @@ import { PlaybackService } from './playback.service';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
+import { creditLabel } from 'src/platform/video-search';
 import {
     escapeHtml,
     formatDateTime,
@@ -84,6 +85,11 @@ const CONFIG_FIELDS = {
         type: 'number',
         min: 0,
         help: 'Per-user daily Play Next limit; 0 = unlimited',
+    },
+    allowVideoSearch: {
+        label: 'Video Search',
+        type: 'boolean',
+        help: 'Allow #video in inline search',
     },
     nextCommand: {
         label: 'Next Command',
@@ -162,6 +168,7 @@ const CONFIG_ICONS: Record<ConfigKey, string> = {
     maxQueueSize: '📋',
     playNextCommand: '⏭️',
     dailyPlayNextLimit: '📆',
+    allowVideoSearch: '🎬',
     nextCommand: '⏩',
     nextOnlyAdmin: '🛡️',
     previousCommand: '⏪',
@@ -181,6 +188,7 @@ const CONFIG_BUTTON_LABELS: Record<ConfigKey, string> = {
     maxQueueSize: 'Max queue',
     playNextCommand: 'Play Next',
     dailyPlayNextLimit: 'Daily limit',
+    allowVideoSearch: 'Video',
     nextCommand: 'Next',
     nextOnlyAdmin: 'Next admin',
     previousCommand: 'Prev',
@@ -335,6 +343,9 @@ export class PlaybackTelegramController {
             this.formatConfigLine(feature, 'refreshCommand'),
             this.formatConfigLine(feature, 'refreshOnlyAdmin'),
             '',
+            htmlBold('Search'),
+            this.formatConfigLine(feature, 'allowVideoSearch'),
+            '',
             htmlBold('Audio'),
             this.formatConfigLine(feature, 'muteCommand'),
             this.formatConfigLine(feature, 'unmuteCommand'),
@@ -387,6 +398,7 @@ export class PlaybackTelegramController {
             [toggle('radioOnlyAdmin')],
             [toggle('refreshCommand')],
             [toggle('refreshOnlyAdmin')],
+            [toggle('allowVideoSearch')],
             [toggle('muteCommand')],
             [toggle('unmuteCommand')],
             [toggle('volumeCommand')],
@@ -395,6 +407,41 @@ export class PlaybackTelegramController {
             ]),
             [this.styledButton('✖️ Close', 'config:close', 'danger')],
         ]);
+    }
+
+    private buildVideoSearchNotice(
+        inlineQueryID: string,
+        hasRoom: boolean,
+    ): InlineQueryResult {
+        const description = hasRoom
+            ? 'Ask a room admin to enable Video Search in /config.'
+            : 'Use a registered room with Video Search enabled.';
+        return {
+            id: `${inlineQueryID}:video-disabled`,
+            type: 'article',
+            title: 'Video search is disabled',
+            description,
+            input_message_content: {
+                message_text: hasRoom
+                    ? 'Video search is disabled in this room. Ask an admin to enable Video Search in /config.'
+                    : 'Video search requires a registered room with Video Search enabled.',
+            },
+        };
+    }
+
+    /** Plain and HTML forms of "title - credit [duration]". */
+    private describeSong(song: Song) {
+        const credit = creditLabel(song);
+        const duration =
+            song.durationSeconds == null
+                ? 'Duration unavailable'
+                : formatDuration(song.durationSeconds);
+        return {
+            credit,
+            duration,
+            plain: `${song.title} - ${credit} [${duration}]`,
+            html: `<i>${escapeHtml(song.title)}</i> - ${escapeHtml(credit)} [${escapeHtml(duration)}]`,
+        };
     }
 
     private buildSongKeyboard(
@@ -1589,7 +1636,16 @@ export class PlaybackTelegramController {
         const searchQuery = ctx?.update?.inline_query?.query;
         const inlineQueryID = ctx?.update?.inline_query?.id;
         if (!inlineQueryID) return;
-        if (!searchQuery || searchQuery.trim().length < 3) {
+
+        // `#video <query>` opts into video results for this query only. Songs
+        // stay the default; the room must allow video search.
+        const rawQuery = searchQuery?.trim() ?? '';
+        const videoPrefix = /^#video(?:\s+|$)/i.exec(rawQuery);
+        const wantsVideo = Boolean(videoPrefix);
+        const query = videoPrefix
+            ? rawQuery.slice(videoPrefix[0].length).trim()
+            : rawQuery;
+        if (query.length < 3) {
             await ctx.answerInlineQuery([], {
                 cache_time: 5,
                 is_personal: true,
@@ -1597,13 +1653,32 @@ export class PlaybackTelegramController {
             return;
         }
 
-        const songs = await this.ytmusicService.searchSongs(searchQuery);
         const senderID = ctx.from.id;
-        // Chosen-result / via_bot can add Play Next once the room is known.
-        let playNextLabel: string | null = null;
         const userLoc = await this.cacheManager.get<InlineChatLocation>(
             `user-loc:${senderID}`,
         );
+        if (wantsVideo) {
+            const room = userLoc?.chatId
+                ? await this.playbackService.getRoomByChatId(
+                      userLoc.chatId,
+                      userLoc.threadId,
+                  )
+                : null;
+            if (room?.Feature?.allowVideoSearch !== true) {
+                await ctx.answerInlineQuery(
+                    [this.buildVideoSearchNotice(inlineQueryID, Boolean(room))],
+                    { cache_time: 5, is_personal: true },
+                );
+                return;
+            }
+        }
+
+        const songs = await this.ytmusicService.searchSongs(
+            query,
+            wantsVideo ? 'video' : 'song',
+        );
+        // Chosen-result / via_bot can add Play Next once the room is known.
+        let playNextLabel: string | null = null;
         if (userLoc?.chatId) {
             playNextLabel = await this.resolvePlayNextLabel(
                 userLoc.chatId,
@@ -1614,7 +1689,7 @@ export class PlaybackTelegramController {
 
         // Version the payload so pre-upgrade artist records are not reused.
         await this.cacheManager.set<Song[]>(
-            `songs:v2:${inlineQueryID}`,
+            `songs:v3:${inlineQueryID}`,
             songs,
             10 * 60 * 1000,
         );
@@ -1624,12 +1699,12 @@ export class PlaybackTelegramController {
                     id: `${inlineQueryID}:${row.videoId}`,
                     type: 'article',
                     title: row.title,
-                    description: `${row.channelName} • ${row.durationSeconds == null ? 'Duration unavailable' : formatDuration(row.durationSeconds)}`,
+                    description: `${creditLabel(row)} • ${row.durationSeconds == null ? 'Duration unavailable' : formatDuration(row.durationSeconds)}`,
                     ...(row.thumbnailUrl
                         ? { thumbnail_url: row.thumbnailUrl }
                         : {}),
                     input_message_content: {
-                        message_text: `${row.title} • Channel: ${row.channelName}`,
+                        message_text: `${row.title} • ${creditLabel(row)}`,
                     },
                     ...this.buildSongKeyboard(
                         playNextLabel,
@@ -1657,7 +1732,7 @@ export class PlaybackTelegramController {
         const [inlineQueryID, videoId] = resultId.split(':');
 
         // get from cache
-        const cacheKey = `songs:v2:${inlineQueryID}`;
+        const cacheKey = `songs:v3:${inlineQueryID}`;
         const cachedSongs = await this.cacheManager.get<Song[]>(cacheKey);
         if (!cachedSongs) {
             await this.safeEdit(() =>
@@ -1685,8 +1760,8 @@ export class PlaybackTelegramController {
             return;
         }
 
-        const songText = `${song.title} • Channel: ${song.channelName}`;
-        const cacheKeySong = `song:v2:${inline_message_id}:${videoId}`;
+        const songText = `${song.title} • ${creditLabel(song)}`;
+        const cacheKeySong = `song:v3:${inline_message_id}:${videoId}`;
         await this.cacheManager.set<Song>(cacheKeySong, song, SONG_CACHE_TTL);
 
         // Link chat/topic from a via_bot message that may have already arrived
@@ -1928,7 +2003,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const cacheKey = `song:v2:${inlineMessageId}:${videoId}`;
+            const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
             const cachedSong = await this.cacheManager.get<Song>(cacheKey);
             if (!cachedSong) {
                 // Race: primary path already added and cleared cache — stay silent.
@@ -1956,7 +2031,7 @@ export class PlaybackTelegramController {
                         undefined,
                         undefined,
                         inlineMessageId,
-                        `🔁 "<i>${escapeHtml(cachedSong.title)} • Channel: ${escapeHtml(cachedSong.channelName)}</i>" is already in the queue.`,
+                        `🔁 "<i>${escapeHtml(cachedSong.title)} • ${escapeHtml(creditLabel(cachedSong))}</i>" is already in the queue.`,
                         {
                             parse_mode: 'HTML',
                         },
@@ -1965,7 +2040,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const songCombined = `${cachedSong.title} - Channel: ${cachedSong.channelName} [${cachedSong.durationSeconds == null ? 'Duration unavailable' : formatDuration(cachedSong.durationSeconds)}]`;
+            const song = this.describeSong(cachedSong);
 
             // Analytics is best-effort: a tracking failure must never block a
             // song request. The request ID becomes the queue row ID.
@@ -1976,8 +2051,8 @@ export class PlaybackTelegramController {
                     requesterId: ctx.from?.id ?? null,
                     videoId,
                     title: cachedSong.title,
-                    // Search channels are not verified artists. Keep artist analytics unknown.
-                    artist: '',
+                    // Song results carry real artists; video channels stay unknown.
+                    artist: cachedSong.artistName ?? '',
                     source: 'queue',
                 });
             } catch (error) {
@@ -1988,7 +2063,7 @@ export class PlaybackTelegramController {
                 await this.playbackService.addToQueue(
                     roomId,
                     videoId,
-                    songCombined,
+                    song.plain,
                     requestId,
                 );
             } catch (error) {
@@ -2010,16 +2085,7 @@ export class PlaybackTelegramController {
                     undefined,
                     undefined,
                     inlineMessageId,
-                    `↩️ ${songCombined
-                        .split(' - ')
-                        .map((value, k) => {
-                            const v = escapeHtml(value);
-                            if (k === 0) {
-                                return `<i>${v}</i>`;
-                            }
-                            return v;
-                        })
-                        .join(' - ')} added to the queue.`,
+                    `↩️ ${song.html} added to the queue.`,
                     {
                         parse_mode: 'HTML',
                     },
@@ -2032,7 +2098,7 @@ export class PlaybackTelegramController {
                 roomId,
                 videoId,
                 'end',
-                songCombined,
+                song.plain,
                 requestId,
             );
         } finally {
@@ -2090,7 +2156,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const cacheKey = `song:v2:${inlineMessageId}:${videoId}`;
+            const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
             const cachedSong = await this.cacheManager.get<Song>(cacheKey);
             if (!cachedSong) {
                 if (await this.cacheManager.get(doneKey)) return;
@@ -2126,7 +2192,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const songCombined = `${cachedSong.title} - Channel: ${cachedSong.channelName} [${cachedSong.durationSeconds == null ? 'Duration unavailable' : formatDuration(cachedSong.durationSeconds)}]`;
+            const song = this.describeSong(cachedSong);
 
             // Analytics is best-effort; see completeAddToQueue.
             let requestId: string | undefined;
@@ -2136,7 +2202,7 @@ export class PlaybackTelegramController {
                     requesterId: userId,
                     videoId,
                     title: cachedSong.title,
-                    artist: '',
+                    artist: cachedSong.artistName ?? '',
                     source: 'play_next',
                 });
             } catch (error) {
@@ -2147,7 +2213,7 @@ export class PlaybackTelegramController {
                 await this.playbackService.addPlayNext(
                     roomId,
                     videoId,
-                    songCombined,
+                    song.plain,
                     requestId,
                 );
             } catch (error) {
@@ -2171,16 +2237,7 @@ export class PlaybackTelegramController {
                     undefined,
                     undefined,
                     inlineMessageId,
-                    `⏭️ ${songCombined
-                        .split(' - ')
-                        .map((value, k) => {
-                            const v = escapeHtml(value);
-                            if (k === 0) {
-                                return `<i>${v}</i>`;
-                            }
-                            return v;
-                        })
-                        .join(' - ')} will play next.`,
+                    `⏭️ ${song.html} will play next.`,
                     {
                         parse_mode: 'HTML',
                     },
@@ -2193,7 +2250,7 @@ export class PlaybackTelegramController {
                 roomId,
                 videoId,
                 'next',
-                songCombined,
+                song.plain,
                 requestId,
             );
         } finally {
