@@ -49,7 +49,7 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "telegraf": "^4.16.3",
-    "ytmusic-api": "^5.3.1"
+    "youtubei.js": "18.3.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
