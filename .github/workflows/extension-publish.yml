@@ -1,112 +1,86 @@
 name: Extension Publish to Chrome Web Store
 
-# Publishes the built extension to the Chrome Web Store.
-#
-# Required repository secrets (Settings -> Secrets and variables -> Actions):
-#   CWS_CLIENT_ID     - OAuth client id from the Chrome Web Store Developer Dashboard
-#   CWS_CLIENT_SECRET - OAuth client secret
-#   CWS_REFRESH_TOKEN - refresh token for the publishing account
-#   CWS_EXTENSION_ID  - the extension item id (optional; taken from CHROME_WEB_STORE_EXTENSION_ID)
-#
-# The publish step is skipped unless every secret is present, so a fork can run
-# the build without store credentials.
-
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish to the Chrome Web Store"
+      check_credentials:
+        description: "Verify OAuth and item access without uploading"
         type: boolean
         default: false
-  push:
-    tags:
-      - "v*"
+      publish:
+        description: "Upload and submit for Chrome Web Store review (false = build only)"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: chrome-web-store-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
-    name: Build & publish extension
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Resolve version
+      - name: Validate release version
         id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            REF="${{ github.ref_name }}"
-          else
-            REF="v${{ github.sha }}"
-          fi
-          VERSION="${REF#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: ${VERSION}"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('apps/extension/public/manifest.json', 'utf8'));
+          const version = process.env.REF_TYPE === 'tag' ? process.env.REF_NAME.replace(/^v/, '') : manifest.version;
+          const parts = version.split('.');
+          if (parts.length < 2 || parts.length > 4 || parts.some(p => !/^(0|[1-9]\d*)$/.test(p) || Number(p) > 65535) || parts.every(p => Number(p) === 0)) {
+            throw new Error(`Invalid Chrome extension version: ${version}`);
+          }
+          if (version !== manifest.version) throw new Error('Tag and committed manifest version must match; bump version before tagging.');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          NODE
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10.6.2
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter=extension lint
+      - run: pnpm --filter=extension test
+      - run: pnpm --filter=extension build
 
-      - name: Sync extension manifest version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          MANIFEST="apps/extension/public/manifest.json"
-          tmp="$(mktemp)"
-          sed -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")/\\1${VERSION}\\2/" "$MANIFEST" >"$tmp"
-          mv "$tmp" "$MANIFEST"
-          echo "manifest.json version set to ${VERSION}"
+      - name: Package extension
+        run: cd apps/extension/dist && zip -r "$GITHUB_WORKSPACE/extension-webstore.zip" .
 
-      - name: Build extension
-        run: pnpm --filter=extension build
-
-      - name: Package zip
-        id: package
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          ZIP_NAME="yt-music-party-extension-v${VERSION}.zip"
-          (
-            cd apps/extension/dist
-            zip -r "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
-          )
-          test -f "${ZIP_NAME}"
-          unzip -l "${ZIP_NAME}"
-          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Check store credentials
-        id: creds
-        env:
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
-        run: |
-          if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ] && [ -n "$REFRESH_TOKEN" ] && [ -n "$EXTENSION_ID" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "Store credentials found - publish step enabled."
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Store credentials missing - skipping publish step."
-          fi
-
-      - name: Publish to Chrome Web Store
-        if: steps.creds.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' && inputs.publish == true || github.event_name == 'push')
-        uses: actions/upload-chrome-webstore@v1
+      - uses: actions/upload-artifact@v4
         with:
-          file-path: ${{ steps.package.outputs.zip_name }}
-          extension-id: ${{ secrets.CWS_EXTENSION_ID }}
-          client-id: ${{ secrets.CWS_CLIENT_ID }}
-          client-secret: ${{ secrets.CWS_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CWS_REFRESH_TOKEN }}
-          publish-visibility: public
+          name: extension-webstore-${{ steps.version.outputs.version }}
+          path: extension-webstore.zip
+          if-no-files-found: error
+
+      - name: Check credentials or submit for review
+        if: github.event_name == 'push' || inputs.publish == true || inputs.check_credentials == true
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: pdibhcofofkfblpajpjcpopbbbbbncbk
+          CHECK_ONLY: ${{ inputs.check_credentials }}
+        run: |
+          if [ "$CHECK_ONLY" = "true" ]; then
+            python3 scripts/publish-chrome-extension.py --check-only
+          else
+            python3 scripts/publish-chrome-extension.py extension-webstore.zip
+          fi
