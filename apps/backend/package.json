@@ -13,6 +13,7 @@
         "db:deploy": "node scripts/database.mjs deploy",
         "db:studio": "node scripts/database.mjs studio",
         "test:database": "node scripts/test-database.mjs",
+        "test:homepage": "node --test scripts/test-homepage.mjs",
     "dev": "nest start --watch",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

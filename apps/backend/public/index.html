@@ -2,61 +2,97 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Music Party Server</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Connect the YouTube Music Party extension to this party server.">
+    <meta name="theme-color" content="#FFFFFF">
+    <title>YouTube Music Party server</title>
+    <link rel="icon" href="./server-icon.png">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            max-width: 600px;
+        @font-face {
+            font-family: "Bricolage Grotesque";
+            src: url("./server-heading.woff2") format("woff2");
+            font-weight: 700;
+            font-display: swap;
         }
-        h1 {
-            color: #4285F4;
+        :root {
+            color-scheme: light;
+            --bg: #FFFFFF;
+            --surface: #EEF2F7;
+            --text: #20242C;
+            --muted: #536174;
+            --accent: #2845C7;
         }
-        ol {
-            line-height: 1.6;
-        }
-        code {
-            background: #f4f4f4;
-            padding: 2px 5px;
-            border-radius: 4px;
-        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        main { max-width: 46rem; margin: 0 auto; padding: clamp(2rem, 8vw, 5rem) 1.5rem 2rem; }
+        a { color: var(--accent); text-underline-offset: 4px; }
+        a:hover { text-decoration-thickness: 2px; }
+        a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+        .brand { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-decoration: none; }
+        h1 { font: 700 clamp(2rem, 6vw, 3rem)/1.1 "Bricolage Grotesque", sans-serif; letter-spacing: -0.035em; margin: 2.5rem 0 1rem; max-width: 17ch; }
+        p { margin: 0 0 1rem; }
+        .intro, .note, footer { color: var(--muted); }
+        .address-panel { background: var(--surface); border-radius: 14px; padding: clamp(1.25rem, 4vw, 2rem); margin: 2rem 0; }
+        label { display: block; font-weight: 650; margin-bottom: 0.75rem; }
+        input { display: block; width: 100%; min-width: 0; font: inherit; color: var(--text); background: var(--bg); border: 1px solid #CFD6E0; border-radius: 5px; padding: 0.8rem; }
+        button { display: block; min-height: 48px; margin-top: 1rem; border: 0; border-radius: 5px; padding: 0.75rem 1.25rem; font: inherit; font-weight: 650; color: white; background: var(--accent); cursor: pointer; }
+        button:hover { background: #2038A5; }
+        button:disabled { cursor: default; opacity: 0.65; }
+        #copy-status { margin: 0.75rem 0 0; min-height: 1.65em; font-size: 0.9rem; }
+        .guidance { margin-top: 1.5rem; font-size: 0.95rem; }
+        .guidance:last-child { margin-bottom: 0; }
+        .links { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; margin: 1.25rem 0; }
+        .links a, footer a { display: inline-flex; align-items: center; min-height: 44px; }
+        .note, footer { font-size: 0.875rem; }
+        footer { margin-top: 2.5rem; }
+        @media (max-width: 380px) { main { padding-inline: 1rem; } button { width: 100%; } }
     </style>
 </head>
 <body>
-    <h1>YouTube Music Party Server</h1>
-    <p>Party server URL: <code>https://music.ytparty.my.id</code></p>
-    <p><a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Install the extension from the Chrome Web Store</a>. Chrome handles updates automatically.</p>
-    <p>See <a href="https://ytparty.my.id/support">setup and support</a> for full instructions.</p>
-    <h2>Local Development Installation</h2>
-    <p>For a locally built extension:</p>
-    <ol>
-        <li>Build the extension from the project source.</li>
-        <li>Open Google Chrome.</li>
-        <li>Go to <a target="_blank" href="chrome://extensions"><code>chrome://extensions/</code></a> in the address bar.</li>
-        <li>Enable <strong>Developer mode</strong> (toggle in the top-right corner).</li>
-        <li>Click <strong>"Load unpacked"</strong>.</li>
-        <li>Select the <code>apps/extension/dist</code> folder.</li>
-        <li>The extension will be installed and ready to use.</li>
-    </ol>
-    <p><strong>Tip:</strong> Click the puzzle icon 🧩 in the toolbar to manage extensions.</p>
+    <main>
+        <a class="brand" href="https://ytparty.my.id">YouTube Music Party</a>
+        <h1>YouTube Music Party server</h1>
+        <p class="intro">This address connects your player to your Telegram room. Music plays in your YouTube Music tab, not on this page.</p>
 
-    <h2>How to Use this Bot</h2>
-    <ol>
-        <li>Add <a href="https://t.me/xmsc_bot" target="_blank">@xmsc_bot</a> to your Telegram group.</li>
-        <li>Run the command <code>/register</code> in the group chat.</li>
-        <li>Open <a href="https://music.youtube.com">YouTube Music</a>, then open the extension popup from your browser toolbar.</li>
-        <li>Enter the room ID from the bot and click <strong>Join Room</strong>. The server defaults to <code>https://music.ytparty.my.id</code>; use <strong>Advanced / custom server</strong> for your own server URL.</li>
-        <li>The music tab refreshes and may briefly interrupt playback. Wait for <strong>Connected</strong> in the popup before controlling playback. Joining continues if you close the popup.</li>
-    </ol>
-    <p>The YouTube Music sidebar's <strong>Join Room</strong> prompts remain available. Only one device can own a room: if it is busy, leave on the current device before retrying. To switch rooms while connected, use <strong>Leave room</strong> first.</p>
+        <section class="address-panel" aria-label="Connect to this server">
+            <label for="server-url">Server URL</label>
+            <input id="server-url" type="text" readonly spellcheck="false" aria-describedby="server-help">
+            <button id="copy-url" type="button" disabled>Copy server URL</button>
+            <p id="copy-status" role="status" aria-live="polite"></p>
+            <noscript><p>JavaScript is off. Copy this page’s address from your browser, without any query string, fragment, or trailing <code>index.html</code>.</p></noscript>
+            <p class="guidance" id="server-help">In the extension popup, open <strong>Advanced / custom server</strong> and paste this URL into the server field. Only connect to a server you trust.</p>
+        </section>
 
-    <h2>How to Add Queue</h2>
-    <ol>
-        <li>Find the music you want to add to the queue.</li>
-        <li>Tag <a href="https://t.me/xmsc_bot" target="_blank">@xmsc_bot</a> in the group chat, followed by "search [music name] here" (e.g. <code>@xmsc_bot search Shape of You here</code>).</li>
-        <li>Bot will display the results of the search. Click the "Add to queue" button next to the desired result.</li>
-        <li>Then, run the command <code>/play</code> in the group chat to play the music from the queue.</li>
-    </ol>
+        <p>Use the room ID from your Telegram bot, then choose <strong>Join Room</strong> in the extension. Wait for <strong>Connected</strong> before controlling playback.</p>
+        <nav class="links" aria-label="Setup resources">
+            <a href="https://ytparty.my.id/support">Setup &amp; support</a>
+            <a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Install the extension</a>
+        </nav>
+        <p class="note">This page identifies the server address. It does not check bot, database, or playback health.</p>
+        <footer><a href="https://github.com/faytranevozter/telegram-music-party#readme">Self-hosting &amp; development docs</a></footer>
+    </main>
+    <script>
+        const serverUrl = document.getElementById('server-url');
+        const copyButton = document.getElementById('copy-url');
+        const copyStatus = document.getElementById('copy-status');
+        // Preserve a reverse proxy's visible mount path; omit document/query/hash.
+        const address = new URL(window.location.href);
+        address.search = '';
+        address.hash = '';
+        address.pathname = address.pathname.replace(/\/index\.html$/, '/');
+        serverUrl.value = address.href.replace(/\/$/, '');
+        copyButton.disabled = false;
+        copyButton.addEventListener('click', async () => {
+            copyStatus.textContent = '';
+            try {
+                await navigator.clipboard.writeText(serverUrl.value);
+                copyStatus.textContent = 'Server URL copied. Paste it into the extension.';
+            } catch {
+                serverUrl.focus();
+                serverUrl.select();
+                copyStatus.textContent = 'Could not copy automatically. The URL is selected; copy it manually.';
+            }
+        });
+    </script>
 </body>
 </html>
