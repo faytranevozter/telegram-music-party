@@ -3,62 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>YouTube Music Party — Shared listening from Telegram</title>
-<meta name="description" content="Connect a YouTube Music tab to a room controlled from Telegram. Join a room, control the queue together, and keep the music playing.">
+<title>YouTube Music Party — Your group chat picks the next song</title>
+<meta name="description" content="Let your Telegram group choose the music. Connect one YouTube Music tab, search for songs, build a shared queue, and control playback together.">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="canonical" href="https://ytparty.my.id/">
+<meta property="og:title" content="Your group chat picks the next song.">
+<meta property="og:description" content="One YouTube Music player. A Telegram group full of song requests. Set up your room with YouTube Music Party.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ytparty.my.id/">
 <link rel="icon" href="/icon-128x128.png">
+<link rel="preload" href="/fonts/bricolage-grotesque-latin-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-
-<div class="hero">
-    <img src="/icon-128x128.png" alt="YouTube Music Party">
-    <h1>One tab. One room.<br>Whole group listening.</h1>
-    <p>Connect a YouTube Music tab to a room and let a Telegram group control the queue together.</p>
-    <div class="cta">
-        <a class="btn" href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Add to Chrome</a>
-        <a class="btn btn-secondary" href="/support">Setup guide</a>
-        <a class="btn btn-secondary" href="https://github.com/faytranevozter/telegram-music-party">View source</a>
-    </div>
-</div>
-
-<main>
-    <div class="note">
-        The browser extension only runs on <code>music.youtube.com</code>. It does not collect account
-        credentials, passwords, or personal browsing history. Not affiliated with YouTube, Google,
-        Chrome, or Telegram.
-    </div>
-
-    <h2>How it works</h2>
-    <div class="steps">
-        <ol>
-            <li><a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Install the extension from the Chrome Web Store</a>, then open <code>music.youtube.com</code>.</li>
-            <li>Click <strong>Join</strong> on the YouTube Music page.</li>
-            <li>Enter your room ID and use <code>https://music.ytparty.my.id</code> as the party server URL (or enter your own trusted server).</li>
-            <li>Use the Telegram bot in your group to control playback and the queue.</li>
-        </ol>
-    </div>
-
-    <h2>Screenshots</h2>
-    <div class="screenshots">
-        <img src="/screenshot-01-queue.png" alt="Extension popup showing the queue">
-        <img src="/screenshot-02-playing.png" alt="Extension popup while a track is playing">
-    </div>
-
-    <h2>Self-hosting</h2>
-    <p>
-        This is an open-source project. The extension connects to the party server URL you provide,
-        so you can run the backend yourself and keep your data under your own control. See the
-        <a href="https://github.com/faytranevozter/telegram-music-party">project repository</a>
-        for setup instructions.
-    </p>
+<body class="landing">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+    <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
+    <nav aria-label="Main navigation"><a href="#setup">Set up your room</a><a href="/gallery">Gallery</a><a href="/support">Support</a></nav>
+</header>
+<main id="main">
+    <section class="invitation" aria-labelledby="invitation-title">
+        <div class="invitation-copy">
+            <h1 id="invitation-title">Your group chat picks the next song.</h1>
+            <p class="intro">Connect one YouTube Music tab to your Telegram group. Search for songs, build the queue, and control playback together.</p>
+            <div class="actions"><a class="button" href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Add to Chrome</a><a class="text-action" href="#setup">Set up your room</a></div>
+            <p class="desktop-note">For the host’s desktop browser. Your group joins in from Telegram.</p>
+            <p class="one-player"><strong>One active player per room.</strong><br>Everyone controls the queue from Telegram. Audio plays in the host’s YouTube Music tab, not in Telegram or on every member’s device.</p>
+        </div>
+        <figure class="connected-figure"><div class="party-backdrop"><a href="/gallery#playback" aria-label="See the player and more actions in the gallery"><img src="/popup-connected.webp" alt="YouTube Music Party playing Baby by Justin Bieber, with playback controls and upcoming songs" width="400" height="1018" fetchpriority="high"></a></div><figcaption>The host’s player, connected and playing. <a href="/gallery">See more actions in the gallery</a>.</figcaption></figure>
+    </section>
+    <section class="group-section" aria-labelledby="group-title">
+        <div class="section-heading"><h2 id="group-title">Good music.<br>Everyone gets a say.</h2><p>No passing the host’s laptop around. Keep the song requests and controls in the group chat.</p></div>
+        <ul class="shared-queue">
+            <li><div class="queue-symbol" aria-hidden="true">+</div><div><h3>Pick the next song</h3><p>Search inline with <a href="https://t.me/xmsc_bot">@xmsc_bot</a>, add your pick to the queue, and see what’s coming with <code>/queue</code>.</p></div></li>
+            <li><div class="queue-symbol" aria-hidden="true">Ⅱ</div><div><h3>Share the controls</h3><p>Play, pause, skip, and adjust the volume. Use <code>/vote_next</code> to vote for a skip. Available controls follow your room’s settings.</p></div></li>
+            <li><div class="queue-symbol" aria-hidden="true">↺</div><div><h3>See what the room played</h3><p>Look back with <code>/stats</code>, <code>/top</code>, <code>/history</code>, and <code>/mystats</code>. Requests and confirmed plays are counted separately; observed playback time is not listener-hours.</p></div></li>
+        </ul>
+    </section>
+    <section class="setup-section" id="setup" aria-labelledby="setup-title">
+        <div class="setup-copy">
+            <h2 id="setup-title">You bring the tab.<br>The group brings the tunes.</h2>
+            <p>Set up the player in desktop Chrome. Once it’s connected, group members can use Telegram on their phones or computers.</p>
+            <ol class="setup-list">
+                <li><h3>Install the extension</h3><p><a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Add to Chrome from the Chrome Web Store.</a> Chrome handles updates automatically.</p></li>
+                <li><h3>Register your group</h3><p>Add <a href="https://t.me/xmsc_bot">@xmsc_bot</a> to your Telegram group and send <code>/register</code> to get your Room ID.</p></li>
+                <li><h3>Open your player</h3><p>Open <a href="https://music.youtube.com">YouTube Music</a>, then open the extension popup from your browser toolbar.</p></li>
+                <li><h3>Join the room</h3><p>Paste the <strong>Room ID</strong> and choose <strong>Join Room</strong>. The default server is <code>https://music.ytparty.my.id</code>. <strong>Advanced / custom server</strong> is optional.</p><p class="setup-detail">Joining refreshes the music tab and may briefly interrupt playback.</p></li>
+                <li><h3>Wait for Connected</h3><p>Saved settings alone don’t mean you’re admitted. Once the popup shows <strong>Connected</strong>, search for a song with <code>@xmsc_bot</code> in Telegram, add it to the queue, and send <code>/play</code>.</p></li>
+            </ol>
+            <p class="room-note"><strong>Room busy?</strong> Leave on the existing player before choosing <strong>Retry join</strong>. Joining never replaces that player. <a href="/support">Get help with joining, multiple tabs, or unconfirmed admission.</a></p>
+        </div>
+        <div class="setup-evidence"><figure class="join-figure"><a href="/popup-join.webp" aria-label="View the full-size extension join form"><img src="/popup-join.webp" alt="Extension join form showing Room ID, optional public server URL, and Join Room" width="400" height="511" loading="lazy"></a><figcaption>Paste your Room ID, then choose Join Room. <a href="/gallery#joining">See all setup screenshots</a>.</figcaption></figure></div>
+    </section>
+    <section class="hosting-section" aria-labelledby="hosting-title">
+        <div><h2 id="hosting-title">Your room.<br>Your choice of server.</h2><p>Custom party servers are supported. If you’d rather host your own, the open-source backend supports PostgreSQL and SQLite.</p><a class="text-action" href="https://github.com/faytranevozter/telegram-music-party/blob/main/docs/database.md">Read the database &amp; deployment guide</a></div>
+        <div class="privacy-copy"><h3>Know where the music data goes</h3><p>Room, device, queue, and playback information goes to the party server you choose, including room-scoped request and playback analytics. Only connect to a server you trust.</p><a class="text-action" href="/privacy">Read the Privacy Policy</a><p class="disclosure">Not affiliated with YouTube, Google, Chrome, or Telegram.</p></div>
+    </section>
 </main>
-
-<footer>
-    <a href="/privacy">Privacy Policy</a>
-    <a href="/support">Support</a>
-    <a href="https://github.com/faytranevozter/telegram-music-party">Source</a>
-    <a href="https://github.com/faytranevozter/telegram-music-party/issues">Report an issue</a>
-</footer>
-
+<footer class="site-footer"><p>YouTube Music Party</p><nav aria-label="Footer navigation"><a href="/support">Support</a><a href="/privacy">Privacy Policy</a><a href="https://github.com/faytranevozter/telegram-music-party">Source</a><a href="https://github.com/faytranevozter/telegram-music-party/issues">Report an issue</a></nav></footer>
 </body>
 </html>

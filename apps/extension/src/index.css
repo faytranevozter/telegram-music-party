@@ -1,3 +1,51 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* A compact listening desk: track and controls first, diagnostics kept quiet. */
+:root { color-scheme: dark; }
+/* Size the document, not the viewport: Chrome initially measures action popups
+   in a narrow viewport. A 100vw cap creates a shrink-to-fit feedback loop. */
+html, body, #root { width: 400px; min-width: 400px; margin: 0; background: #151922; }
+body { max-height: 600px; overflow-y: auto; overflow-x: hidden; }
+.party-popup { width: 400px; color: #F5F7FC; background: #151922; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.popup-layout { display: flex; flex-direction: column; gap: 16px; padding: 22px; }
+.popup-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 700; letter-spacing: -.025em; }
+.popup-brand img { border-radius: 7px; }
+.popup-layout header p { margin-top: 6px; font-size: 12px; color: #AAB6CA; }
+.party-popup [data-slot="base"] { box-shadow: none; }
+.party-popup .session-details { background: transparent; border: 0; border-radius: 0; order: 0; }
+.session-details > div { padding: 0 0 14px; border-bottom: 1px solid #394253; }
+.session-details > div > div:last-child { display: none; }
+.party-popup .now-playing { background: #232D43; border: 0; border-radius: 16px; }
+.now-playing > div { padding: 22px; gap: 10px; }
+.track-label { color: #BDCAE3; font-size: 12px; }
+.track-title { font-size: 23px; line-height: 1.2; font-weight: 700; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.party-popup .text-zinc-500, .party-popup .text-zinc-600 { color: #AAB6CA; }
+.party-popup .text-zinc-400 { color: #BDCAE3; }
+.party-popup button { min-height: 44px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.transport { margin-top: -2px; }
+.transport > div:first-child { gap: 12px; }
+.transport > div:first-child button { min-height: 52px; }
+.transport > div:first-child button:nth-child(2) { background: #ADC2FF; color: #182544; font-size: 16px; }
+.transport > div:first-child button:first-child, .transport > div:first-child button:last-child { width: 56px; }
+.transport > div:nth-child(2) button { background: transparent; border: 1px solid #47536A; }
+.party-popup .queue-panel { border: 0; background: transparent; border-radius: 0; }
+.queue-panel > div { padding: 6px 0; gap: 14px; }
+.queue-heading { font-size: 15px; font-weight: 700; }
+.queue-tracks { max-height: 160px; }
+.queue-tracks li { padding: 8px 0; border-bottom: 1px solid #303A4C; font-size: 13px; }
+.player-settings { border-top: 1px solid #394253; padding-top: 10px; }
+.player-settings summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: #BDCAE3; font-size: 13px; }
+.player-settings summary::after { content: "+"; margin-left: auto; }
+.player-settings[open] summary::after { content: "−"; }
+.player-settings > div { background: transparent; border: 0; }
+.party-popup :focus-visible { outline: 2px solid #ADC2FF; outline-offset: 3px; }
+.party-popup summary { min-height: 44px; }
+.join-field { display: grid; gap: 8px; }
+.join-field > span { color: #BDCAE3; font-size: 12px; font-weight: 600; line-height: 1.4; }
+.join-field input { width: 100%; height: 46px; padding: 11px 12px; border: 1px solid #47536A; border-radius: 8px; background: #202734; color: #F5F7FC; font: inherit; outline-offset: 3px; }
+.join-field input::placeholder { color: #AAB6CA; }
+.join-field input:disabled { opacity: .6; }
+.join-server-field { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .party-popup *, .party-popup *::before, .party-popup *::after { animation: none !important; transition: none !important; } }

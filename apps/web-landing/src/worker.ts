@@ -14,6 +14,8 @@ const PAGES: Record<string, string> = {
     "/": "index.html",
     "/privacy": "privacy.html",
     "/support": "support.html",
+    "/gallery": "gallery.html",
+    "/gallery/": "gallery.html",
     "/privacy/": "privacy.html",
     "/support/": "support.html",
 };
