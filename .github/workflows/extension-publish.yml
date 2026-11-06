@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      check_credentials:
+        description: "Verify OAuth and item access without uploading"
+        type: boolean
+        default: false
       publish:
         description: "Upload and submit for Chrome Web Store review (false = build only)"
         type: boolean
@@ -65,12 +69,18 @@ jobs:
           path: extension-webstore.zip
           if-no-files-found: error
 
-      - name: Upload and submit for review
-        if: github.event_name == 'push' || inputs.publish == true
+      - name: Check credentials or submit for review
+        if: github.event_name == 'push' || inputs.publish == true || inputs.check_credentials == true
         env:
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CWS_EXTENSION_ID: pdibhcofofkfblpajpjcpopbbbbbncbk
-        run: python3 scripts/publish-chrome-extension.py extension-webstore.zip
+          CHECK_ONLY: ${{ inputs.check_credentials }}
+        run: |
+          if [ "$CHECK_ONLY" = "true" ]; then
+            python3 scripts/publish-chrome-extension.py --check-only
+          else
+            python3 scripts/publish-chrome-extension.py extension-webstore.zip
+          fi

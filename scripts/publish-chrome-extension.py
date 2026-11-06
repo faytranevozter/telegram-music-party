@@ -31,10 +31,6 @@ def main():
     missing = [key for key in keys if not os.environ.get(key)]
     if missing:
         raise RuntimeError('Missing configuration: ' + ', '.join(missing))
-    package = Path(sys.argv[1])
-    with zipfile.ZipFile(package) as archive:
-        version = json.loads(archive.read('manifest.json'))['version']
-
     auth = urllib.parse.urlencode({
         'client_id': os.environ['CWS_CLIENT_ID'],
         'client_secret': os.environ['CWS_CLIENT_SECRET'],
@@ -50,6 +46,14 @@ def main():
     base = f'https://chromewebstore.googleapis.com/v2/{resource}'
 
     status = request(base + ':fetchStatus', token=token)
+    if sys.argv[1:] == ['--check-only']:
+        revision = status.get('publishedItemRevisionStatus', {})
+        versions = [channel['crxVersion'] for channel in revision.get('distributionChannels', [])]
+        print(f'Authentication and item access verified. Published state: {revision.get("state", "UNPUBLISHED")}; versions: {versions}')
+        return
+    package = Path(sys.argv[1])
+    with zipfile.ZipFile(package) as archive:
+        version = json.loads(archive.read('manifest.json'))['version']
     pending = status.get('submittedItemRevisionStatus', {}).get('state')
     if pending in ('PENDING_REVIEW', 'STAGED'):
         raise RuntimeError(f'Existing submission is {pending}; refusing to replace it.')

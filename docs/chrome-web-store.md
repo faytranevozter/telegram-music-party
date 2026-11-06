@@ -315,6 +315,8 @@ Official setup guide: <https://developer.chrome.com/docs/webstore/using-api>.
 
 - **Safe test:** Actions → Extension Publish to Chrome Web Store → Run workflow,
   leaving `publish` unchecked. This only builds and saves a ZIP artifact.
+- **Credential test:** check `check_credentials` to verify OAuth and read item
+  status without uploading or submitting. This takes precedence over `publish`.
 - **Release:** bump the committed manifest version, merge, then push its `v*` tag.
   The tag must match the manifest version exactly. Missing credentials fail the
   publish step explicitly instead of silently skipping it.
