@@ -274,27 +274,56 @@ Upload `apps/extension/extension-webstore.zip` in the Chrome Web Store Developer
 
 ### Automated Upload (optional)
 
-`.github/workflows/extension-publish.yml` builds and uploads the ZIP through the
-Chrome Web Store API. Add these repository secrets under
-**Settings -> Secrets and variables -> Actions**:
+`.github/workflows/extension-publish.yml` validates the version, runs lint/tests,
+builds a ZIP, then uses the official Chrome Web Store v2 API to upload and submit
+for review. Google approval is still required before the update reaches users.
+
+Add these repository secrets under **Settings -> Secrets and variables -> Actions**:
 
 | Secret | Value |
 |--------|-------|
-| `CWS_CLIENT_ID` | OAuth client id from the Developer Dashboard |
+| `CWS_CLIENT_ID` | OAuth client ID from Google Cloud Console |
 | `CWS_CLIENT_SECRET` | OAuth client secret |
 | `CWS_REFRESH_TOKEN` | Refresh token for the publishing account |
-| `CWS_EXTENSION_ID` | The extension item id |
+Also add a repository **variable** `CWS_PUBLISHER_ID`, copied from Chrome Web Store
+Developer Dashboard → Publisher → Settings. This is not the extension ID. The
+extension ID `pdibhcofofkfblpajpjcpopbbbbbncbk` is fixed in the workflow.
 
-The publish step is skipped when any secret is missing, so a fork still runs the
-build. Trigger it manually with `workflow_dispatch` (set `publish: true`) or
-push a `v*` tag.
+#### One-time OAuth setup
 
-To create the refresh token:
+1. Enable **Chrome Web Store API** in a Google Cloud project.
+2. Configure the OAuth consent screen and create an OAuth client of type
+   **Web application**. Add `https://developers.google.com/oauthplayground` as an
+   authorized redirect URI.
+3. Open [OAuth Playground](https://developers.google.com/oauthplayground), open
+   Settings, enable **Use your own OAuth credentials**, and enter the client ID
+   and client secret. Use offline access and force consent when reauthorizing.
+4. Authorize the scope `https://www.googleapis.com/auth/chromewebstore` using the
+   Google account that owns/manages the published extension.
+5. Exchange the authorization code for tokens. Store the **refresh token**, not
+   the short-lived access token, as `CWS_REFRESH_TOKEN`.
+6. For unattended use, move an External OAuth app out of **Testing** when
+   appropriate: refresh tokens for this scope expire after seven days in Testing.
+   Follow any verification requirements shown by Google Cloud.
 
-```bash
-# one-time, locally
-npx chrome-webstore-upload-cli login
-```
+Never commit tokens or paste them into chat. Enter secrets directly in GitHub.
+The old out-of-band redirect `urn:ietf:wg:oauth:2.0:oob` is deprecated; do not use it.
+
+Official setup guide: <https://developer.chrome.com/docs/webstore/using-api>.
+
+#### Running the workflow
+
+- **Safe test:** Actions → Extension Publish to Chrome Web Store → Run workflow,
+  leaving `publish` unchecked. This only builds and saves a ZIP artifact.
+- **Release:** bump the committed manifest version, merge, then push its `v*` tag.
+  The tag must match the manifest version exactly. Missing credentials fail the
+  publish step explicitly instead of silently skipping it.
+- **Manual submission:** run the workflow on the release tag with `publish`
+  checked. Only do this for a version not already published.
+- Upload and publish HTTP calls have a 60-second timeout. Processing is polled
+  for at most 12 attempts, and the entire job has a 15-minute timeout.
+- The script refuses to overwrite a pending/staged submission or upload a version
+  that is not newer than the published version. It never cancels a review.
 
 ## Release Checklist
 
