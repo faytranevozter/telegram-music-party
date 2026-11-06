@@ -18,7 +18,7 @@
         <ol>
             <li><a href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Install the extension from the Chrome Web Store</a>. Chrome handles updates automatically.</li>
             <li>Open <code>music.youtube.com</code> and click <strong>Join</strong> in the left sidebar.</li>
-            <li>Enter your <strong>room ID</strong> and the <strong>party server URL</strong>.</li>
+            <li>Enter your <strong>room ID</strong> and use <code>https://music.ytparty.my.id</code> as the <strong>party server URL</strong>, or enter your own trusted server.</li>
             <li>Add the bot to your Telegram group and control playback from there.</li>
         </ol>
     </div>
@@ -30,7 +30,7 @@
 
     <h2>Connection problems</h2>
     <ul>
-        <li>The party URL must be reachable from your browser. Use an <code>https://</code> URL in production.</li>
+        <li>The party URL must be reachable from your browser. The default is <code>https://music.ytparty.my.id</code>. If a different URL was previously saved, leave the room and join again to change it. Use an <code>https://</code> URL in production.</li>
         <li>If you run your own backend, make sure it is running and that the URL is correct.</li>
         <li>The extension cannot reach a server on a different machine using <code>localhost</code>.</li>
     </ul>

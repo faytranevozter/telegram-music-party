@@ -68,7 +68,7 @@ Shared types: `src/shared/messages.ts`.
 On `music.youtube.com` page `localStorage`:
 
 - `roomId`
-- `partyUrl` (default prompt: `http://localhost:3000`)
+- `partyUrl` (default prompt: `https://music.ytparty.my.id`; custom server URLs remain supported, and existing saved URLs are preserved)
 - `ytmp_device_id` (stable device fingerprint)
 
 ## Updates

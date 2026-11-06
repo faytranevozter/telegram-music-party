@@ -1,6 +1,6 @@
 import { getDeviceId } from "../lib/browser";
 
-export const DEFAULT_PARTY_URL = "http://localhost:3000";
+export const DEFAULT_PARTY_URL = "https://music.ytparty.my.id";
 
 export type Config = {
     partyUrl: string | null;

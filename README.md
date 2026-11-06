@@ -50,7 +50,7 @@ Register the group.
 Open YouTube Music and join the room.
 
 ```txt
-music.youtube.com -> Join Room -> paste Room ID -> enter party server URL
+music.youtube.com -> Join Room -> paste Room ID -> use https://music.ytparty.my.id
 ```
 
 Queue a song from Telegram.
@@ -66,6 +66,10 @@ Start playback.
 ```
 
 Only one device can be active in a room. Joining from another browser replaces the previous device.
+
+The default party server is `https://music.ytparty.my.id`. Self-hosted servers are
+still supported: enter your own trusted HTTPS server URL when joining. Saved
+server URLs are preserved; leave and rejoin to change an existing configuration.
 
 ## Screenshots
 

@@ -39,6 +39,11 @@ Never point a new provider at the other provider's migration history.
 
 ## Docker
 
+The production party URL is `https://music.ytparty.my.id` (the public landing page
+remains `https://ytparty.my.id`). On the production server, Nginx proxies HTTPS
+and Socket.IO upgrades to `127.0.0.1:3010`, mapped to container port `3000`.
+The extension uses the public HTTPS URL, never the internal port.
+
 Build a SQLite-specific image from the repository root:
 
 ```sh
@@ -46,7 +51,7 @@ docker build -f apps/backend/Dockerfile --build-arg DATABASE_PROVIDER=sqlite -t 
 docker volume create music-party-data
 docker run --env-file apps/backend/.env \
   -e DATABASE_PROVIDER=sqlite -e DATABASE_URL=file:/app/data/party.db \
-  -v music-party-data:/app/data -p 3000:3000 music-party:sqlite
+  -v music-party-data:/app/data -p 127.0.0.1:3010:3000 music-party:sqlite
 ```
 
 Use a Redis URL reachable from the container (container localhost is not the host).

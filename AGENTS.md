@@ -21,6 +21,7 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
 ## Public URLs
 
 - `https://ytparty.my.id` — landing page
+- `https://music.ytparty.my.id` — production backend / default extension party server (Nginx → host port 3010 → container port 3000)
 - `https://ytparty.my.id/privacy` — privacy policy (Chrome Web Store Privacy Policy URL)
 - `https://ytparty.my.id/support` — support (Chrome Web Store Support URL)
 
@@ -140,4 +141,4 @@ Popup → bridge → MAIN for status/controls without going through Telegram.
 - Redis required at runtime.
 - MAIN-world content scripts cannot use `chrome.*` — always go through the ISOLATED bridge.
 - When building HTML Telegram messages, do not `...string` into arrays; map to full line strings, then `.join('\n')`.
-- Default party URL in extension is `http://localhost:3000` — set production URL on Join.
+- Default party URL in extension is `https://music.ytparty.my.id`. Saved custom URLs are preserved; use an explicit local URL for development.

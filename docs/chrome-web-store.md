@@ -44,7 +44,7 @@ Features:
 How it works:
 1. Open music.youtube.com
 2. Click Join on the YouTube Music page
-3. Enter your room ID and party server URL
+3. Enter your room ID and use https://music.ytparty.my.id as the party server URL, or enter your own trusted server
 4. Use the Telegram bot in your group to control playback
 
 This extension only runs on music.youtube.com. It does not collect account credentials, passwords, or personal browsing history.

@@ -26,7 +26,7 @@ On `music.youtube.com`, the Extension uses the page’s `localStorage` only:
 | Key | Purpose |
 |-----|---------|
 | `roomId` | Room identifier you enter when joining a session |
-| `partyUrl` | Party server URL you enter (default prompt may be a local URL for development) |
+| `partyUrl` | Party server URL you enter (default: `https://music.ytparty.my.id`; you can choose a different trusted server) |
 | `ytmp_device_id` | Random ID generated in the browser so the server can treat this browser as one device per room |
 | `ytmp_bypass_continue_watching` | Your preference for auto-dismissing YouTube Music’s “Continue watching?” dialog |
 
