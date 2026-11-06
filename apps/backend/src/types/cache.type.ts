@@ -1,12 +1,6 @@
-export interface Song {
-    videoId: string;
-    name: string;
-    artist: {
-        artistId: string | null;
-        name: string;
-    };
-    duration: number;
-}
+import type { VideoSearchResult } from '../platform/video-search';
+
+export type Song = VideoSearchResult;
 
 export interface InlineChatLocation {
     chatId: string;

@@ -1585,83 +1585,61 @@ export class PlaybackTelegramController {
         @Ctx()
         ctx: NarrowedContext<Context<UpdateType>, UpdateType.InlineQueryUpdate>,
     ) {
-        try {
-            // get songs
-            const searchQuery = ctx?.update?.inline_query?.query; // Change to your search keyword
-
-            const inlineQueryID = ctx?.update?.inline_query?.id;
-            if (!inlineQueryID) return;
-
-            if (!searchQuery || searchQuery.length < 3) return;
-
-            const songs = await this.ytmusicService.searchSongs(searchQuery);
-
-            const senderID = ctx.from.id;
-
-            // Default: no Play Next button. Show only when last known room has it enabled.
-            // chosen_inline_result / via_bot can add the button once the room is known.
-            let playNextLabel: string | null = null;
-            const userLoc = await this.cacheManager.get<InlineChatLocation>(
-                `user-loc:${senderID}`,
-            );
-            if (userLoc?.chatId) {
-                playNextLabel = await this.resolvePlayNextLabel(
-                    userLoc.chatId,
-                    userLoc.threadId,
-                    senderID,
-                );
-            }
-
-            const cacheExpireTime = 10 * 60 * 1000; // 10 minutes
-
-            const videoIds = new Set<string>();
-
-            const cacheKey = `songs:${inlineQueryID}`;
-            const cachedData = await this.cacheManager.get<Song>(cacheKey);
-            if (!cachedData) {
-                void this.cacheManager.set<Song[]>(
-                    cacheKey,
-                    songs.map((row) => ({
-                        videoId: row.videoId,
-                        name: row.name,
-                        artist: row.artist,
-                        duration: row.duration,
-                    })) as Song[],
-                    cacheExpireTime,
-                );
-            }
-
-            await ctx.answerInlineQuery(
-                songs
-                    .filter((row) => {
-                        if (videoIds.has(row.videoId)) return false;
-
-                        videoIds.add(row.videoId);
-                        return true;
-                    })
-                    .map(
-                        (row): InlineQueryResult => ({
-                            id: `${inlineQueryID}:${row.videoId}`,
-                            type: 'article',
-                            title: row.name,
-                            description: `${row.artist.name} • ${row.album?.name} • ${formatDuration(row.duration || 0)}`,
-                            thumbnail_url: row.thumbnails[0].url,
-                            input_message_content: {
-                                photo_url: row.thumbnails[0].url,
-                                message_text: `${row.name} by ${row.artist.name}`,
-                            },
-                            ...this.buildSongKeyboard(
-                                playNextLabel,
-                                senderID,
-                                row.videoId,
-                            ),
-                        }),
-                    ),
-                {},
-            );
-        } catch (e) {
-            console.error(e);
+        // Provider outages return []; programming/cache errors still surface.
+        const searchQuery = ctx?.update?.inline_query?.query;
+        const inlineQueryID = ctx?.update?.inline_query?.id;
+        if (!inlineQueryID) return;
+        if (!searchQuery || searchQuery.trim().length < 3) {
+            await ctx.answerInlineQuery([], {
+                cache_time: 5,
+                is_personal: true,
+            });
+            return;
         }
+
+        const songs = await this.ytmusicService.searchSongs(searchQuery);
+        const senderID = ctx.from.id;
+        // Chosen-result / via_bot can add Play Next once the room is known.
+        let playNextLabel: string | null = null;
+        const userLoc = await this.cacheManager.get<InlineChatLocation>(
+            `user-loc:${senderID}`,
+        );
+        if (userLoc?.chatId) {
+            playNextLabel = await this.resolvePlayNextLabel(
+                userLoc.chatId,
+                userLoc.threadId,
+                senderID,
+            );
+        }
+
+        // Version the payload so pre-upgrade artist records are not reused.
+        await this.cacheManager.set<Song[]>(
+            `songs:v2:${inlineQueryID}`,
+            songs,
+            10 * 60 * 1000,
+        );
+        await ctx.answerInlineQuery(
+            songs.map(
+                (row): InlineQueryResult => ({
+                    id: `${inlineQueryID}:${row.videoId}`,
+                    type: 'article',
+                    title: row.title,
+                    description: `${row.channelName} • ${row.durationSeconds == null ? 'Duration unavailable' : formatDuration(row.durationSeconds)}`,
+                    ...(row.thumbnailUrl
+                        ? { thumbnail_url: row.thumbnailUrl }
+                        : {}),
+                    input_message_content: {
+                        message_text: `${row.title} • Channel: ${row.channelName}`,
+                    },
+                    ...this.buildSongKeyboard(
+                        playNextLabel,
+                        senderID,
+                        row.videoId,
+                    ),
+                }),
+            ),
+            { cache_time: songs.length ? 30 : 5, is_personal: true },
+        );
     }
 
     @On('chosen_inline_result')
@@ -1679,7 +1657,7 @@ export class PlaybackTelegramController {
         const [inlineQueryID, videoId] = resultId.split(':');
 
         // get from cache
-        const cacheKey = `songs:${inlineQueryID}`;
+        const cacheKey = `songs:v2:${inlineQueryID}`;
         const cachedSongs = await this.cacheManager.get<Song[]>(cacheKey);
         if (!cachedSongs) {
             await this.safeEdit(() =>
@@ -1707,8 +1685,8 @@ export class PlaybackTelegramController {
             return;
         }
 
-        const songText = `${song.name} by ${song.artist.name}`;
-        const cacheKeySong = `song:${inline_message_id}:${videoId}`;
+        const songText = `${song.title} • Channel: ${song.channelName}`;
+        const cacheKeySong = `song:v2:${inline_message_id}:${videoId}`;
         await this.cacheManager.set<Song>(cacheKeySong, song, SONG_CACHE_TTL);
 
         // Link chat/topic from a via_bot message that may have already arrived
@@ -1950,7 +1928,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const cacheKey = `song:${inlineMessageId}:${videoId}`;
+            const cacheKey = `song:v2:${inlineMessageId}:${videoId}`;
             const cachedSong = await this.cacheManager.get<Song>(cacheKey);
             if (!cachedSong) {
                 // Race: primary path already added and cleared cache — stay silent.
@@ -1978,7 +1956,7 @@ export class PlaybackTelegramController {
                         undefined,
                         undefined,
                         inlineMessageId,
-                        `🔁 "<i>${cachedSong.name} by ${cachedSong.artist.name}</i>" is already in the queue.`,
+                        `🔁 "<i>${escapeHtml(cachedSong.title)} • Channel: ${escapeHtml(cachedSong.channelName)}</i>" is already in the queue.`,
                         {
                             parse_mode: 'HTML',
                         },
@@ -1987,9 +1965,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const songCombined = `${cachedSong.name} - ${cachedSong.artist.name} [${formatDuration(
-                cachedSong.duration || 0,
-            )}]`;
+            const songCombined = `${cachedSong.title} - Channel: ${cachedSong.channelName} [${cachedSong.durationSeconds == null ? 'Duration unavailable' : formatDuration(cachedSong.durationSeconds)}]`;
 
             // Analytics is best-effort: a tracking failure must never block a
             // song request. The request ID becomes the queue row ID.
@@ -1999,8 +1975,9 @@ export class PlaybackTelegramController {
                     roomId,
                     requesterId: ctx.from?.id ?? null,
                     videoId,
-                    title: cachedSong.name,
-                    artist: cachedSong.artist.name,
+                    title: cachedSong.title,
+                    // Search channels are not verified artists. Keep artist analytics unknown.
+                    artist: '',
                     source: 'queue',
                 });
             } catch (error) {
@@ -2035,7 +2012,8 @@ export class PlaybackTelegramController {
                     inlineMessageId,
                     `↩️ ${songCombined
                         .split(' - ')
-                        .map((v, k) => {
+                        .map((value, k) => {
+                            const v = escapeHtml(value);
                             if (k === 0) {
                                 return `<i>${v}</i>`;
                             }
@@ -2112,7 +2090,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const cacheKey = `song:${inlineMessageId}:${videoId}`;
+            const cacheKey = `song:v2:${inlineMessageId}:${videoId}`;
             const cachedSong = await this.cacheManager.get<Song>(cacheKey);
             if (!cachedSong) {
                 if (await this.cacheManager.get(doneKey)) return;
@@ -2148,9 +2126,7 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const songCombined = `${cachedSong.name} - ${cachedSong.artist.name} [${formatDuration(
-                cachedSong.duration || 0,
-            )}]`;
+            const songCombined = `${cachedSong.title} - Channel: ${cachedSong.channelName} [${cachedSong.durationSeconds == null ? 'Duration unavailable' : formatDuration(cachedSong.durationSeconds)}]`;
 
             // Analytics is best-effort; see completeAddToQueue.
             let requestId: string | undefined;
@@ -2159,8 +2135,8 @@ export class PlaybackTelegramController {
                     roomId,
                     requesterId: userId,
                     videoId,
-                    title: cachedSong.name,
-                    artist: cachedSong.artist.name,
+                    title: cachedSong.title,
+                    artist: '',
                     source: 'play_next',
                 });
             } catch (error) {
@@ -2197,7 +2173,8 @@ export class PlaybackTelegramController {
                     inlineMessageId,
                     `⏭️ ${songCombined
                         .split(' - ')
-                        .map((v, k) => {
+                        .map((value, k) => {
+                            const v = escapeHtml(value);
                             if (k === 0) {
                                 return `<i>${v}</i>`;
                             }
