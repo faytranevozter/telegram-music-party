@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import Keyv from 'keyv';
+import { ENV } from '../config/env';
 import { YTMusicService, VideoSearchClient } from './yt-music.service';
 
 class TestService extends YTMusicService {
@@ -34,8 +35,32 @@ describe('song search availability', () => {
         });
     });
     afterEach(() => {
+        ENV.REMOTE_SEARCH.enabled = false;
         jest.useRealTimers();
         jest.restoreAllMocks();
+    });
+
+    it('uses remote songs and videos without local fallback, with independent cooldowns', async () => {
+        ENV.REMOTE_SEARCH.enabled = true;
+        ENV.REMOTE_SEARCH.url = 'https://search.example/api/search';
+        ENV.REMOTE_SEARCH.token = 'test-token';
+        const http = jest
+            .spyOn(global, 'fetch')
+            .mockRejectedValueOnce(new Error('private details'))
+            .mockResolvedValue(
+                new Response(JSON.stringify({ results: [] }), {
+                    headers: { 'content-type': 'application/json' },
+                }),
+            );
+        expect(await service.searchSongs('hello')).toEqual([]);
+        expect(await service.searchSongs('hello', 'video')).toEqual([]);
+        expect(http).toHaveBeenCalledTimes(2);
+        expect(service.initialize).not.toHaveBeenCalled();
+        expect(songSearch).not.toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- Jest spy assertion, never invoked
+        expect(Logger.prototype.warn).toHaveBeenCalledWith(
+            'Search failed (song): network',
+        );
     });
 
     it('defaults to song-only search and caches normalized queries', async () => {

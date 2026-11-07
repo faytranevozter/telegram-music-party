@@ -171,6 +171,9 @@ export function normalizeSongs(response: unknown): VideoSearchResult[] {
 }
 
 export type SearchFailure =
+    | 'authentication'
+    | 'protection'
+    | 'invalid-request'
     | 'initialization'
     | 'timeout'
     | 'rate-limit'
