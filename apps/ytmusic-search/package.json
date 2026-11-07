@@ -1,0 +1,17 @@
+{
+    "name": "ytmusic-search-function",
+    "private": true,
+    "version": "1.0.0",
+    "type": "commonjs",
+    "scripts": {
+        "build": "tsc",
+        "test": "pnpm build && pnpm exec node --test test/*.test.cjs"
+    },
+    "dependencies": {
+        "ytmusic-api": "5.3.1"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.7",
+        "typescript": "^5.7.3"
+    }
+}
