@@ -43,7 +43,7 @@ inherit it. GitHub deployment statuses and PR comments are enabled.
 
 Request: `{ "query": "artist song", "type": "song" }` (type is optional, defaults to `song`; accepted values: `song`, `video`; normalized query is 3–200 characters).
 Success: `{ "results": [{ "videoId", "title", "artistName", "channelName", "durationSeconds", "thumbnailUrl" }], "requestId", "cached" }`. Song results have artist metadata; video results have channel metadata.
-Provider errors are non-2xx and distinct from a successful empty `songs` array.
+Provider errors are non-2xx and distinct from a successful empty `results` array.
 Responses never include query text, credentials, cookies, or provider exception details.
 
 The in-memory cache and rate limiter are per warm instance, not global/distributed;
