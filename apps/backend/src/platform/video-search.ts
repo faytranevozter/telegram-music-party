@@ -121,51 +121,33 @@ export function normalizeVideos(response: unknown): VideoSearchResult[] {
 }
 
 /**
- * Normalizes a YouTube Music song search. Only `MUSIC_VIDEO_TYPE_ATV` audio
- * tracks (item_type "song") are accepted, so covers/UGC videos stay out.
+ * Normalizes Piped's `filter=music_songs` results. Piped resolves YouTube Music
+ * audio tracks by video ID; only stream entries with a valid watch URL are kept.
  */
-export function normalizeSongs(response: unknown): VideoSearchResult[] {
-    const root = record(response);
-    const shelves: unknown[] = [];
-    let shaped = false;
-    if (root.songs) {
-        shelves.push(root.songs);
-        shaped = true;
-    }
-    if (Array.isArray(root.contents)) {
-        shelves.push(...(root.contents as unknown[]));
-        shaped = true;
-    }
-    if (!shaped) throw new SearchProviderError('malformed');
+export function normalizePipedSongs(response: unknown): VideoSearchResult[] {
+    const items = record(response).items;
+    if (!Array.isArray(items)) throw new SearchProviderError('malformed');
 
     const results: VideoSearchResult[] = [];
     const seen = new Set<string>();
-    for (const shelf of shelves) {
-        const entries = record(shelf).contents;
-        if (!Array.isArray(entries)) continue;
-        for (const entry of entries) {
-            const row = record(entry);
-            if (row.item_type !== 'song') continue;
-            const videoId = text(row.id);
-            const title = text(row.title);
-            if (!/^[\w-]{11}$/.test(videoId) || !title || seen.has(videoId))
-                continue;
-            const artists = Array.isArray(row.artists)
-                ? row.artists
-                      .map((artist) => text(record(artist).name))
-                      .filter((name) => name.length > 0)
-                : [];
-            const done = pushUnique(results, seen, {
-                videoId,
-                title,
-                artistName: artists.length ? artists.join(', ') : null,
-                channelName: null,
-                durationSeconds: duration(row.duration),
-                thumbnailUrl: thumbnail(row.thumbnails),
-            });
-            if (done) break;
-        }
-        if (results.length === 20) break;
+    for (const item of items) {
+        const row = record(item);
+        if (row.type !== 'stream') continue;
+        const match = /[?&]v=([\w-]{11})/.exec(text(row.url));
+        const videoId = match?.[1] ?? '';
+        const title = text(row.title);
+        if (!videoId || !title || seen.has(videoId)) continue;
+        const artistName = text(row.uploaderName);
+        const done = pushUnique(results, seen, {
+            videoId,
+            title,
+            artistName: artistName || null,
+            channelName: null,
+            durationSeconds: duration({ seconds: row.duration }),
+            // Resolve the thumbnail from YouTube, not the Piped proxy.
+            thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        });
+        if (done) break;
     }
     return results;
 }

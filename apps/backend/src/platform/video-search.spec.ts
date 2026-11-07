@@ -1,6 +1,6 @@
 import {
     creditLabel,
-    normalizeSongs,
+    normalizePipedSongs,
     normalizeVideos,
     SearchProviderError,
 } from './video-search';
@@ -9,19 +9,6 @@ const video = (overrides = {}) => ({
     video_id: 'dQw4w9WgXcQ',
     title: { text: 'Never Gonna Give You Up' },
     author: { name: 'Rick Astley' },
-    duration: { text: '3:33', seconds: 213 },
-    thumbnails: [
-        { url: 'https://img.test/small', width: 120 },
-        { url: 'https://img.test/large', width: 480 },
-    ],
-    ...overrides,
-});
-
-const song = (overrides = {}) => ({
-    item_type: 'song',
-    id: 'dQw4w9WgXcQ',
-    title: 'Never Gonna Give You Up',
-    artists: [{ name: 'Rick Astley', channel_id: 'UC123' }],
     duration: { text: '3:33', seconds: 213 },
     thumbnails: [
         { url: 'https://img.test/small', width: 120 },
@@ -146,91 +133,76 @@ describe('ordinary video normalization', () => {
     });
 });
 
-describe('YouTube Music song normalization', () => {
-    it('keeps only audio-track songs with artist metadata', () => {
-        expect(
-            normalizeSongs({
-                songs: {
-                    contents: [
-                        song(),
-                        {
-                            ...song({ id: 'abcdefghijk' }),
-                            item_type: 'video',
-                        },
-                    ],
-                },
-            }),
-        ).toEqual([
+describe('Piped song normalization', () => {
+    const pipedSong = (overrides = {}) => ({
+        url: '/watch?v=dQw4w9WgXcQ',
+        type: 'stream',
+        title: 'Never Gonna Give You Up',
+        uploaderName: 'Rick Astley',
+        duration: 213,
+        thumbnail: 'https://proxy.test/thumb',
+        ...overrides,
+    });
+
+    it('maps stream results to song metadata and a YouTube thumbnail', () => {
+        expect(normalizePipedSongs({ items: [pipedSong()] })).toEqual([
             {
                 videoId: 'dQw4w9WgXcQ',
                 title: 'Never Gonna Give You Up',
                 artistName: 'Rick Astley',
                 channelName: null,
                 durationSeconds: 213,
-                thumbnailUrl: 'https://img.test/large',
+                thumbnailUrl:
+                    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
             },
         ]);
     });
-    it('finds songs inside contents shelves even without the named getter', () => {
+    it('rejects non-streams, invalid URLs/titles and duplicates', () => {
         expect(
-            normalizeSongs({
-                contents: [
-                    { contents: [song()] },
-                    { contents: [{ item_type: 'album', id: 'MPR123' }] },
+            normalizePipedSongs({
+                items: [
+                    null,
+                    {},
+                    pipedSong({ type: 'channel' }),
+                    pipedSong({ url: '/watch?v=bad' }),
+                    pipedSong({ title: '' }),
+                    pipedSong(),
+                    pipedSong(),
                 ],
             }),
         ).toHaveLength(1);
     });
-    it('joins multiple artists and tolerates missing metadata', () => {
+    it('tolerates missing artist and duration', () => {
         expect(
-            normalizeSongs({
-                songs: {
-                    contents: [
-                        song({
-                            artists: [
-                                { name: 'Artist A' },
-                                { name: 'Artist B' },
-                            ],
-                        }),
-                        song({
-                            id: 'abcdefghijk',
-                            artists: [],
-                            duration: null,
-                            thumbnails: [{ url: 'javascript:bad' }],
-                        }),
-                    ],
-                },
-            }),
-        ).toMatchObject([
-            { artistName: 'Artist A, Artist B' },
-            {
-                artistName: null,
-                durationSeconds: null,
-                thumbnailUrl: null,
-            },
-        ]);
+            normalizePipedSongs({
+                items: [
+                    pipedSong({
+                        uploaderName: '',
+                        duration: -1,
+                        title: 'Song',
+                    }),
+                ],
+            })[0],
+        ).toMatchObject({
+            artistName: null,
+            durationSeconds: null,
+        });
     });
-    it('deduplicates, rejects malformed rows and caps at 20', () => {
+    it('returns empty for valid empty items but marks invalid structures', () => {
+        expect(normalizePipedSongs({ items: [] })).toEqual([]);
+        expect(() => normalizePipedSongs({})).toThrow(SearchProviderError);
+    });
+    it('caps results at 20', () => {
         expect(
-            normalizeSongs({
-                songs: {
-                    contents: [
-                        null,
-                        {},
-                        song({ id: 'bad' }),
-                        song({ title: '' }),
-                        song(),
-                        song(),
-                        ...Array.from({ length: 30 }, (_, i) =>
-                            song({ id: String(i).padStart(11, '0') }),
-                        ),
-                    ],
-                },
+            normalizePipedSongs({
+                items: Array.from({ length: 30 }, (_, i) =>
+                    pipedSong({
+                        id: i,
+                        url: `/watch?v=${String(i).padStart(11, '0')}`,
+                    }),
+                ),
             }),
         ).toHaveLength(20);
-        expect(normalizeSongs({ songs: { contents: [] } })).toEqual([]);
-        expect(normalizeSongs({ contents: [] })).toEqual([]);
-        expect(() => normalizeSongs({})).toThrow(SearchProviderError);
     });
     it('labels song artists and video channels differently', () => {
         expect(

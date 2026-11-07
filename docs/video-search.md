@@ -1,10 +1,14 @@
 # Backend search
 
-The historical `YTMusicService` name remains for dependency injection. Search now
-uses **youtubei.js 18.3.0** with **song-only YouTube Music search by default**
-(`client.music.search(query, { type: 'song' })`), not homepage-initialized
-`ytmusic-api`. The unused `getSong` method and `ytmusic-api` dependency were
-removed. There is no homepage initialization during Nest startup.
+The historical `YTMusicService` name remains for dependency injection. Inline
+search has two sources:
+
+- **Songs (default):** Piped's keyless `filter=music_songs` search, because
+  YouTube Music itself is region-blocked on the current Tencent host.
+- **Videos (`#video`):** youtubei.js 18.3.0 ordinary YouTube video search.
+
+The unused `getSong` method and `ytmusic-api` dependency were removed. There is
+no homepage initialization during Nest startup.
 
 ## Contract and behavior
 
@@ -12,10 +16,10 @@ removed. There is no homepage initialization during Nest startup.
   nullable `durationSeconds`, and nullable `thumbnailUrl`. IDs/titles are
   required, duplicate IDs are removed, and only the first 20 valid results are
   returned; no continuations are fetched.
-- Song mode accepts only YouTube Music audio tracks (`item_type: "song"`,
-  `MUSIC_VIDEO_TYPE_ATV`), so UGC covers and music videos stay out. Multiple
-  artists are joined for display. `artistName` is real YouTube Music artist
-  metadata and is recorded in artist analytics.
+- Song mode calls a Piped API with `filter=music_songs`. Only `type: "stream"`
+  entries with a valid `/watch?v=` ID and title are accepted; `uploaderName`
+  becomes `artistName` and thumbnails resolve to `i.ytimg.com`. Piped already
+  returns YouTube Music audio tracks, so no music-video heuristic is applied.
 - `#video <query>` opts into ordinary YouTube video search (classic Video nodes
   and video LockupView nodes) for that one query. Video mode is display-only for
   channels: a channel is **not** an artist identity, so artist analytics stay
@@ -27,19 +31,20 @@ removed. There is no homepage initialization during Nest startup.
 - Missing artist/channel labels display `Unknown artist`; missing duration
   displays `Duration unavailable`; missing thumbnails are omitted. Non-HTTPS
   thumbnail URLs are discarded.
-- Lazy session creation uses `generate_session_locally: true` and
-  `retrieve_player: false`. Each initialization/search operation has an 8-second
-  deadline; HTTP requests also have abort deadlines. The first uncached query
-  can therefore take up to roughly 16 seconds including initialization.
-  Late promise settlement is observed by the race, not left unhandled.
-- Initialization failure does not prevent Nest startup. Provider failures are
-  logged by category only (initialization, timeout, rate-limit, network,
-  malformed), returning an empty result. Unexpected normalization/programming
-  errors and cache errors are not mislabeled as provider outages.
+- Song search is a keyless HTTPS request with an 8-second deadline; it does not
+  create a youtubei session. Video search lazily creates a session with
+  `generate_session_locally: true` and `retrieve_player: false`, with 8-second
+  initialization/search deadlines and abortable HTTP requests. Late promise
+  settlement is observed by the race, not left unhandled.
+- Song-provider and video-initialization failures do not prevent Nest startup.
+  Provider failures are logged by category only (initialization, timeout,
+  rate-limit, network, malformed), returning an empty result. Unexpected
+  normalization/programming errors and cache errors are not mislabeled as
+  provider outages.
 - Input is trimmed, whitespace-collapsed, and capped at 200 characters. Positive
   normalized-query results use existing Keyv storage for 30 seconds. Identical
   in-flight queries share work; each backend process allows four concurrent
-  distinct queries. A provider outage pauses new searches for five seconds,
+  distinct queries. A provider outage pauses that result type for five seconds,
   or 30 seconds for HTTP 429. There are no automatic retries. These are local
   admission limits, not a distributed quota or a guarantee against upstream
   blocking.
@@ -54,7 +59,14 @@ removed. There is no homepage initialization during Nest startup.
 
 Search mode is not an environment variable.
 
-- **Default:** song-only YouTube Music results for every inline query.
+- **Default:** songs from Piped's `filter=music_songs` for every inline query.
+  Public Piped instances are best-effort; the ordered fallback list lives in
+  `apps/backend/src/config/search.ts` (`SONG_SEARCH_INSTANCES`). No API key is
+  required. Replace it with your own Piped deployment for stronger availability.
+- **Why not YouTube Music directly:** the production Tencent host is outside
+  YouTube Music's service area. The same `music.search(..., { type: 'song' })`
+  call returns 20 songs locally but `No results` on that host, and
+  `music.youtube.com` answers `YouTube Music is not available in your area`.
 - **Per-query override:** type `#video <query>` in inline mode. The token is
   stripped before searching and applies only to that query.
 - **Room permission:** `/config` → **Search → Video Search** toggles the
@@ -66,6 +78,8 @@ Search mode is not an environment variable.
   with a `false` default for both PostgreSQL and SQLite.
 
 There is no persistent per-user search preference and no env-based switch.
+The YouTube Data API is a possible fallback, but it requires an API key and its
+free quota is limited; Piped keeps the current design keyless.
 
 ## CommonJS and packaging
 
@@ -81,7 +95,7 @@ docker run --rm --network none --entrypoint node \
   telegram-music-party:cloud-search-local -e '
   const {YTMusicService}=require("./dist/platform/yt-music.service.js");
   new YTMusicService({}).createClient().then(client=>{
-    if(typeof client.search!=="function" || typeof client.music?.search!=="function") throw Error("missing search");
+    if(typeof client.search!=="function") throw Error("missing search");
     console.log("Packaged CommonJS/ESM initialization OK");
   }).catch(error=>{console.error(error);process.exitCode=1});'
 ```
@@ -115,10 +129,24 @@ Telegram bot playback test or evidence of production/cloud behavior. No service
 was deployed, no production database was accessed, and no Telegram messages were
 sent. Deployment is owned by the user; do not deploy on their behalf.
 
-The song-only follow-up is covered by unit tests (song normalization, artist
-labelling, analytics, and both queue actions) but has not been live-searched yet.
-A local live check should confirm that `type: 'song'` returns audio tracks with
-artist names on the target network before production rollout.
+### Song source check (2026-11-07)
+
+The song-only follow-up was live-checked during deployment:
+
+- Direct YouTube Music search returned 20 songs from the local workstation but
+  `0` from `ubuntu@tencent-dev`. `https://music.youtube.com/` on that host
+  answers `YouTube Music is not available in your area`.
+- Piped `filter=music_songs` returned 20 songs from the same host for
+  `Rick Astley Never Gonna Give You Up`: first ID `lYBUbBu4W08`, artist
+  `Rick Astley`, duration 214 seconds. This is why song mode now uses Piped.
+- Video mode remains youtubei.js ordinary video search, which already worked
+  from this host.
+- No YouTube Data API key is used. Its default free quota is 10,000 units/day,
+  and `search.list` costs 100 units per call (about 100 searches/day) before a
+  quota increase request.
+
+No production search was run through Telegram during this check; the Piped
+request was made directly from the host.
 
 No live YouTube smoke test, SSH, production deployment/restart, secrets, or
 Telegram gallery actions are authorized by the implementation alone.
