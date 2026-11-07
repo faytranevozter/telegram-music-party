@@ -60,8 +60,10 @@ HTTP `200`:
 }
 ```
 
-`artistName` is populated for song searches; `channelName` is populated for
-video searches. Optional metadata may be `null`. A valid search with no usable
+`artistName` is the library's artist display credit for songs or music videos;
+it is not a verified artist identity. `channelName` is populated only if the
+provider supplies separate author metadata; it may be null for videos. Optional
+metadata may be `null`. A valid search with no usable
 matches returns `200` and `"results": []`. Provider failure is **not** an empty
 success: it uses a non-2xx response.
 

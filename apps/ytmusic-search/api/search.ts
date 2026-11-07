@@ -1,5 +1,6 @@
 import YTMusic from 'ytmusic-api';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 
 type SearchResult = {
     videoId: string;
@@ -165,8 +166,9 @@ function normalizeVideos(value: unknown): SearchResult[] {
         results.push({
             videoId: id,
             title: title.slice(0, 300),
-            artistName: null,
-            channelName: (author || text(row.artist)).slice(0, 300) || null,
+            artistName: row.artist && typeof row.artist === 'object'
+                ? text((row.artist as Record<string, unknown>).name).slice(0, 300) || null : null,
+            channelName: author.slice(0, 300) || null,
             durationSeconds: durationSeconds(row.durationSeconds ?? row.duration),
             thumbnailUrl: thumbnailUrl(row.thumbnails),
         });
@@ -202,9 +204,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         return;
     }
     const started = Date.now();
-    const requestId = typeof req.headers['x-request-id'] === 'string'
-        ? req.headers['x-request-id'].slice(0, 80)
-        : 'generated';
+    const requestId = randomUUID();
     const respondError = (status: number, code: string) => {
         console.warn(JSON.stringify({ event: 'song_search', requestId, outcome: code, elapsedMs: Date.now() - started }));
         respond(res, status, { error: code, requestId });
@@ -255,21 +255,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         return;
     }
     cache.delete(cacheKey);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-        const client = await Promise.race([
-            getClient(),
-            new Promise<never>((_, reject) => {
-                const timer = setTimeout(() => reject(new Error('search-timeout')), REQUEST_TIMEOUT_MS);
-                timer.unref?.();
-            }),
-        ]);
         const raw = await Promise.race([
-            type === 'song'
-                ? client.searchSongs(query)
-                : client.searchVideos(query),
+            (async () => {
+                const client = await getClient();
+                return type === 'song' ? client.searchSongs(query) : client.searchVideos(query);
+            })(),
             new Promise<never>((_, reject) => {
-                const timer = setTimeout(() => reject(new Error('search-timeout')), REQUEST_TIMEOUT_MS);
-                timer.unref?.();
+                timer = setTimeout(() => reject(new Error('search-timeout')), REQUEST_TIMEOUT_MS);
             }),
         ]);
         const results = type === 'song' ? normalizeSongs(raw) : normalizeVideos(raw);
@@ -287,5 +281,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         const rateLimited = (error as { response?: { status?: number }; status?: number } | null)?.response?.status === 429 ||
             (error as { status?: number } | null)?.status === 429;
         respondError(timeout ? 504 : rateLimited ? 503 : 502, timeout ? 'provider_timeout' : rateLimited ? 'provider_rate_limited' : 'provider_unavailable');
+    } finally {
+        clearTimeout(timer);
     }
 }
