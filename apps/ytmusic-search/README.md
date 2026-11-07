@@ -7,6 +7,17 @@ regions or the Tencent backend's network path.
 
 ## Deployment and verification
 
+### Git auto-deployment
+
+The Vercel project is connected to
+`faytranevozter/telegram-music-party` with Root Directory
+`apps/ytmusic-search`. Pushes to `main` deploy production; other branches and
+pull requests create protected previews. PR #15 must merge before `main`
+contains this service. Build command is `pnpm build`, install command is
+`pnpm install --frozen-lockfile`, and output directory is `public`.
+The bearer secret is production-only; preview deployments intentionally do not
+inherit it. GitHub deployment statuses and PR comments are enabled.
+
 1. Vercel project `telegram-music-party-search` uses this directory as its root.
 2. The encrypted production `SEARCH_API_TOKEN` is configured in Vercel.
    Generate and manage a strong random token out-of-band; do not put it in source,
