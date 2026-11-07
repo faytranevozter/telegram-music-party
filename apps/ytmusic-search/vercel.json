@@ -1,0 +1,10 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "outputDirectory": "public",
+    "regions": ["iad1"],
+    "functions": {
+        "api/search.ts": {
+            "maxDuration": 30
+        }
+    }
+}
