@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import Keyv from 'keyv';
+import { ENV } from '../config/env';
+import { searchRemote } from './remote-search';
 import {
     normalizeSongs,
     normalizeVideos,
@@ -31,7 +33,7 @@ export class YTMusicService {
     private readonly logger = new Logger(YTMusicService.name);
     private client: Promise<VideoSearchClient> | null = null;
     private readonly pending = new Map<string, Promise<VideoSearchResult[]>>();
-    private retryAfter = 0;
+    private readonly retryAfter = new Map<VideoSearchType, number>();
     private readonly timeoutMs = 8_000;
 
     constructor(@Inject('KEYV_CACHE') private readonly cache: Keyv) {}
@@ -87,12 +89,17 @@ export class YTMusicService {
     ): Promise<VideoSearchResult[]> {
         const query = keyword.trim().replace(/\s+/g, ' ').slice(0, 200);
         if (query.length < 3) return [];
-        const key = `video-search:v2:${type}:${query.toLowerCase()}`;
+        const provider = ENV.REMOTE_SEARCH.enabled ? 'remote-v1' : 'local-v2';
+        const key = `video-search:${provider}:${type}:${query.toLowerCase()}`;
         const cached = await this.cache.get<VideoSearchResult[]>(key);
         if (cached) return cached;
         const pending = this.pending.get(key);
         if (pending) return pending;
-        if (Date.now() < this.retryAfter || this.pending.size >= 4) return [];
+        if (
+            Date.now() < (this.retryAfter.get(type) ?? 0) ||
+            this.pending.size >= 4
+        )
+            return [];
         const operation = this.searchProvider(query, type).then(
             async (results) => {
                 if (results.length) await this.cache.set(key, results, 30_000);
@@ -112,6 +119,9 @@ export class YTMusicService {
         type: VideoSearchType,
     ): Promise<VideoSearchResult[]> {
         try {
+            if (ENV.REMOTE_SEARCH.enabled) {
+                return await searchRemote(ENV.REMOTE_SEARCH, query, type);
+            }
             if (!this.client) {
                 this.client = this.bounded(this.createClient()).catch(
                     (error: unknown) => {
@@ -153,9 +163,11 @@ export class YTMusicService {
                 : normalizeVideos(response);
         } catch (error) {
             if (!(error instanceof SearchProviderError)) throw error;
-            this.retryAfter =
-                Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000);
-            this.logger.warn(`Search failed: ${error.kind}`);
+            this.retryAfter.set(
+                type,
+                Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000),
+            );
+            this.logger.warn(`Search failed (${type}): ${error.kind}`);
             return [];
         }
     }
