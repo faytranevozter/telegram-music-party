@@ -75,6 +75,46 @@ describe('song search availability', () => {
         expect(videoSearch).not.toHaveBeenCalled();
         expect(service.initialize).toHaveBeenCalledTimes(1);
     });
+    it('keeps results for ten minutes then refreshes them', async () => {
+        songSearch.mockResolvedValue({ songs: { contents: [song()] } });
+        await service.searchSongs('hello');
+        jest.advanceTimersByTime(10 * 60_000 - 1);
+        expect(await service.searchSongs('hello')).toHaveLength(1);
+        expect(songSearch).toHaveBeenCalledTimes(1);
+        jest.advanceTimersByTime(2);
+        expect(await service.searchSongs('hello')).toHaveLength(1);
+        expect(songSearch).toHaveBeenCalledTimes(2);
+    });
+    it('caches successful empty results', async () => {
+        expect(await service.searchSongs('empty')).toEqual([]);
+        jest.advanceTimersByTime(60_000);
+        expect(await service.searchSongs(' EMPTY ')).toEqual([]);
+        expect(songSearch).toHaveBeenCalledTimes(1);
+    });
+    it('caches remote results across normalized repeated queries', async () => {
+        ENV.REMOTE_SEARCH.enabled = true;
+        ENV.REMOTE_SEARCH.url = 'https://search.example/api/search';
+        ENV.REMOTE_SEARCH.token = 'test-token';
+        const results = [
+            {
+                videoId: 'dQw4w9WgXcQ',
+                title: 'Title',
+                artistName: 'Artist',
+                channelName: null,
+                durationSeconds: null,
+                thumbnailUrl: null,
+            },
+        ];
+        const http = jest.spyOn(global, 'fetch').mockImplementation(async () =>
+            new Response(JSON.stringify({ results }), {
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        expect(await service.searchSongs(' Hello   World ')).toEqual(results);
+        jest.advanceTimersByTime(60_000);
+        expect(await service.searchSongs('hello world')).toEqual(results);
+        expect(http).toHaveBeenCalledTimes(1);
+    });
     it('searches ordinary videos when requested and caches them separately', async () => {
         videoSearch.mockResolvedValue({
             videos: [{ video_id: 'dQw4w9WgXcQ', title: { text: 'Title' } }],

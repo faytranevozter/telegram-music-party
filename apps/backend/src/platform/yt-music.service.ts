@@ -35,6 +35,7 @@ export class YTMusicService {
     private readonly pending = new Map<string, Promise<VideoSearchResult[]>>();
     private readonly retryAfter = new Map<VideoSearchType, number>();
     private readonly timeoutMs = 8_000;
+    private readonly searchCacheTtlMs = 10 * 60_000;
 
     constructor(@Inject('KEYV_CACHE') private readonly cache: Keyv) {}
 
@@ -102,7 +103,9 @@ export class YTMusicService {
             return [];
         const operation = this.searchProvider(query, type).then(
             async (results) => {
-                if (results.length) await this.cache.set(key, results, 30_000);
+                // Failed requests are not empty search results and must remain retryable.
+                if (results === null) return [];
+                await this.cache.set(key, results, this.searchCacheTtlMs);
                 return results;
             },
         );
@@ -117,7 +120,7 @@ export class YTMusicService {
     private async searchProvider(
         query: string,
         type: VideoSearchType,
-    ): Promise<VideoSearchResult[]> {
+    ): Promise<VideoSearchResult[] | null> {
         try {
             if (ENV.REMOTE_SEARCH.enabled) {
                 return await searchRemote(ENV.REMOTE_SEARCH, query, type);
@@ -168,7 +171,7 @@ export class YTMusicService {
                 Date.now() + (error.kind === 'rate-limit' ? 30_000 : 5_000),
             );
             this.logger.warn(`Search failed (${type}): ${error.kind}`);
-            return [];
+            return null;
         }
     }
 }

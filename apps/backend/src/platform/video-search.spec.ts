@@ -242,7 +242,7 @@ describe('YouTube Music song normalization', () => {
                 durationSeconds: null,
                 thumbnailUrl: null,
             }),
-        ).toBe('Artist: Artist');
+        ).toBe('Artist');
         expect(
             creditLabel({
                 videoId: 'dQw4w9WgXcQ',

@@ -23,7 +23,7 @@ const text = (value: unknown): string => {
 
 /** Credit line for inline text: artists for songs, channels for videos. */
 export function creditLabel(result: VideoSearchResult): string {
-    if (result.artistName) return `Artist: ${result.artistName}`;
+    if (result.artistName) return result.artistName;
     if (result.channelName) return `Channel: ${result.channelName}`;
     return 'Unknown artist';
 }

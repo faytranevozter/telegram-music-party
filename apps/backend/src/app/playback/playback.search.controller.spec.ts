@@ -63,9 +63,9 @@ describe('inline song search and queue contract', () => {
             id: 'query:dQw4w9WgXcQ',
             type: 'article',
             title: result.title,
-            description: 'Artist: A & B • Duration unavailable',
+            description: 'A & B • Duration unavailable',
             input_message_content: {
-                message_text: 'Title <live> • Artist: A & B',
+                message_text: 'Title <live> • A & B',
             },
         });
         expect(articles[0].thumbnail_url).toBeUndefined();
@@ -198,7 +198,7 @@ describe('inline song search and queue contract', () => {
                 'room',
                 result.videoId,
                 next ? 'next' : 'end',
-                expect.stringContaining('Artist: A & B'),
+                expect.stringContaining('A & B'),
                 'request',
             );
             expect(analytics.recordRequest).toHaveBeenCalledWith(
