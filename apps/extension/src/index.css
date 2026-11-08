@@ -48,4 +48,12 @@ body { max-height: 600px; overflow-y: auto; overflow-x: hidden; }
 .join-field input::placeholder { color: #AAB6CA; }
 .join-field input:disabled { opacity: .6; }
 .join-server-field { margin-top: 10px; }
+.community-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 20px; border-top: 1px solid #394253; padding-top: 8px; }
+.community-links a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; color: #BDCAE3; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.community-links a:hover { color: #F5F7FC; }
+.community-links .coffee-link { flex-basis: 100%; gap: 5px; }
+.community-links .coffee-link span { color: #AAB6CA; }
+.saweria-qr { text-align: center; color: #BDCAE3; font-size: 12px; }
+.saweria-qr summary { cursor: pointer; width: fit-content; margin-inline: auto; padding: 12px 4px; text-decoration: underline; text-underline-offset: 3px; }
+.saweria-qr img { display: block; width: 185px; height: 185px; margin: 8px auto 12px; background: white; }
 @media (prefers-reduced-motion: reduce) { .party-popup *, .party-popup *::before, .party-popup *::after { animation: none !important; transition: none !important; } }

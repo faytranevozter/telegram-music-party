@@ -820,6 +820,16 @@ function App() {
                 <p className="text-center text-[10px] text-zinc-600">
                     Join / leave also available in the YT Music sidebar
                 </p>
+                <nav className="community-links" aria-label="Feedback and support">
+                    <a href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Request a feature</a>
+                    <a href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a>
+                    <a className="coffee-link" href="https://saweria.co/faytranevozter" target="_blank" rel="noopener noreferrer">Buy me a coffee <span>on Saweria</span></a>
+                </nav>
+                <details className="saweria-qr">
+                    <summary>Scan Saweria QR code</summary>
+                    <img src="/saweria-qr.png" alt="QR code linking to saweria.co/faytranevozter" width="185" height="185" />
+                    <p>Scan to open Saweria on your phone.<br />saweria.co/faytranevozter</p>
+                </details>
             </div>
         </div>
     );

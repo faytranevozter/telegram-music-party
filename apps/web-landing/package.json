@@ -4,6 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "test": "node --test scripts/test-*.mjs",
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
         "build:privacy": "node scripts/build-privacy.mjs"

@@ -1,0 +1,58 @@
+name: Report an issue
+description: Report something that is not working in YouTube Music Party.
+title: "[Bug]: "
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Please check existing issues and https://ytparty.my.id/support first.
+              Issues are public. Remove bot tokens, credentials, private room details, and other sensitive information from text, screenshots, and logs before posting.
+    - type: dropdown
+      id: component
+      attributes:
+          label: Affected component
+          options:
+              - Extension popup
+              - YouTube Music playback or sidebar
+              - Telegram bot
+              - Party server
+              - Website
+              - Not sure
+      validations:
+          required: true
+    - type: textarea
+      id: reproduction
+      attributes:
+          label: Steps to reproduce
+          description: Walk us through how to trigger the problem.
+          placeholder: |
+              1. Open...
+              2. Choose...
+              3. Observe...
+      validations:
+          required: true
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+      validations:
+          required: true
+    - type: textarea
+      id: actual
+      attributes:
+          label: Actual behavior
+          description: Include any visible error message, with sensitive information removed.
+      validations:
+          required: true
+    - type: textarea
+      id: versions
+      attributes:
+          label: Versions and environment
+          description: Include your browser and OS versions, extension version from the popup, and server version if known. For website-only issues, extension version can be N/A.
+      validations:
+          required: true
+    - type: textarea
+      id: evidence
+      attributes:
+          label: Screenshots or logs (optional)
+          description: Only attach sanitized evidence. Never include tokens, credentials, or private room details.

@@ -64,6 +64,17 @@ footer a, .site-header nav a { display: inline-flex; align-items: center; min-he
 .button:hover { background: #2038A5; text-decoration: none; }
 .button:active { background: #172D94; color: white; }
 .text-action { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.community-section { border-top: 1px solid var(--border); padding: 34px 0 24px; }
+.community-section h2 { margin-top: 0; }
+.landing .community-section { padding: 56px 0; }
+.community-section > p { color: var(--muted); }
+.community-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0; }
+.community-button { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 10px 18px; border: 1px solid var(--border); border-radius: 5px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.community-button:hover { background: var(--surface); text-decoration: none; }
+.community-donation { margin-top: 28px; }
+.community-donation p { margin-top: 10px; color: var(--muted); font-size: 14px; max-width: 60ch; }
+.saweria-qr { margin-top: 20px; }
+.saweria-qr img { display: block; width: 185px; height: 185px; background: white; }
 .desktop-note { font-size: 14px; color: var(--muted); max-width: 40ch; }
 .one-player { border-left: 3px solid var(--accent); padding-left: 18px; margin-top: 36px; max-width: 45ch; font-size: 15px; }
 .connected-figure { min-width: 0; }

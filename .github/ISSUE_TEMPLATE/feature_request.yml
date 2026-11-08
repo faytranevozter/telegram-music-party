@@ -1,0 +1,28 @@
+name: Request a feature
+description: Suggest an improvement to YouTube Music Party.
+title: "[Feature]: "
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for helping shape YouTube Music Party! Please check existing issues first.
+              Issues are public. Do not share bot tokens, credentials, private room details, or other sensitive information.
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem or use case
+          description: What are you trying to do, and what gets in the way?
+      validations:
+          required: true
+    - type: textarea
+      id: solution
+      attributes:
+          label: Proposed solution
+          description: How would you like this to work?
+      validations:
+          required: true
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives and additional context
+          description: Optional workarounds, alternatives, or sanitized screenshots.

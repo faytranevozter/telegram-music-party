@@ -173,6 +173,30 @@ describe("popup room joining", () => {
         expect(sendMessage).not.toHaveBeenCalled();
     });
 
+    it.each(["no-tab", "not-joined", "disconnected", "connected"])("offers safe feedback and donation links when %s", async (state) => {
+        if (state === "no-tab") query.mockResolvedValue([]);
+        if (state === "disconnected" || state === "connected") {
+            pageStatus = { ...baseStatus, hasRoom: true, roomId: "saved", connected: state === "connected", socketConnected: state === "connected" };
+        }
+        await mount();
+        const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Feedback and support"] a'));
+        const qr = container.querySelector<HTMLDetailsElement>('details.saweria-qr')!;
+        expect(qr.open).toBe(false);
+        expect(qr.querySelector('summary')!.textContent).toBe('Scan Saweria QR code');
+        expect(qr.querySelector('img')!.getAttribute('src')).toBe('/saweria-qr.png');
+        expect(qr.querySelector('img')!.alt).toBe('QR code linking to saweria.co/faytranevozter');
+        expect(links.map((link) => [link.textContent, link.href])).toEqual([
+            ["Request a feature", "https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml"],
+            ["Report an issue", "https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml"],
+            ["Buy me a coffee on Saweria", "https://saweria.co/faytranevozter"],
+        ]);
+        for (const link of links) {
+            expect(link.target).toBe("_blank");
+            expect(link.relList.contains("noopener")).toBe(true);
+            expect(link.relList.contains("noreferrer")).toBe(true);
+        }
+    });
+
     it("keeps an unreachable server editable and retryable", async () => {
         pageStatus = { ...baseStatus, hasRoom: true, roomId: "saved", partyUrl: "http://localhost:3010" };
         await mount();
