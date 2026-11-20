@@ -338,6 +338,9 @@ export class PlaybackService {
                         "🤷‍♀️ No lyrics this time—guess we're freestyling!",
                 );
                 break;
+            case 'queue-unavailable':
+                message = `⚠️ <i>"${escapeHtml(notification.song)}"</i> could not be added — YouTube Music refused it (usually a region or premium restriction). Skipped it; try another result.`;
+                break;
             default:
                 return;
         }

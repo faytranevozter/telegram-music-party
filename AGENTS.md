@@ -74,6 +74,7 @@ Backend reads from `apps/backend/.env` (gitignored). Required:
 - `DATABASE_URL` — PostgreSQL connection string
 - `REDIS_URL` — Redis connection string (used by Keyv cache)
 - `ANALYTICS_RETENTION_DAYS` — optional; raw request/playback retention in days (default 365, `0` disables pruning)
+- `YT_MUSIC_LOCATION` / `YT_MUSIC_LANG` — optional; search catalog region (ISO 3166-1 alpha-2, default `ID`) and YouTube language (default `en`). Playback availability still follows the player's own account region.
 
 See `apps/backend/.env.example`.
 
@@ -112,6 +113,7 @@ Popup (React) ──chrome.tabs.sendMessage──► content-bridge.js (ISOLATED
 - **Recovery** (`src/lib/popup-bridge.ts`, `src/App.tsx`): at most eight bridge-readiness attempts after opening/reloading; steady-state status comes from `STATUS_PUSH`, not polling. Admission waiting is bounded to 30 seconds; timeout must not claim the room definitely does not exist. Closing the popup does not cancel page-side joining.
 - **Config**: page `localStorage` keys `roomId`, `partyUrl`, `ytmp_device_id`, `ytmp_bypass_continue_watching` (`"false"` disables; unset = enabled) on `music.youtube.com`. Helpers in `src/constants/config.ts` (`isContinueWatchingBypassEnabled` / `setContinueWatchingBypass`); popup switch sends `SET_CONTINUE_WATCHING_BYPASS` via bridge → `applyContinueWatchingSetting()` gates watcher + `_lact` keep-alive live.
 - **Leave payload**: `{ roomId, fingerprint }` (not `id`).
+- **Refused tracks**: after `music/get_queue`, `waitForQueueItem` in `src/lib/player-queue.ts` confirms the video reached the player queue. If the queue is readable and the track never arrives (region lock, premium-only), the extension drops it locally and emits `playback-notification` `queue-unavailable`; the backend removes it from the room queue and warns the chat. An unreadable queue store is `unknown` and never reported.
 - **Join config**: `validateRoomConfig` / `saveRoomConfig` in `src/constants/config.ts` are shared by MAIN and the sidebar. Trim room ID and URL, require nonempty room ID and HTTP(S) URL, and preserve custom hosts, ports, and paths. Allow HTTP for local development.
 - **Updates**: Chrome Web Store builds rely on native browser auto-update. Do not add a manual ZIP downloader or GitHub release checker to the extension popup.
 - **Build**: `base: "./"` in popup Vite config so assets work under `chrome-extension://`.

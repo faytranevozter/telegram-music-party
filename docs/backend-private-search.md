@@ -15,6 +15,11 @@ secrets in backend runtime secret storage. Do not set them in the extension,
 Telegram messages, URLs, source, screenshots or logs. Rotate independently and
 update runtime configuration; revoke the old secret after cutover.
 
+The remote function, not this backend, decides its own search region: the request
+payload carries only `query` and `type`, so `YT_MUSIC_LOCATION` and
+`YT_MUSIC_LANG` apply to the local `youtubei.js` path only. They are still part
+of the cache key, so switching them never reuses another locale's entries.
+
 Enabled configuration is validated at startup. Redirects are rejected to avoid
 sending secrets to another host. `YTMUSIC_SEARCH_TIMEOUT_MS` defaults to 8000
 (100–15000 allowed); one deadline bounds headers and the entire body. Responses

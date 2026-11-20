@@ -40,12 +40,13 @@ export class YTMusicService {
     constructor(@Inject('KEYV_CACHE') private readonly cache: Keyv) {}
 
     protected async createClient(): Promise<VideoSearchClient> {
+        const { location, lang } = ENV.YT_MUSIC;
         const { Innertube } = await importYoutube();
         return Innertube.create({
             generate_session_locally: true,
             retrieve_player: false,
-            lang: 'en',
-            location: 'ID',
+            lang,
+            location,
             fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
                 const response = await fetch(input, {
                     ...init,
@@ -91,7 +92,10 @@ export class YTMusicService {
         const query = keyword.trim().replace(/\s+/g, ' ').slice(0, 200);
         if (query.length < 3) return [];
         const provider = ENV.REMOTE_SEARCH.enabled ? 'remote-v1' : 'local-v2';
-        const key = `video-search:${provider}:${type}:${query.toLowerCase()}`;
+        // The catalog depends on the configured region and language, so a
+        // locale change must never reuse another locale's cached results.
+        const { location, lang } = ENV.YT_MUSIC;
+        const key = `video-search:${provider}:${location}:${lang}:${type}:${query.toLowerCase()}`;
         const cached = await this.cache.get<VideoSearchResult[]>(key);
         if (cached) return cached;
         const pending = this.pending.get(key);

@@ -368,6 +368,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
 
     @SubscribeMessage('playback-notification')
     async onPlaybackNotification(
+        @ConnectedSocket() socket: Socket,
         @MessageBody() data: PlaybackNotificationPayload,
     ) {
         // get room
@@ -376,6 +377,16 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         if (!room) {
             console.log('Room not found');
             return;
+        }
+
+        // A track the player refused must leave the room queue, otherwise every
+        // later /play retries the same unavailable song. Only the admitted
+        // device may report this, so a random socket cannot drop tracks.
+        if (data.type === 'queue-unavailable') {
+            const session = this.getSession(socket);
+            if (!session || session.roomId !== data.roomId) return;
+            if (!socket.rooms?.has(data.roomId)) return;
+            await this.playbackService.removeQueue(data.roomId, data.videoId);
         }
 
         await this.playbackService.sendPlaybackNotification(

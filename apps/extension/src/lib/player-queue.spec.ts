@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parsePlayerQueue, readPlayerQueue, watchPlayerQueue, splitQueue } from "./player-queue";
+import { parsePlayerQueue, readPlayerQueue, waitForQueueItem, watchPlayerQueue, splitQueue } from "./player-queue";
 
 const track = (id: string, selected = false) => ({
     playlistPanelVideoRenderer: {
@@ -124,5 +124,30 @@ describe("player queue", () => {
         expect(onChange).toHaveBeenCalledTimes(3);
         stop();
         expect(unsubscribe).toHaveBeenCalledOnce();
+    });
+
+    it("waits for a track the player accepted", async () => {
+        let items = [{ id: "0:other", url: "other", title: "", artist: "", current: false }];
+        const read = () => ({ available: true, items });
+        setTimeout(() => {
+            items = [
+                ...items,
+                { id: "1:wanted", url: "wanted", title: "", artist: "", current: false },
+            ];
+        }, 10);
+
+        await expect(waitForQueueItem("wanted", 500, read)).resolves.toBe("added");
+    });
+
+    it("reports a track the player never queued", async () => {
+        const read = () => ({ available: true, items: [] });
+
+        await expect(waitForQueueItem("refused", 200, read)).resolves.toBe("missing");
+    });
+
+    it("stays undecided when the queue store is unreadable", async () => {
+        const read = () => ({ available: false, items: [] });
+
+        await expect(waitForQueueItem("refused", 200, read)).resolves.toBe("unknown");
     });
 });

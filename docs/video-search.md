@@ -58,6 +58,13 @@ removed. There is no homepage initialization during Nest startup.
 
 Search mode is not an environment variable.
 
+- **Catalog region:** `YT_MUSIC_LOCATION` (ISO 3166-1 alpha-2, default `ID`) and
+  `YT_MUSIC_LANG` (YouTube `hl`, default `en`) shape every local search and are
+  part of the cache key. Invalid values stop startup. Region only selects the
+  **search catalog**: whether a result can actually play is decided by the
+  connected player's own account region, so a listed song may still be refused.
+  The private remote search ignores these values and uses its own deployment
+  region.
 - **Default:** song-only YouTube Music results for every inline query.
 - **Per-query override:** type `#video <query>` in inline mode. The token is
   stripped before searching and applies only to that query.

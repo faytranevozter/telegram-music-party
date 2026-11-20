@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
-import { readPlayerQueue } from "./player-queue";
+import { readPlayerQueue, waitForQueueItem } from "./player-queue";
 import { DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
@@ -75,7 +75,8 @@ type PlaybackNotification =
           volume: number;
       }
     | { type: "mute-changed"; muted: boolean }
-    | { type: "lyrics"; text: string | null };
+    | { type: "lyrics"; text: string | null }
+    | { type: "queue-unavailable"; videoId: string; song: string };
 
 function getSelectedRenderer(item: unknown): Record<string, any> | undefined {
     if (!item || typeof item !== "object") return undefined;
@@ -718,7 +719,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (getYtQueueVideoIds().has(videoId)) return;
 
-            await addQueue(videoId, position);
+            // music/get_queue silently drops unplayable tracks (region lock,
+            // premium-only), so verify the player really accepted the request.
+            let acceptance: Awaited<ReturnType<typeof waitForQueueItem>> =
+                "unknown";
+            try {
+                await addQueue(videoId, position);
+                acceptance = await waitForQueueItem(videoId);
+            } catch (error) {
+                console.error("addToQueue failed", error);
+            }
+            if (acceptance !== "missing") return;
+
+            queues = queues.filter((q) => q.url !== videoId);
+            setBridgeSession({ queues });
+            console.log("player refused track", videoId);
+            sendPlaybackNotification({
+                type: "queue-unavailable",
+                videoId,
+                song: title ?? videoId,
+            });
         },
     );
 

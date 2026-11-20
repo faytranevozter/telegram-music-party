@@ -100,6 +100,33 @@ export function readPlayerQueue(): PlayerQueueSnapshot {
     }
 }
 
+export type QueueAcceptance = "added" | "missing" | "unknown";
+
+/**
+ * Resolve once the player queue lists the video. `missing` means the queue was
+ * readable but the track never arrived (YouTube Music refused it); `unknown`
+ * means the queue store could not be read, so nothing can be concluded.
+ */
+export async function waitForQueueItem(
+    videoId: string,
+    timeoutMs = 2000,
+    read: () => PlayerQueueSnapshot = readPlayerQueue,
+): Promise<QueueAcceptance> {
+    let readable = false;
+    const contains = () => {
+        const snapshot = read();
+        readable ||= snapshot.available;
+        return snapshot.items.some((item) => item.url === videoId);
+    };
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (contains()) return "added";
+        await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    if (contains()) return "added";
+    return readable ? "missing" : "unknown";
+}
+
 /** Rebind on late mount/navigation; sampling also covers stores without subscribe. */
 export function watchPlayerQueue(onChange: () => void): () => void {
     let store: QueueStore | undefined;

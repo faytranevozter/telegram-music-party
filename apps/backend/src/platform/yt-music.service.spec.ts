@@ -91,6 +91,19 @@ describe('song search availability', () => {
         expect(await service.searchSongs(' EMPTY ')).toEqual([]);
         expect(songSearch).toHaveBeenCalledTimes(1);
     });
+    it('keeps search results separate per configured region', async () => {
+        songSearch.mockResolvedValue({ songs: { contents: [song()] } });
+        const original = ENV.YT_MUSIC;
+        try {
+            ENV.YT_MUSIC = { location: 'ID', lang: 'en' };
+            expect(await service.searchSongs('hello')).toHaveLength(1);
+            ENV.YT_MUSIC = { location: 'US', lang: 'en' };
+            expect(await service.searchSongs('hello')).toHaveLength(1);
+        } finally {
+            ENV.YT_MUSIC = original;
+        }
+        expect(songSearch).toHaveBeenCalledTimes(2);
+    });
     it('caches remote results across normalized repeated queries', async () => {
         ENV.REMOTE_SEARCH.enabled = true;
         ENV.REMOTE_SEARCH.url = 'https://search.example/api/search';

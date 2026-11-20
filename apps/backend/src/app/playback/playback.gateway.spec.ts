@@ -457,17 +457,30 @@ describe('PlaybackGateway playback reports', () => {
 describe('PlaybackGateway notifications', () => {
     const getRoom = jest.fn();
     const sendPlaybackNotification = jest.fn();
+    const removeQueue = jest.fn();
     const playbackService = {
         getRoom,
         sendPlaybackNotification,
+        removeQueue,
     } as unknown as PlaybackService;
     let gateway: PlaybackGateway;
 
     beforeEach(() => {
         getRoom.mockReset();
         sendPlaybackNotification.mockReset();
+        removeQueue.mockReset();
+        removeQueue.mockResolvedValue(undefined);
         gateway = new PlaybackGateway(playbackService, {} as AnalyticsService);
     });
+
+    /** The admitted player socket, as the gateway records it on join. */
+    function makeSocket(inRoom = true) {
+        return {
+            id: 'socket-1',
+            data: { session: { roomId: 'room-id', fingerprint: 'device-1' } },
+            rooms: new Set(inRoom ? ['room-id'] : []),
+        };
+    }
 
     it('routes typed notifications through the room Telegram chat', async () => {
         getRoom.mockResolvedValue({
@@ -480,7 +493,7 @@ describe('PlaybackGateway notifications', () => {
             type: 'queue-empty' as const,
         };
 
-        await gateway.onPlaybackNotification(notification);
+        await gateway.onPlaybackNotification(makeSocket() as never, notification);
 
         expect(sendPlaybackNotification).toHaveBeenCalledWith(
             'chat-id',
@@ -492,11 +505,68 @@ describe('PlaybackGateway notifications', () => {
     it('does not send notifications for unknown rooms', async () => {
         getRoom.mockResolvedValue(null);
 
-        await gateway.onPlaybackNotification({
+        await gateway.onPlaybackNotification(makeSocket() as never, {
             roomId: 'missing-room',
             type: 'queue-empty',
         });
 
+        expect(sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('drops a refused track from the room queue before notifying', async () => {
+        getRoom.mockResolvedValue({
+            id: 'room-id',
+            chatId: 'chat-id',
+            threadId: 42,
+        });
+
+        await gateway.onPlaybackNotification(makeSocket() as never, {
+            roomId: 'room-id',
+            type: 'queue-unavailable',
+            videoId: 'dQw4w9WgXcQ',
+            song: 'Title',
+        });
+
+        expect(removeQueue).toHaveBeenCalledWith('room-id', 'dQw4w9WgXcQ');
+        expect(sendPlaybackNotification).toHaveBeenCalledWith(
+            'chat-id',
+            42,
+            expect.objectContaining({ type: 'queue-unavailable' }),
+        );
+    });
+
+    it('leaves the room queue alone for other notifications', async () => {
+        getRoom.mockResolvedValue({
+            id: 'room-id',
+            chatId: 'chat-id',
+            threadId: null,
+        });
+
+        await gateway.onPlaybackNotification(makeSocket() as never, {
+            roomId: 'room-id',
+            type: 'now-playing',
+            song: 'Title',
+            artist: 'Artist',
+        });
+
+        expect(removeQueue).not.toHaveBeenCalled();
+    });
+
+    it('ignores refused tracks from a socket that is not the admitted device', async () => {
+        getRoom.mockResolvedValue({
+            id: 'room-id',
+            chatId: 'chat-id',
+            threadId: 42,
+        });
+
+        await gateway.onPlaybackNotification(makeSocket(false) as never, {
+            roomId: 'room-id',
+            type: 'queue-unavailable',
+            videoId: 'dQw4w9WgXcQ',
+            song: 'Title',
+        });
+
+        expect(removeQueue).not.toHaveBeenCalled();
         expect(sendPlaybackNotification).not.toHaveBeenCalled();
     });
 });

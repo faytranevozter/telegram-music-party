@@ -66,6 +66,15 @@ describe('PlaybackService notifications', () => {
             notification: { type: 'lyrics', text: null },
             message: "🤷‍♀️ No lyrics this time—guess we're freestyling!",
         },
+        {
+            notification: {
+                type: 'queue-unavailable',
+                videoId: 'dQw4w9WgXcQ',
+                song: 'Song & <restricted>',
+            },
+            message:
+                '⚠️ <i>"Song &amp; &lt;restricted&gt;"</i> could not be added — YouTube Music refused it (usually a region or premium restriction). Skipped it; try another result.',
+        },
     ])(
         'formats $notification.type notifications',
         async ({ notification, message }) => {

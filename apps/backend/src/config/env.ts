@@ -1,5 +1,6 @@
 import { configDotenv } from 'dotenv';
 import { remoteSearchConfig } from './remote-search';
+import { ytMusicLocale } from './yt-music';
 
 configDotenv();
 
@@ -10,6 +11,7 @@ const parsedRetentionDays = Number.parseInt(
 
 export const ENV = {
     REMOTE_SEARCH: remoteSearchConfig(),
+    YT_MUSIC: ytMusicLocale(),
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN as string,
     REDIS_URL: process.env.REDIS_URL as string,
     ANALYTICS_RETENTION_DAYS: Number.isFinite(parsedRetentionDays)
