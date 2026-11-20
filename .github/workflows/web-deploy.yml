@@ -39,10 +39,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # PRIVACY.md is the source of truth for /privacy. Regenerate so the
-      # deployed page always matches the repository.
-      - name: Generate privacy page
-        run: pnpm --filter=web-landing build:privacy
+      # PRIVACY.md and TERMS.md are the source of truth for /privacy and
+      # /terms. Regenerate so the deployed pages always match the repository.
+      - name: Generate legal pages
+        run: pnpm --filter=web-landing build:legal
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

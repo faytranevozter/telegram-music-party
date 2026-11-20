@@ -2,8 +2,9 @@
 .wrangler/
 .dev.vars
 
-# Generated from the root PRIVACY.md
+# Generated from the root PRIVACY.md and TERMS.md
 public/privacy.html
+public/terms.html
 
 # Build artifact — download from the GitHub Release instead
 public/extension.zip

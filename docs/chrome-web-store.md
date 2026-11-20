@@ -249,6 +249,18 @@ The page is generated from the root `PRIVACY.md` — see
 `apps/web-landing/scripts/build-privacy.mjs`. Keep one source of truth so the
 store listing cannot drift from the repository.
 
+### Terms of Service URL
+
+```text
+https://ytparty.my.id/terms
+```
+
+Generated from the root `TERMS.md` by `apps/web-landing/scripts/build-terms.mjs`.
+The Chrome Web Store listing has no terms field; this URL is used for the OAuth
+consent screen's optional **Application terms of service link** (Google Auth
+Platform → Branding). `pnpm --filter=web-landing build:legal` regenerates both
+legal pages.
+
 The privacy policy should mention:
 
 - What data is processed: room ID, backend URL, generated device ID/fingerprint, browser/OS label, playback state, queue metadata, playback analytics (video ID, title/artist text, timing, observed listening time), and user-selected settings.

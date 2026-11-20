@@ -202,17 +202,20 @@ pnpm --filter=extension build
 ```txt
 apps/backend      NestJS, Telegraf, Socket.IO, Prisma, PostgreSQL, Redis
 apps/extension    React, Vite, Tailwind, HeroUI, MV3 content scripts
-apps/web-landing  Cloudflare Worker serving ytparty.my.id (landing, /privacy, /support)
+apps/web-landing  Cloudflare Worker serving ytparty.my.id (landing, /privacy, /terms, /support)
 packages          Shared packages placeholder
 ```
 
 ## Website
 
 The public site at `https://ytparty.my.id` is a Cloudflare Worker serving static
-assets. The privacy page is generated from the root `PRIVACY.md`.
+assets. The privacy policy and terms are generated from the root `PRIVACY.md` and
+`TERMS.md`.
 
 ```bash
+pnpm --filter=web-landing build:legal     # regenerate /privacy + /terms
 pnpm --filter=web-landing build:privacy   # regenerate /privacy from PRIVACY.md
+pnpm --filter=web-landing build:terms     # regenerate /terms from TERMS.md
 pnpm --filter=web-landing dev             # run locally
 pnpm --filter=web-landing deploy          # deploy to Cloudflare
 ```

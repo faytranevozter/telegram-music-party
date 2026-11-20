@@ -1,9 +1,10 @@
 /**
  * Static site router for ytparty.my.id.
  *
- * Serves the landing page, privacy policy, and support page. The privacy page
- * is generated from the root PRIVACY.md at build time so the Chrome Web Store
- * listing and the repository cannot drift apart.
+ * Serves the landing page, privacy policy, terms, and support page. The legal
+ * pages are generated from the root PRIVACY.md and TERMS.md at build time so
+ * the Chrome Web Store listing, the OAuth consent screen, and the repository
+ * cannot drift apart.
  */
 
 interface Env {
@@ -13,10 +14,12 @@ interface Env {
 const PAGES: Record<string, string> = {
     "/": "index.html",
     "/privacy": "privacy.html",
+    "/terms": "terms.html",
     "/support": "support.html",
     "/gallery": "gallery.html",
     "/gallery/": "gallery.html",
     "/privacy/": "privacy.html",
+    "/terms/": "terms.html",
     "/support/": "support.html",
 };
 

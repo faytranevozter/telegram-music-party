@@ -5,6 +5,9 @@ dist
 .turbo
 # OpenChamber session artifacts
 .openchamber/
+# Google OAuth client downloads (contain a client secret)
+client_secret_*.json
+*.apps.googleusercontent.com.json
 *.db
 *.db-journal
 *.db-shm

@@ -13,9 +13,9 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
   - Popup (`vite.config.ts` → `index.html` + `main.js`)
   - MAIN content script (`vite.config.lib.ts` → `content.js`)
   - ISOLATED bridge (`vite.config.bridge.ts` → `content-bridge.js`)
-- `apps/web-landing` — Cloudflare Worker serving `https://ytparty.my.id`. Static assets in `public/`; `src/worker.ts` routes `/`, `/privacy`, `/support`.
+- `apps/web-landing` — Cloudflare Worker serving `https://ytparty.my.id`. Static assets in `public/`; `src/worker.ts` routes `/`, `/privacy`, `/terms`, `/support`, `/gallery`.
   - **`wrangler.toml` requires explicit `binding = "ASSETS"`** when `main` is set — wrangler does not inject it automatically, and `env.ASSETS` will be `undefined` without it.
-  - `/privacy` is generated from root `PRIVACY.md` by `scripts/build-privacy.mjs`. Run it after editing `PRIVACY.md`.
+  - `/privacy` and `/terms` are generated from the root `PRIVACY.md` and `TERMS.md` by `scripts/build-privacy.mjs` / `scripts/build-terms.mjs` (shared renderer in `scripts/legal-page.mjs`, or `pnpm --filter=web-landing build:legal` for both). Regenerate after editing either document.
 - `packages/` — currently empty (reserved).
 
 ## Public URLs
@@ -23,6 +23,7 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
 - `https://ytparty.my.id` — landing page
 - `https://music.ytparty.my.id` — production backend / default extension party server (Nginx → host port 3010 → container port 3000)
 - `https://ytparty.my.id/privacy` — privacy policy (Chrome Web Store Privacy Policy URL)
+- `https://ytparty.my.id/terms` — terms of service (OAuth consent screen "Application terms of service link")
 - `https://ytparty.my.id/support` — support (Chrome Web Store Support URL)
 
 ## Commands
@@ -52,7 +53,9 @@ pnpm --filter=extension lint
 # Web landing (Cloudflare Worker)
 pnpm --filter=web-landing dev
 pnpm --filter=web-landing deploy
+pnpm --filter=web-landing build:legal     # regenerate /privacy + /terms
 pnpm --filter=web-landing build:privacy   # regenerate /privacy from PRIVACY.md
+pnpm --filter=web-landing build:terms     # regenerate /terms from TERMS.md
 ```
 
 Run a single backend test file: `pnpm --filter=backend test -- <path-or-pattern>`.
