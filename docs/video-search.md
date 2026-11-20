@@ -21,9 +21,13 @@ removed. There is no homepage initialization during Nest startup.
   channels: a channel is **not** an artist identity, so artist analytics stay
   empty and labels read `Channel: …`. Song mode labels read `Artist: …`.
 - Video search is gated per room by the `allowVideoSearch` feature (default off).
-  The inline handler checks the user's last known room; when the room is missing
-  or the flag is off, `#video` returns a short notice instead of results.
-  Plain queries always stay song-only.
+  Inline queries carry no chat ID, so the handler guesses rooms from the user's
+  recent chat/topic pairs (up to five, 15-minute TTL). `#video` is blocked only
+  when every guessed room is known and none enables video search; when no room
+  can be resolved, the search proceeds. The authoritative check runs when a
+  result is added: Add to Queue and Play Next refuse a video result in a room
+  whose `allowVideoSearch` is off, while song results are unaffected. Plain
+  queries always stay song-only.
 - Missing artist/channel labels display `Unknown artist`; missing duration
   displays `Duration unavailable`; missing thumbnails are omitted. Non-HTTPS
   thumbnail URLs are discarded.
@@ -58,8 +62,9 @@ Search mode is not an environment variable.
 - **Per-query override:** type `#video <query>` in inline mode. The token is
   stripped before searching and applies only to that query.
 - **Room permission:** `/config` → **Search → Video Search** toggles the
-  `Feature.allowVideoSearch` column (default `false`). Video results are denied
-  unless the user's last known room has it enabled.
+  `Feature.allowVideoSearch` column (default `false`). Inline `#video` is hidden
+  only when every recent room is known to disable it; adding a video result is
+  refused in any room that disables it.
 - **Cache:** normalized cache keys include the result type, so song and video
   results never share an entry.
 - **Migration:** `20261107120000_add_allow_video_search` adds the boolean column

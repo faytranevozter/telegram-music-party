@@ -21,6 +21,14 @@ const text = (value: unknown): string => {
     return typeof raw === 'string' ? raw.trim() : '';
 };
 
+/** Ordinary video results carry a channel credit and no YouTube Music artist. */
+export function isVideoResult(result: {
+    artistName: string | null;
+    channelName: string | null;
+}): boolean {
+    return !result.artistName && Boolean(result.channelName);
+}
+
 /** Credit line for inline text: artists for songs, channels for videos. */
 export function creditLabel(result: VideoSearchResult): string {
     if (result.artistName) return result.artistName;

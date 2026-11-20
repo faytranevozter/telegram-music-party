@@ -132,7 +132,7 @@ describe('inline song search and queue contract', () => {
         const article = ctx.answerInlineQuery.mock.calls[0][0][0];
         expect(article.description).toContain('Channel: Channel');
     });
-    it.each(['disabled', 'no known room'])(
+    it.each(['disabled'])(
         'rejects #video when Video Search is %s',
         async (mode) => {
             const { controller, cache, provider, ctx } = setup();
@@ -153,6 +153,30 @@ describe('inline song search and queue contract', () => {
             expect(options).toEqual({ cache_time: 5, is_personal: true });
         },
     );
+    it('allows #video when no room can be resolved', async () => {
+        const { controller, provider, ctx } = setup();
+        ctx.update.inline_query.query = '#video a title';
+        await controller.search(ctx);
+        expect(provider.searchSongs).toHaveBeenCalledWith('a title', 'video');
+    });
+    it('allows #video when any recently used room enables it', async () => {
+        const { controller, cache, playback, provider, ctx } = setup();
+        await cache.set('user-loc:42', { chatId: '42', threadId: null });
+        await cache.set('user-recent-locs:42', [
+            { chatId: '-100', threadId: null },
+        ]);
+        playback.getRoomByChatId.mockImplementation((chatId: string) =>
+            chatId === '-100'
+                ? {
+                      id: 'room',
+                      Feature: { allowVideoSearch: true },
+                  }
+                : null,
+        );
+        ctx.update.inline_query.query = '#video a title';
+        await controller.search(ctx);
+        expect(provider.searchSongs).toHaveBeenCalledWith('a title', 'video');
+    });
     it.each(['short', 'empty/outage'])(
         'answers %s queries with a short personal cache',
         async (mode) => {
@@ -217,7 +241,7 @@ describe('inline song search and queue contract', () => {
         },
     );
     it('labels video channels without claiming an artist', async () => {
-        const { controller, cache, analytics, ctx } = setup();
+        const { controller, cache, playback, analytics, ctx } = setup();
         const video: VideoSearchResult = {
             ...result,
             artistName: null,
@@ -225,6 +249,15 @@ describe('inline song search and queue contract', () => {
         };
         await cache.set('song:v3:inline:dQw4w9WgXcQ', video);
         jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(true);
+        playback.getRoomByChatId.mockResolvedValue({
+            id: 'room',
+            Feature: {
+                maxQueueSize: 10,
+                playNextCommand: true,
+                dailyPlayNextLimit: 0,
+                allowVideoSearch: true,
+            },
+        });
         await (controller as any).completeAddToQueue(ctx, {
             videoId: video.videoId,
             inlineMessageId: 'inline',
@@ -239,4 +272,33 @@ describe('inline song search and queue contract', () => {
             'Channel: A &amp; B',
         );
     });
+    it.each(['completeAddToQueue', 'completePlayNext'])(
+        'refuses a video in a room without Video Search via %s',
+        async (action) => {
+            const { controller, cache, playback, gateway, analytics, ctx } =
+                setup();
+            await cache.set('song:v3:inline:dQw4w9WgXcQ', {
+                ...result,
+                artistName: null,
+                channelName: 'Channel',
+            });
+            jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
+                true,
+            );
+            await (controller as any)[action](ctx, {
+                videoId: result.videoId,
+                inlineMessageId: 'inline',
+                chatId: '-100',
+                threadId: null,
+                userId: 42,
+            });
+            expect(playback.addToQueue).not.toHaveBeenCalled();
+            expect(playback.addPlayNext).not.toHaveBeenCalled();
+            expect(gateway.addToQueueCommand).not.toHaveBeenCalled();
+            expect(analytics.recordRequest).not.toHaveBeenCalled();
+            expect(ctx.telegram.editMessageText.mock.calls[0][3]).toContain(
+                'Video Search is disabled in this room',
+            );
+        },
+    );
 });

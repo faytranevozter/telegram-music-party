@@ -1,5 +1,6 @@
 import {
     creditLabel,
+    isVideoResult,
     normalizeSongs,
     normalizeVideos,
     SearchProviderError,
@@ -253,5 +254,26 @@ describe('YouTube Music song normalization', () => {
                 thumbnailUrl: null,
             }),
         ).toBe('Channel: Channel');
+    });
+    it('only treats channel results without an artist as videos', () => {
+        const base = {
+            videoId: 'dQw4w9WgXcQ',
+            title: 'Row',
+            durationSeconds: null,
+            thumbnailUrl: null,
+        };
+        expect(
+            isVideoResult({
+                ...base,
+                artistName: null,
+                channelName: 'Channel',
+            }),
+        ).toBe(true);
+        expect(
+            isVideoResult({ ...base, artistName: 'Artist', channelName: null }),
+        ).toBe(false);
+        expect(
+            isVideoResult({ ...base, artistName: null, channelName: null }),
+        ).toBe(false);
     });
 });

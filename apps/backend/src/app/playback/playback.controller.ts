@@ -20,7 +20,7 @@ import { PlaybackService } from './playback.service';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
-import { creditLabel } from 'src/platform/video-search';
+import { creditLabel, isVideoResult } from 'src/platform/video-search';
 import {
     escapeHtml,
     formatDateTime,
@@ -39,6 +39,8 @@ import { validateConfigNumber } from 'src/helpers/validation';
 import type { Feature } from '@prisma/client';
 
 const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+/** How many chat/topic pairs to keep per user for inline room lookups. */
+const USER_LOCATION_LIMIT = 5;
 
 const getThreadId = (ctx: Context): number | null => {
     const msg = (ctx.msg ?? ctx.editedMessage) as
@@ -219,9 +221,26 @@ export class PlaybackTelegramController {
         threadId: number | null,
     ) {
         if (!userId || !chatId) return;
+        const location: InlineChatLocation = { chatId, threadId };
         await this.cacheManager.set<InlineChatLocation>(
             `user-loc:${userId}`,
-            { chatId, threadId },
+            location,
+            SONG_CACHE_TTL,
+        );
+        // Keep a short list too: inline queries carry no chat, and one slot is
+        // easily overwritten by a DM or by another room.
+        const key = `user-recent-locs:${userId}`;
+        const recent =
+            (await this.cacheManager.get<InlineChatLocation[]>(key)) ?? [];
+        const next = [
+            location,
+            ...recent.filter(
+                (row) => row.chatId !== chatId || row.threadId !== threadId,
+            ),
+        ].slice(0, USER_LOCATION_LIMIT);
+        await this.cacheManager.set<InlineChatLocation[]>(
+            key,
+            next,
             SONG_CACHE_TTL,
         );
     }
@@ -409,24 +428,64 @@ export class PlaybackTelegramController {
         ]);
     }
 
-    private buildVideoSearchNotice(
-        inlineQueryID: string,
-        hasRoom: boolean,
-    ): InlineQueryResult {
-        const description = hasRoom
-            ? 'Ask a room admin to enable Video Search in /config.'
-            : 'Use a registered room with Video Search enabled.';
+    private buildVideoSearchNotice(inlineQueryID: string): InlineQueryResult {
         return {
             id: `${inlineQueryID}:video-disabled`,
             type: 'article',
             title: 'Video search is disabled',
-            description,
+            description: 'Ask a room admin to enable Video Search in /config.',
             input_message_content: {
-                message_text: hasRoom
-                    ? 'Video search is disabled in this room. Ask an admin to enable Video Search in /config.'
-                    : 'Video search requires a registered room with Video Search enabled.',
+                message_text:
+                    'Video Search is disabled in this room. Ask an admin to enable Video Search in /config.',
             },
         };
+    }
+
+    /**
+     * Best-effort inline permission check. Inline queries carry no chat, so the
+     * room is guessed from the user's recent messages. Unknown rooms are allowed
+     * here; the add/Play Next path enforces the room setting for real.
+     */
+    private async videoSearchAllowed(userId: number): Promise<boolean> {
+        const primary = await this.cacheManager.get<InlineChatLocation>(
+            `user-loc:${userId}`,
+        );
+        const recent =
+            (await this.cacheManager.get<InlineChatLocation[]>(
+                `user-recent-locs:${userId}`,
+            )) ?? [];
+        const locations = (primary ? [primary, ...recent] : recent).filter(
+            (location) => location?.chatId,
+        );
+        const seen = new Set<string>();
+        let knownRoom = false;
+        for (const location of locations) {
+            const key = `${location.chatId}:${location.threadId ?? ''}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const room = await this.playbackService.getRoomByChatId(
+                location.chatId,
+                location.threadId,
+            );
+            if (!room) continue;
+            knownRoom = true;
+            if (room.Feature?.allowVideoSearch === true) return true;
+        }
+        // No known room: let the search through, the queue action decides.
+        return !knownRoom;
+    }
+
+    /** Replace the inline message when a video cannot be added to this room. */
+    private async refuseVideoSearch(ctx: Context, inlineMessageId: string) {
+        await this.safeEdit(() =>
+            ctx.telegram.editMessageText(
+                undefined,
+                undefined,
+                inlineMessageId,
+                '🎬 Video Search is disabled in this room. Ask an admin to enable Video Search in /config.',
+                { parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } },
+            ),
+        );
     }
 
     /** Plain and HTML forms of "title - credit [duration]". */
@@ -1638,7 +1697,8 @@ export class PlaybackTelegramController {
         if (!inlineQueryID) return;
 
         // `#video <query>` opts into video results for this query only. Songs
-        // stay the default; the room must allow video search.
+        // stay the default; a known room without Video Search blocks it, and
+        // the queue action enforces the room setting when the room is certain.
         const rawQuery = searchQuery?.trim() ?? '';
         const videoPrefix = /^#video(?:\s+|$)/i.exec(rawQuery);
         const wantsVideo = Boolean(videoPrefix);
@@ -1657,20 +1717,12 @@ export class PlaybackTelegramController {
         const userLoc = await this.cacheManager.get<InlineChatLocation>(
             `user-loc:${senderID}`,
         );
-        if (wantsVideo) {
-            const room = userLoc?.chatId
-                ? await this.playbackService.getRoomByChatId(
-                      userLoc.chatId,
-                      userLoc.threadId,
-                  )
-                : null;
-            if (room?.Feature?.allowVideoSearch !== true) {
-                await ctx.answerInlineQuery(
-                    [this.buildVideoSearchNotice(inlineQueryID, Boolean(room))],
-                    { cache_time: 5, is_personal: true },
-                );
-                return;
-            }
+        if (wantsVideo && !(await this.videoSearchAllowed(senderID))) {
+            await ctx.answerInlineQuery(
+                [this.buildVideoSearchNotice(inlineQueryID)],
+                { cache_time: 5, is_personal: true },
+            );
+            return;
         }
 
         const songs = await this.ytmusicService.searchSongs(
@@ -2024,6 +2076,16 @@ export class PlaybackTelegramController {
                 return;
             }
 
+            // Authoritative per-room gate for video results: inline queries
+            // have no chat, so the room is only certain here.
+            if (
+                isVideoResult(cachedSong) &&
+                room.Feature?.allowVideoSearch !== true
+            ) {
+                await this.refuseVideoSearch(ctx, inlineMessageId);
+                return;
+            }
+
             if (queues.find((q) => q.url === videoId)) {
                 await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
                 await this.safeEdit(() =>
@@ -2173,6 +2235,15 @@ export class PlaybackTelegramController {
                         },
                     ),
                 );
+                return;
+            }
+
+            // Authoritative per-room gate for video results; see completeAddToQueue.
+            if (
+                isVideoResult(cachedSong) &&
+                room.Feature?.allowVideoSearch !== true
+            ) {
+                await this.refuseVideoSearch(ctx, inlineMessageId);
                 return;
             }
 
