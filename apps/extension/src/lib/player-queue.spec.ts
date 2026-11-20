@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parsePlayerQueue, readPlayerQueue, waitForQueueItem, watchPlayerQueue, splitQueue } from "./player-queue";
+import {
+    parsePlayerQueue,
+    playerQueueIndex,
+    queueInsertIndex,
+    readPlayerQueue,
+    splitQueue,
+    upcomingVideoIds,
+    waitForQueueItem,
+    watchPlayerQueue,
+} from "./player-queue";
 
 const track = (id: string, selected = false) => ({
     playlistPanelVideoRenderer: {
@@ -149,5 +158,46 @@ describe("player queue", () => {
         const read = () => ({ available: false, items: [] });
 
         await expect(waitForQueueItem("refused", 200, read)).resolves.toBe("unknown");
+    });
+});
+
+describe("queue placement", () => {
+    it("puts play next directly after the current track", () => {
+        const items = [track("history"), track("current", true), track("later")];
+
+        expect(playerQueueIndex(items)).toBe(1);
+        expect(queueInsertIndex(items, "next")).toBe(2);
+        expect(queueInsertIndex(items, "end")).toBe(3);
+    });
+
+    it("uses the store's selected index when the renderer drops the flag", () => {
+        const items = [track("current"), track("later")];
+
+        expect(playerQueueIndex(items)).toBe(-1);
+        expect(queueInsertIndex(items, "next", 0)).toBe(1);
+    });
+
+    it("appends instead of guessing an unusable index", () => {
+        const items = [track("a"), track("b"), track("c")];
+
+        expect(queueInsertIndex(items, "next")).toBe(3);
+        expect(queueInsertIndex(items, "next", 9)).toBe(3);
+    });
+
+    it("only treats the current track and what follows it as queued", () => {
+        const items = [
+            ...parsePlayerQueue([track("played"), track("current", true), track("later")]),
+            ...parsePlayerQueue([track("preview")]).map((item) => ({
+                ...item,
+                id: `automix:${item.id}`,
+            })),
+        ];
+
+        const ids = upcomingVideoIds(items);
+
+        expect([...ids]).toEqual(["current", "later"]);
+        expect(ids.has("played")).toBe(false);
+        expect(ids.has("preview")).toBe(false);
+        expect(upcomingVideoIds(items, "playing").has("playing")).toBe(true);
     });
 });

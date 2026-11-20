@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from "socket.io-client";
-import { readPlayerQueue, waitForQueueItem } from "./player-queue";
+import {
+    queueInsertIndex,
+    readPlayerQueue,
+    upcomingVideoIds,
+    waitForQueueItem,
+} from "./player-queue";
 import { DEFAULT_PARTY_URL, getConfig } from "../constants/config";
 import {
     applyContinueWatchingSetting,
@@ -78,19 +83,6 @@ type PlaybackNotification =
     | { type: "lyrics"; text: string | null }
     | { type: "queue-unavailable"; videoId: string; song: string };
 
-function getSelectedRenderer(item: unknown): Record<string, any> | undefined {
-    if (!item || typeof item !== "object") return undefined;
-    const it = item as Record<string, any>;
-    return (
-        it.playlistPanelVideoRenderer ||
-        it.playlistPanelVideoWrapperRenderer?.primaryRenderer
-            ?.playlistPanelVideoRenderer ||
-        it.content?.playlistPanelVideoRenderer ||
-        it.content?.playlistPanelVideoWrapperRenderer?.primaryRenderer
-            ?.playlistPanelVideoRenderer
-    );
-}
-
 function getYtQueueVideoIds(): Set<string> {
     const ids = new Set<string>();
     for (const item of readPlayerQueue().items) {
@@ -99,6 +91,15 @@ function getYtQueueVideoIds(): Set<string> {
     const currentId = getVideoId();
     if (currentId) ids.add(currentId);
     return ids;
+}
+
+/**
+ * Videos the player still has ahead of it. Adding a track that only sits in the
+ * player's history (or in the automix preview) must re-queue it, otherwise the
+ * room row waits for a playback that never comes.
+ */
+function getUpcomingVideoIds(): Set<string> {
+    return upcomingVideoIds(readPlayerQueue().items, getVideoId());
 }
 
 function getMissingQueueIds(serverQueues: Queue[]): string[] {
@@ -223,13 +224,13 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
             ) {
                 const currentState = store.getState().queue;
                 const queueItems = currentState.items;
-                const queueItemsLength = queueItems.length ?? 0;
-                const index =
-                    position === "next"
-                        ? queueItems.findIndex((it: any) =>
-                              getSelectedRenderer(it)?.selected,
-                          ) + 1 || queueItemsLength
-                        : queueItemsLength;
+                // Read the selection again: the track may have changed while
+                // music/get_queue was in flight.
+                const index = queueInsertIndex(
+                    queueItems,
+                    position,
+                    currentState.selectedItemIndex,
+                );
                 queue?.dispatch({
                     type: "ADD_ITEMS",
                     payload: {
@@ -717,7 +718,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            if (getYtQueueVideoIds().has(videoId)) return;
+            if (getUpcomingVideoIds().has(videoId)) return;
 
             // music/get_queue silently drops unplayable tracks (region lock,
             // premium-only), so verify the player really accepted the request.

@@ -107,3 +107,34 @@ describe('PlaybackService notifications', () => {
         expect(sendMessage).not.toHaveBeenCalled();
     });
 });
+
+describe('PlaybackService queue cleanup', () => {
+    const deleteMany = jest.fn();
+    const prisma = {
+        queue: { deleteMany },
+    } as unknown as PrismaService;
+    const bot = {
+        telegram: { sendMessage: jest.fn() },
+    } as unknown as Telegraf<Context>;
+    let service: PlaybackService;
+
+    beforeEach(() => {
+        deleteMany.mockReset();
+        deleteMany.mockResolvedValue({ count: 0 });
+        service = new PlaybackService(prisma, bot);
+    });
+
+    it('drops a departed track only up to the moment it started', async () => {
+        const startedAt = new Date('2026-01-01T00:00:00.000Z');
+
+        await service.removeQueueBefore('room-id', 'dQw4w9WgXcQ', startedAt);
+
+        expect(deleteMany).toHaveBeenCalledWith({
+            where: {
+                roomId: 'room-id',
+                url: 'dQw4w9WgXcQ',
+                createdAt: { lte: startedAt },
+            },
+        });
+    });
+});

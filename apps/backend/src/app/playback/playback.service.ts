@@ -63,6 +63,23 @@ export class PlaybackService {
         });
     }
 
+    /**
+     * Drop the row of a track that left the player without playing. The cutoff
+     * keeps a fresh request for the same video (queued while it was playing)
+     * out of the deletion.
+     */
+    async removeQueueBefore(roomId: string, videoId: string, before: Date) {
+        await this.prisma.queue.deleteMany({
+            where: {
+                roomId,
+                url: videoId,
+                createdAt: {
+                    lte: before,
+                },
+            },
+        });
+    }
+
     async removeLastPlayed(roomId: string) {
         const data = await this.prisma.queue.findFirst({
             where: {

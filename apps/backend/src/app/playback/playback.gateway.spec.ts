@@ -454,6 +454,67 @@ describe('PlaybackGateway playback reports', () => {
     });
 });
 
+describe('PlaybackGateway song starts', () => {
+    const getRoom = jest.fn();
+    const removeQueue = jest.fn();
+    const removeQueueBefore = jest.fn();
+    const removeRoomVotes = jest.fn();
+    let gateway: PlaybackGateway;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        getRoom.mockResolvedValue({ id: 'room-id' });
+        removeQueue.mockResolvedValue(undefined);
+        removeQueueBefore.mockResolvedValue(undefined);
+        removeRoomVotes.mockResolvedValue(undefined);
+        gateway = new PlaybackGateway(
+            {
+                getRoom,
+                removeQueue,
+                removeQueueBefore,
+                removeRoomVotes,
+            } as unknown as PlaybackService,
+            {} as AnalyticsService,
+        );
+    });
+
+    it('clears the started track and the one it replaced', async () => {
+        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'first' });
+        await gateway.onStartedNewSong({
+            roomId: 'room-id',
+            videoId: 'second',
+        });
+
+        expect(removeQueue).toHaveBeenLastCalledWith('room-id', 'second');
+        expect(removeQueueBefore).toHaveBeenCalledTimes(1);
+        expect(removeQueueBefore).toHaveBeenCalledWith(
+            'room-id',
+            'first',
+            expect.any(Date),
+        );
+        expect(removeRoomVotes).toHaveBeenCalledTimes(2);
+    });
+
+    it('never deletes a repeat through the previous-track path', async () => {
+        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
+        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
+
+        expect(removeQueueBefore).not.toHaveBeenCalled();
+    });
+
+    it('ignores starts reported for unknown rooms', async () => {
+        getRoom.mockResolvedValue(null);
+
+        await gateway.onStartedNewSong({
+            roomId: 'missing-room',
+            videoId: 'song',
+        });
+
+        expect(removeQueue).not.toHaveBeenCalled();
+        expect(removeRoomVotes).not.toHaveBeenCalled();
+    });
+});
+
 describe('PlaybackGateway notifications', () => {
     const getRoom = jest.fn();
     const sendPlaybackNotification = jest.fn();
@@ -493,7 +554,10 @@ describe('PlaybackGateway notifications', () => {
             type: 'queue-empty' as const,
         };
 
-        await gateway.onPlaybackNotification(makeSocket() as never, notification);
+        await gateway.onPlaybackNotification(
+            makeSocket() as never,
+            notification,
+        );
 
         expect(sendPlaybackNotification).toHaveBeenCalledWith(
             'chat-id',

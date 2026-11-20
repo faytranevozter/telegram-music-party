@@ -2140,7 +2140,7 @@ export class PlaybackTelegramController {
             // Mark done before clearing song cache so a concurrent path cannot
             // rewrite the success message as "link expired".
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-            await ctx.answerCbQuery('Added to Play Next');
+            await ctx.answerCbQuery('Added to queue');
 
             await this.safeEdit(() =>
                 ctx.telegram.editMessageText(

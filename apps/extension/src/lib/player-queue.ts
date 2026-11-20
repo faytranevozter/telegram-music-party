@@ -71,6 +71,59 @@ export function parsePlayerQueue(items: unknown[]): QueueItem[] {
     });
 }
 
+/**
+ * Index of the track the player is on, taken from the raw store array so it can
+ * be used as an `ADD_ITEMS` index. Some player versions drop the `selected`
+ * flag from the renderer and only expose `selectedItemIndex`.
+ */
+export function playerQueueIndex(
+    items: unknown[],
+    selectedItemIndex?: unknown,
+): number {
+    const selected = items.findIndex(
+        (item) => parsePlayerQueue([item])[0]?.current === true,
+    );
+    if (selected >= 0) return selected;
+    return typeof selectedItemIndex === "number" &&
+        selectedItemIndex >= 0 &&
+        selectedItemIndex < items.length
+        ? selectedItemIndex
+        : -1;
+}
+
+/**
+ * Where `music/get_queue` items belong: directly after the current track for
+ * "next", at the tail for "end". Appending when the current track cannot be
+ * identified is safer than guessing a position the player will skip over.
+ */
+export function queueInsertIndex(
+    items: unknown[],
+    position: "end" | "next",
+    selectedItemIndex?: unknown,
+): number {
+    if (position === "end") return items.length;
+    const current = playerQueueIndex(items, selectedItemIndex);
+    return current >= 0 ? current + 1 : items.length;
+}
+
+/**
+ * Videos the player has not passed yet: the current track and everything after
+ * it. History and the automix preview are not upcoming — treating an already
+ * played track as queued makes Play Next a silent no-op while the room keeps
+ * the row forever.
+ */
+export function upcomingVideoIds(
+    items: QueueItem[],
+    currentVideoId?: string | null,
+): Set<string> {
+    const currentIndex = items.findIndex((item) => item.current);
+    const upcoming = (currentIndex >= 0 ? items.slice(currentIndex) : items)
+        .filter((item) => !item.id.startsWith("automix:"));
+    const ids = new Set(upcoming.map((item) => item.url));
+    if (currentVideoId) ids.add(currentVideoId);
+    return ids;
+}
+
 function getStore(): QueueStore | undefined {
     const queue = document.querySelector("#queue") as (Element & {
         queue?: { store?: { store?: QueueStore } };

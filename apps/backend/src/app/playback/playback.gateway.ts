@@ -33,6 +33,17 @@ export class PlaybackGateway implements OnGatewayDisconnect {
     /** Serializes join admission per room so concurrent joins can't both win. */
     private readonly roomLocks = new Map<string, Promise<void>>();
 
+    /**
+     * Last track each room's player reported starting. The room queue is only
+     * told what *started*, so a track that was skipped (or that played right
+     * after a Play Next) never announces its own departure and would stay
+     * queued forever.
+     */
+    private readonly lastStarted = new Map<
+        string,
+        { videoId: string; at: Date }
+    >();
+
     private withRoomLock<T>(roomId: string, fn: () => Promise<T>): Promise<T> {
         const previous = this.roomLocks.get(roomId) ?? Promise.resolve();
         const run = previous.then(fn, fn);
@@ -329,7 +340,24 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         }
 
         if (data.videoId) {
+            const previous = this.lastStarted.get(data.roomId);
+            this.lastStarted.set(data.roomId, {
+                videoId: data.videoId,
+                at: new Date(),
+            });
+
             await this.playbackService.removeQueue(data.roomId, data.videoId);
+
+            // The queue also had to forget the track this one replaced: after a
+            // skip or a Play Next it never played to its end, so nothing else
+            // would remove it.
+            if (previous && previous.videoId !== data.videoId) {
+                await this.playbackService.removeQueueBefore(
+                    data.roomId,
+                    previous.videoId,
+                    previous.at,
+                );
+            }
         }
 
         // clear votes
