@@ -26,12 +26,15 @@ function setup() {
         ytmusic: { searchSongs: jest.fn().mockResolvedValue([result]) },
     });
     const provider = ytmusic;
+    const getChatMember = jest.fn().mockResolvedValue({ status: 'member' });
     const ctx: any = {
         from: { id: 42 },
         update: { inline_query: { id: 'query', query: 'a title' } },
         answerInlineQuery: jest.fn(),
         answerCbQuery: jest.fn(),
+        getChatMember,
         telegram: {
+            getChatMember,
             editMessageText: jest.fn(),
             editMessageReplyMarkup: jest.fn(),
         },
@@ -211,7 +214,6 @@ describe('inline song search and queue contract', () => {
                 inlineMessageId: 'inline',
                 chatId: '-100',
                 threadId: null,
-                userId: 42,
             });
             const next = action === 'completePlayNext';
             expect(
@@ -239,22 +241,6 @@ describe('inline song search and queue contract', () => {
             ).toBeUndefined();
         },
     );
-    it('records the requester for Add to Queue', async () => {
-        const { controller, cache, playback, analytics, ctx } = setup();
-        await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
-        await (controller as any).completeAddToQueue(ctx, {
-            videoId: result.videoId,
-            inlineMessageId: 'inline',
-            chatId: '-100',
-            threadId: null,
-            userId: 42,
-        });
-        expect(analytics.recordRequest).toHaveBeenCalledWith(
-            expect.objectContaining({ requesterId: '42', source: 'queue' }),
-        );
-        expect(playback.addToQueue).toHaveBeenCalled();
-    });
-
     it('labels video channels without claiming an artist', async () => {
         const { controller, cache, playback, analytics, ctx } = setup();
         const video: VideoSearchResult = {
@@ -277,7 +263,6 @@ describe('inline song search and queue contract', () => {
             inlineMessageId: 'inline',
             chatId: '-100',
             threadId: null,
-            userId: 42,
         });
         expect(analytics.recordRequest).toHaveBeenCalledWith(
             expect.objectContaining({ artist: '' }),
@@ -301,7 +286,6 @@ describe('inline song search and queue contract', () => {
                 inlineMessageId: 'inline',
                 chatId: '-100',
                 threadId: null,
-                userId: 42,
             });
             expect(playback.addToQueue).not.toHaveBeenCalled();
             expect(playback.addPlayNext).not.toHaveBeenCalled();

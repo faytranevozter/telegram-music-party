@@ -197,18 +197,31 @@ describe('QueueRequestService.request', () => {
         expect(quota.record).not.toHaveBeenCalled();
     });
 
-    it('does not look up the actor admin status when there is no limit', async () => {
-        const { service, input } = build({
+    it('records the allowance for a non-admin even in an unlimited room', async () => {
+        const { service, quota, input } = build({
             feature: {
                 maxQueueSize: 10,
                 playNextCommand: true,
                 dailyPlayNextLimit: 0,
             },
         });
-        const adminSpy = jest.spyOn(input.actor, 'isAdmin');
         const result = await service.request({ ...input, position: 'next' });
         expect(result.status).toBe('added');
-        expect(adminSpy).not.toHaveBeenCalled();
+        expect(quota.record).toHaveBeenCalledWith('room', '7');
+    });
+
+    it('never records the allowance for an admin in an unlimited room', async () => {
+        const { service, quota, input } = build({
+            feature: {
+                maxQueueSize: 10,
+                playNextCommand: true,
+                dailyPlayNextLimit: 0,
+            },
+            admin: true,
+        });
+        const result = await service.request({ ...input, position: 'next' });
+        expect(result.status).toBe('added');
+        expect(quota.record).not.toHaveBeenCalled();
     });
 
     it('queues a request at the end with analytics and a player event', async () => {
@@ -274,7 +287,6 @@ describe('QueueRequestService.request', () => {
         const result = await service.request({ ...input, position: 'end' });
 
         expect(result.status).toBe('added');
-        expect(result).toMatchObject({ status: 'added' });
         expect((result as { requestId?: string }).requestId).toBeUndefined();
         expect(playback.addToQueue).toHaveBeenCalledWith(
             'room',

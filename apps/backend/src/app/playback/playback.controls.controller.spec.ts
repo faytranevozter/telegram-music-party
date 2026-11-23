@@ -2,7 +2,6 @@
    calls so the move onto authorizeControl cannot change behavior. Partial
    Telegraf contexts are deliberate test doubles. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
-import { authorizeControl } from './core/control-access';
 import { VoteService } from './core/vote.service';
 import { buildController, groupContext } from './testing/controller-harness';
 
@@ -126,6 +125,61 @@ describe('playback controls access', () => {
     });
 });
 
+describe('autoplay confirmation callback', () => {
+    function autoplayCtx() {
+        const { ctx, getChatMember } = groupContext({ status: 'member' });
+        ctx.match = ['autoplay:radio', 'radio'];
+        ctx.callbackQuery = {
+            message: { message_id: 9, chat: { id: -100 } },
+        };
+        ctx.editMessageText = jest.fn();
+        return { ctx, getChatMember };
+    }
+
+    it('answers "Feature disabled" and clears the keyboard when radio is off', async () => {
+        const { controller, gateway } = buildController({
+            playback: room({ radioCommand: false }) as any,
+        });
+        const { ctx } = autoplayCtx();
+
+        await controller.confirmAutoplay(ctx);
+
+        expect(ctx.answerCbQuery).toHaveBeenCalledWith('Feature disabled');
+        expect(ctx.editMessageText).toHaveBeenCalledWith(
+            '⚠️ This feature is currently disabled.',
+            { reply_markup: { inline_keyboard: [] } },
+        );
+        expect(gateway.startRadio).not.toHaveBeenCalled();
+    });
+
+    it('answers "Admin only" for a member and does not start radio', async () => {
+        const { controller, gateway } = buildController({
+            playback: room({ radioCommand: true, radioOnlyAdmin: true }) as any,
+        });
+        const { ctx } = autoplayCtx();
+
+        await controller.confirmAutoplay(ctx);
+
+        expect(ctx.answerCbQuery).toHaveBeenCalledWith('Admin only');
+        expect(gateway.startRadio).not.toHaveBeenCalled();
+    });
+
+    it('starts radio for an admin', async () => {
+        const { controller, gateway } = buildController({
+            playback: room({ radioCommand: true, radioOnlyAdmin: true }) as any,
+        });
+        gateway.startRadio = jest.fn().mockResolvedValue({ status: 'ok' });
+        const { ctx } = autoplayCtx();
+        (ctx.telegram.getChatMember as jest.Mock).mockResolvedValue({
+            status: 'administrator',
+        });
+
+        await controller.confirmAutoplay(ctx);
+
+        expect(gateway.startRadio).toHaveBeenCalledWith('room');
+    });
+});
+
 describe('authorizeControl is the only admin gate used by controls', () => {
     it('never asks Telegram for membership when no control is restricted', async () => {
         const { controller, gateway } = buildController({
@@ -142,12 +196,6 @@ describe('authorizeControl is the only admin gate used by controls', () => {
         expect(gateway.nextCommand).toHaveBeenCalledWith('room');
         expect(gateway.muteCommand).toHaveBeenCalledWith('room');
     });
-});
-
-// Guard: the policy itself stays covered here too, since the controller now
-// depends on it for every control.
-it('imports the shared policy', () => {
-    expect(typeof authorizeControl).toBe('function');
 });
 
 function votingRoom(options: {

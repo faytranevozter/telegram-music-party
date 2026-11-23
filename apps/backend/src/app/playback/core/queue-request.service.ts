@@ -80,12 +80,14 @@ export class QueueRequestService {
         let limitReached = false;
         let used = 0;
         let limit = 0;
-        let isAdmin = false;
+        // The old bot always resolved admin status for Play Next and always
+        // counted non-admin plays, even in unlimited rooms, so the daily key is
+        // written for them too. Turning a limit on mid-day then still counts
+        // today's usage.
+        const isAdmin = playNext ? await actor.isAdmin() : false;
         if (playNext) {
             limit = room.Feature?.dailyPlayNextLimit ?? 0;
             if (limit > 0) {
-                // Only a real limit needs the (network) admin lookup.
-                isAdmin = await actor.isAdmin();
                 used = await this.playNextQuota.used(room.id, actor.userRef);
                 limitReached = !isAdmin && used >= limit;
             }
@@ -138,7 +140,7 @@ export class QueueRequestService {
             throw error;
         }
 
-        if (playNext && limit > 0 && !isAdmin) {
+        if (playNext && !isAdmin) {
             await this.playNextQuota.record(room.id, actor.userRef);
         }
 

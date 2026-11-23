@@ -16,9 +16,20 @@ function makeActor(isAdmin: boolean) {
 }
 
 describe('authorizeControl', () => {
-    it('allows every control in a room without a Feature row', async () => {
-        const { actor } = makeActor(false);
-        expect(await authorizeControl(null, 'next', actor)).toBe('ok');
+    it('allows each control in a room without a Feature row', async () => {
+        const { actor, isAdminFn } = makeActor(false);
+        for (const control of [
+            'next',
+            'previous',
+            'radio',
+            'refresh',
+            'mute',
+            'unmute',
+            'volume',
+        ] as const) {
+            expect(await authorizeControl(null, control, actor)).toBe('ok');
+        }
+        expect(isAdminFn).not.toHaveBeenCalled();
     });
 
     it('reports a disabled control without checking admin', async () => {

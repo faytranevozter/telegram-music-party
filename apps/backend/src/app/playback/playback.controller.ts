@@ -1937,7 +1937,6 @@ export class PlaybackTelegramController {
             inlineMessageId: string;
             chatId: string;
             threadId: number | null;
-            userId?: number;
         },
     ) {
         const { videoId, inlineMessageId, chatId, threadId } = params;
@@ -2054,7 +2053,6 @@ export class PlaybackTelegramController {
             inlineMessageId: string;
             chatId: string;
             threadId: number | null;
-            userId: number;
         },
     ) {
         const { videoId, inlineMessageId, chatId, threadId } = params;
@@ -2272,7 +2270,6 @@ export class PlaybackTelegramController {
             inlineMessageId,
             chatId,
             threadId,
-            userId: ctx.from.id,
         });
     }
 
@@ -2375,7 +2372,6 @@ export class PlaybackTelegramController {
             inlineMessageId,
             chatId,
             threadId,
-            userId: ctx.from.id,
         });
     }
 

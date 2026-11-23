@@ -32,6 +32,8 @@ export function buildController(overrides: Partial<Deps> = {}) {
             volumeUp: jest.fn(),
             volumeDown: jest.fn(),
             addToQueueCommand: jest.fn(),
+            startRadio: jest.fn().mockResolvedValue({ status: 'ok' }),
+            refreshAutoplay: jest.fn().mockResolvedValue({ status: 'ok' }),
             leave: jest.fn(),
         } as Record<string, jest.Mock>);
     const playback =
@@ -65,7 +67,11 @@ export function buildController(overrides: Partial<Deps> = {}) {
     const voteService =
         overrides.voteService ??
         ({
-            castNextVote: jest.fn().mockResolvedValue({ status: 'counted' }),
+            castNextVote: jest.fn().mockResolvedValue({
+                status: 'counted',
+                count: 1,
+                required: 5,
+            }),
         } as Record<string, jest.Mock>);
     const playNextQuota =
         overrides.playNextQuota ??
