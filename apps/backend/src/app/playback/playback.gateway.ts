@@ -8,6 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PlaybackService } from './playback.service';
+import { TelegramNotifier } from './telegram-notifier';
 import {
     AutoplayResult,
     Join,
@@ -27,6 +28,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
     constructor(
         private readonly playbackService: PlaybackService,
         private readonly analyticsService: AnalyticsService,
+        private readonly telegramNotifier: TelegramNotifier,
     ) {}
     @WebSocketServer() wss: Server;
 
@@ -231,11 +233,13 @@ export class PlaybackGateway implements OnGatewayDisconnect {
                 );
 
                 // send message
-                await this.playbackService.sendMessage(
-                    room.chatId,
-                    room.threadId,
-                    `${data.browser} joined`,
-                );
+                if (room.chatId) {
+                    await this.telegramNotifier.sendMessage(
+                        room.chatId,
+                        room.threadId,
+                        `${data.browser} joined`,
+                    );
+                }
             }
 
             void socket.join(room.id);
@@ -272,11 +276,13 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             return;
         }
 
-        await this.playbackService.sendMessage(
-            device.room.chatId,
-            device.room.threadId,
-            `${device.name} leaved`,
-        );
+        if (device.room.chatId) {
+            await this.telegramNotifier.sendMessage(
+                device.room.chatId,
+                device.room.threadId,
+                `${device.name} leaved`,
+            );
+        }
 
         // remove device
         await this.playbackService.removeDevice(data.roomId, data.fingerprint);
@@ -417,7 +423,11 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             await this.playbackService.removeQueue(data.roomId, data.videoId);
         }
 
-        await this.playbackService.sendPlaybackNotification(
+        // Rooms without a Telegram chat (web-only rooms) have nowhere to send
+        // the message; the notification still has no other side effect.
+        if (!room.chatId) return;
+
+        await this.telegramNotifier.sendPlaybackNotification(
             room.chatId,
             room.threadId,
             data,

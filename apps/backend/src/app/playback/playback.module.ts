@@ -8,6 +8,7 @@ import { YTMusicService } from 'src/platform/yt-music.service';
 import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { QueueRequestService } from './core/queue-request.service';
+import { TelegramNotifier } from './telegram-notifier';
 
 @Module({
     imports: [AnalyticsModule],
@@ -21,6 +22,7 @@ import { QueueRequestService } from './core/queue-request.service';
         VoteService,
         PlayNextQuotaService,
         QueueRequestService,
+        TelegramNotifier,
     ],
     exports: [],
 })
