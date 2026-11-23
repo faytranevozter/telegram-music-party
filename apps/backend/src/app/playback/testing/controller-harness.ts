@@ -11,6 +11,7 @@ type Deps = {
     analytics: Record<string, jest.Mock>;
     ytmusic: Record<string, jest.Mock>;
     voteService: Record<string, jest.Mock>;
+    playNextQuota: Record<string, jest.Mock>;
 };
 
 /** Build the controller with mocked collaborators; override any dependency. */
@@ -64,6 +65,13 @@ export function buildController(overrides: Partial<Deps> = {}) {
         ({
             castNextVote: jest.fn().mockResolvedValue({ status: 'counted' }),
         } as Record<string, jest.Mock>);
+    const playNextQuota =
+        overrides.playNextQuota ??
+        ({
+            used: jest.fn().mockResolvedValue(0),
+            remaining: jest.fn().mockResolvedValue(null),
+            record: jest.fn(),
+        } as Record<string, jest.Mock>);
 
     const controller = new PlaybackTelegramController(
         cache,
@@ -72,6 +80,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
         analytics as any,
         ytmusic as any,
         voteService as any,
+        playNextQuota as any,
     );
     return {
         controller,
@@ -81,6 +90,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
         analytics,
         ytmusic,
         voteService,
+        playNextQuota,
     };
 }
 

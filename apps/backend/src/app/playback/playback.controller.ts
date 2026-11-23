@@ -39,6 +39,7 @@ import { validateConfigNumber } from 'src/helpers/validation';
 import { authorizeControl } from './core/control-access';
 import { ControlAccess, ControlName } from './core/actor';
 import { VoteService } from './core/vote.service';
+import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { telegramActor } from './telegram-actor';
 import type { Feature } from '@prisma/client';
 
@@ -217,6 +218,7 @@ export class PlaybackTelegramController {
         private readonly analyticsService: AnalyticsService,
         private readonly ytmusicService: YTMusicService,
         private readonly voteService: VoteService,
+        private readonly playNextQuota: PlayNextQuotaService,
     ) {}
 
     /** Remember where this user last interacted (chat + topic) for inline callbacks. */
@@ -273,43 +275,10 @@ export class PlaybackTelegramController {
         }
     }
 
-    private getLocalDateKey() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = `${now.getMonth() + 1}`.padStart(2, '0');
-        const day = `${now.getDate()}`.padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    private getMillisecondsUntilLocalMidnight() {
-        const now = new Date();
-        const midnight = new Date(now);
-        midnight.setHours(24, 0, 0, 0);
-        return midnight.getTime() - now.getTime();
-    }
-
     private async isRoomAdmin(ctx: Context, chatId: string, userId: number) {
         if (ctx.chat?.type === 'private') return true;
         const chatMember = await ctx.telegram.getChatMember(chatId, userId);
         return ['administrator', 'creator'].includes(chatMember?.status);
-    }
-
-    private async getPlayNextCount(roomId: string, userId: number) {
-        return (
-            (await this.cacheManager.get<number>(
-                `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`,
-            )) || 0
-        );
-    }
-
-    private async incrementPlayNextCount(roomId: string, userId: number) {
-        const key = `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`;
-        const count = ((await this.cacheManager.get<number>(key)) || 0) + 1;
-        await this.cacheManager.set(
-            key,
-            count,
-            this.getMillisecondsUntilLocalMidnight() + 60_000,
-        );
     }
 
     private formatConfigValue(feature: Feature, key: ConfigKey) {
@@ -318,19 +287,6 @@ export class PlaybackTelegramController {
         if (key === 'dailyPlayNextLimit' && value === 0) return 'unlimited';
         if (key === 'dailyPlayNextLimit') return `${value}/day`;
         return `${value}`;
-    }
-
-    private async getPlayNextRemaining(
-        room: {
-            id: string;
-            Feature: Feature | null;
-        },
-        userId: number,
-    ) {
-        const limit = room.Feature?.dailyPlayNextLimit || 0;
-        if (limit <= 0) return null;
-        const used = await this.getPlayNextCount(room.id, userId);
-        return Math.max(limit - used, 0);
     }
 
     private formatPlayNextLabel(
@@ -546,7 +502,10 @@ export class PlaybackTelegramController {
         );
         // Hide until we know the room has Play Next enabled.
         if (!room?.Feature) return null;
-        const remaining = await this.getPlayNextRemaining(room, userId);
+        const remaining = await this.playNextQuota.remaining(
+            room,
+            String(userId),
+        );
         return this.formatPlayNextLabel(room.Feature, remaining);
     }
 
@@ -2223,7 +2182,10 @@ export class PlaybackTelegramController {
 
             const isAdmin = await this.isRoomAdmin(ctx, chatId, userId);
             const dailyLimit = room.Feature.dailyPlayNextLimit;
-            const playNextCount = await this.getPlayNextCount(roomId, userId);
+            const playNextCount = await this.playNextQuota.used(
+                roomId,
+                String(userId),
+            );
             if (!isAdmin && dailyLimit > 0 && playNextCount >= dailyLimit) {
                 await ctx.answerCbQuery(
                     `Daily Play Next limit reached (${playNextCount}/${dailyLimit})`,
@@ -2265,7 +2227,7 @@ export class PlaybackTelegramController {
             }
 
             if (!isAdmin) {
-                await this.incrementPlayNextCount(roomId, userId);
+                await this.playNextQuota.record(roomId, String(userId));
             }
 
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);

@@ -1,6 +1,6 @@
 /* Partial Telegraf contexts and private callback seams are deliberate test doubles. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
-import { buildController, groupContext } from './testing/controller-harness';
+import { buildController } from './testing/controller-harness';
 import { VideoSearchResult } from 'src/platform/video-search';
 
 const result: VideoSearchResult = {
@@ -13,10 +13,18 @@ const result: VideoSearchResult = {
 };
 
 function setup() {
-    const { cache, gateway, playback, analytics, ytmusic, controller } =
-        buildController({
-            ytmusic: { searchSongs: jest.fn().mockResolvedValue([result]) },
-        });
+    const {
+        cache,
+        gateway,
+        playback,
+        analytics,
+        ytmusic,
+        voteService,
+        playNextQuota,
+        controller,
+    } = buildController({
+        ytmusic: { searchSongs: jest.fn().mockResolvedValue([result]) },
+    });
     const provider = ytmusic;
     const ctx: any = {
         from: { id: 42 },
@@ -28,7 +36,17 @@ function setup() {
             editMessageReplyMarkup: jest.fn(),
         },
     };
-    return { cache, gateway, playback, analytics, provider, controller, ctx };
+    return {
+        cache,
+        gateway,
+        playback,
+        analytics,
+        provider,
+        controller,
+        ctx,
+        voteService,
+        playNextQuota,
+    };
 }
 
 describe('inline song search and queue contract', () => {
@@ -177,15 +195,20 @@ describe('inline song search and queue contract', () => {
     it.each(['completeAddToQueue', 'completePlayNext'])(
         'preserves %s action, records song artists and leaves channels unknown',
         async (action) => {
-            const { controller, cache, ctx, gateway, analytics, playback } =
-                setup();
+            const {
+                controller,
+                cache,
+                ctx,
+                gateway,
+                analytics,
+                playback,
+                playNextQuota,
+            } = setup();
             await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
             jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
                 true,
             );
-            jest.spyOn(controller as any, 'getPlayNextCount').mockResolvedValue(
-                0,
-            );
+            playNextQuota.used.mockResolvedValue(0);
             await (controller as any)[action](ctx, {
                 videoId: result.videoId,
                 inlineMessageId: 'inline',

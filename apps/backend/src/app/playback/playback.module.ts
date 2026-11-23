@@ -6,6 +6,7 @@ import { PlaybackService } from './playback.service';
 import { AnalyticsModule } from 'src/app/analytics/analytics.module';
 import { YTMusicService } from 'src/platform/yt-music.service';
 import { VoteService } from './core/vote.service';
+import { PlayNextQuotaService } from './core/play-next-quota.service';
 
 @Module({
     imports: [AnalyticsModule],
@@ -17,6 +18,7 @@ import { VoteService } from './core/vote.service';
         PlaybackService,
         YTMusicService,
         VoteService,
+        PlayNextQuotaService,
     ],
     exports: [],
 })
