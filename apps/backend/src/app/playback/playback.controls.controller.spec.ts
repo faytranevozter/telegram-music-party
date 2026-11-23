@@ -3,6 +3,7 @@
    Telegraf contexts are deliberate test doubles. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 import { authorizeControl } from './core/control-access';
+import { VoteService } from './core/vote.service';
 import { buildController, groupContext } from './testing/controller-harness';
 
 function room(feature: Record<string, unknown> | null) {
@@ -147,4 +148,85 @@ describe('authorizeControl is the only admin gate used by controls', () => {
 // depends on it for every control.
 it('imports the shared policy', () => {
     expect(typeof authorizeControl).toBe('function');
+});
+
+function votingRoom(options: {
+    minimumVotes?: number | null;
+    votes: string[];
+}) {
+    const { minimumVotes = 3, votes } = options;
+    const playback = {
+        getDevicesByChatId: jest.fn().mockResolvedValue({
+            id: 'room',
+            Feature: minimumVotes === null ? null : { minimumVotes },
+            Votes: votes.map((userId) => ({ userId })),
+        }),
+        addVote: jest.fn(),
+    };
+    const gateway = {
+        nextCommand: jest.fn(),
+        muteCommand: jest.fn(),
+        previousCommand: jest.fn(),
+    };
+    // Use the real service so the controller test still proves end behavior.
+    const voteService = new VoteService(playback as any, gateway as any);
+    return { playback, gateway, voteService };
+}
+
+describe('vote_next', () => {
+    const ALREADY = `Nice try, DJ—but you've already voted! Let's see what the others pick 🎧`;
+
+    it('refuses a second vote from the same user', async () => {
+        const playback = votingRoom({ votes: ['7'] });
+        const { controller } = buildController({
+            playback: playback.playback as any,
+            gateway: playback.gateway,
+            voteService: playback.voteService as any,
+        });
+        const { ctx } = groupContext();
+        await controller.vote_next(ctx);
+        expect(ctx.reply).toHaveBeenCalledWith(ALREADY);
+        expect(playback.playback.addVote).not.toHaveBeenCalled();
+        expect(playback.gateway.nextCommand).not.toHaveBeenCalled();
+    });
+
+    it('stores a vote and reports progress', async () => {
+        const playback = votingRoom({ votes: ['99'] });
+        const { controller } = buildController({
+            playback: playback.playback as any,
+            gateway: playback.gateway,
+            voteService: playback.voteService as any,
+        });
+        const { ctx } = groupContext();
+        await controller.vote_next(ctx);
+        expect(playback.playback.addVote).toHaveBeenCalledWith('room', '7');
+        expect(ctx.reply.mock.calls[0][0]).toContain('2/3');
+        expect(playback.gateway.nextCommand).not.toHaveBeenCalled();
+    });
+
+    it('skips when the vote reaches the minimum', async () => {
+        const playback = votingRoom({ votes: ['98', '99'] });
+        const { controller } = buildController({
+            playback: playback.playback as any,
+            gateway: playback.gateway,
+            voteService: playback.voteService as any,
+        });
+        const { ctx } = groupContext();
+        await controller.vote_next(ctx);
+        expect(playback.gateway.nextCommand).toHaveBeenCalledWith('room');
+        expect(ctx.reply.mock.calls[0][0]).toContain('Minimum votes reached');
+        expect(playback.playback.addVote).not.toHaveBeenCalled();
+    });
+
+    it('defaults to five votes when the room has no Feature row', async () => {
+        const playback = votingRoom({ minimumVotes: null, votes: ['99'] });
+        const { controller } = buildController({
+            playback: playback.playback as any,
+            gateway: playback.gateway,
+            voteService: playback.voteService as any,
+        });
+        const { ctx } = groupContext();
+        await controller.vote_next(ctx);
+        expect(ctx.reply.mock.calls[0][0]).toContain('/5');
+    });
 });

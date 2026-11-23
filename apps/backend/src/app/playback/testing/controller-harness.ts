@@ -10,6 +10,7 @@ type Deps = {
     playback: Record<string, jest.Mock>;
     analytics: Record<string, jest.Mock>;
     ytmusic: Record<string, jest.Mock>;
+    voteService: Record<string, jest.Mock>;
 };
 
 /** Build the controller with mocked collaborators; override any dependency. */
@@ -58,6 +59,11 @@ export function buildController(overrides: Partial<Deps> = {}) {
             string,
             jest.Mock
         >);
+    const voteService =
+        overrides.voteService ??
+        ({
+            castNextVote: jest.fn().mockResolvedValue({ status: 'counted' }),
+        } as Record<string, jest.Mock>);
 
     const controller = new PlaybackTelegramController(
         cache,
@@ -65,8 +71,17 @@ export function buildController(overrides: Partial<Deps> = {}) {
         playback as any,
         analytics as any,
         ytmusic as any,
+        voteService as any,
     );
-    return { controller, cache, gateway, playback, analytics, ytmusic };
+    return {
+        controller,
+        cache,
+        gateway,
+        playback,
+        analytics,
+        ytmusic,
+        voteService,
+    };
 }
 
 /** A group context whose membership lookup answers `status`. */

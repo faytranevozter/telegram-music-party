@@ -38,6 +38,7 @@ import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
 import { authorizeControl } from './core/control-access';
 import { ControlAccess, ControlName } from './core/actor';
+import { VoteService } from './core/vote.service';
 import { telegramActor } from './telegram-actor';
 import type { Feature } from '@prisma/client';
 
@@ -215,6 +216,7 @@ export class PlaybackTelegramController {
         private readonly playbackService: PlaybackService,
         private readonly analyticsService: AnalyticsService,
         private readonly ytmusicService: YTMusicService,
+        private readonly voteService: VoteService,
     ) {}
 
     /** Remember where this user last interacted (chat + topic) for inline callbacks. */
@@ -1382,23 +1384,19 @@ export class PlaybackTelegramController {
             return;
         }
 
-        // check already voted
-        const userId = ctx.from?.id.toString() || '';
-        const alreadyVoted = room.Votes.find((v) => v.userId === userId);
-        if (alreadyVoted) {
+        const result = await this.voteService.castNextVote(
+            room,
+            telegramActor(ctx, chatId),
+        );
+
+        if (result.status === 'already-voted') {
             await ctx.reply(
                 `Nice try, DJ—but you've already voted! Let's see what the others pick 🎧`,
             );
             return;
         }
 
-        const MINIMUM_VOTE = room.Feature ? room.Feature.minimumVotes : 5;
-
-        // if will be last voter reach minimum vote
-        if (room.Votes.length + 1 >= MINIMUM_VOTE) {
-            // emit next command
-            this.gateway.nextCommand(room.id);
-
+        if (result.status === 'passed') {
             await ctx.reply(
                 [
                     '🗳️ The people have spoken.',
@@ -1408,15 +1406,13 @@ export class PlaybackTelegramController {
             return;
         }
 
-        // add vote
-        await this.playbackService.addVote(room.id, userId);
-
+        const { count, required } = result;
         const randomText = [
-            `We're at ${room.Votes.length + 1}/${MINIMUM_VOTE} votes for the next track—who's holding us up? 😄`,
-            `${room.Votes.length + 1}/${MINIMUM_VOTE} votes locked! ${MINIMUM_VOTE - (room.Votes.length + 1)} more to go—your pick could change everything 🔥`,
-            `Only ${room.Votes.length + 1} out of ${MINIMUM_VOTE} votes so far... who's lagging behind? 😏`,
-            `The fate of the next track hangs in the balance… only ${room.Votes.length + 1}/${MINIMUM_VOTE} votes in. Who will decide what's next? 🎭`,
-            `Just ${room.Votes.length + 1}/${MINIMUM_VOTE} votes in for the next track—don't be shy, cast yours! 🎶`,
+            `We're at ${count}/${required} votes for the next track—who's holding us up? 😄`,
+            `${count}/${required} votes locked! ${required - count} more to go—your pick could change everything 🔥`,
+            `Only ${count} out of ${required} votes so far... who's lagging behind? 😏`,
+            `The fate of the next track hangs in the balance… only ${count}/${required} votes in. Who will decide what's next? 🎭`,
+            `Just ${count}/${required} votes in for the next track—don't be shy, cast yours! 🎶`,
         ];
 
         // send message
