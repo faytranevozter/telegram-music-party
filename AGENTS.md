@@ -90,8 +90,12 @@ See `apps/backend/.env.example`.
 - **PlaybackModule** (`src/app/playback/`):
   - `playback.controller.ts` — Telegram handlers (`@Update()`). Commands: play/pause/next/prev, queue, register, config, info, devices, inline search, etc. **No `/set`** — use `/config`.
   - `playback.gateway.ts` — Socket.IO. On `join`: reject another device with `join-rejected` (`room-busy`); the existing device must leave or disconnect first. Unknown rooms currently return without an admission response. Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title` + `requestId`)/`leave`. Accepts `playback-report` only from the admitted device.
-  - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features.
+  - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features. No Telegram dependency.
   - `playback.stats.controller.ts` — room analytics commands: `/stats`, `/top`, `/history`, `/mystats`.
+  - `playback/core/*` — transport-neutral services: `authorizeControl` (feature flags plus a lazy admin check), `VoteService`, `PlayNextQuotaService`, `QueueRequestService`, `describeSongPlain`. They take an `Actor` (`userRef`, `displayName`, `source`, `isAdmin()`), never Telegraf types. `userRef` is the bare Telegram user ID today; stage 2 adds the `telegram:` prefix with a data migration. New callers (e.g. a web client) go through these services, not the controller.
+  - `telegram-actor.ts` — builds an `Actor` from a Telegraf context.
+  - `telegram-notifier.ts` — the only place that sends through the bot (`sendMessage`, `sendPlaybackNotification`). The gateway skips it for rooms with no `chatId` (web-only rooms).
+  - Telegram reply text and keyboards stay in `playback.controller.ts`.
 - **AnalyticsModule** (`src/app/analytics/`) — `AnalyticsService` records durable `SongRequest` and confirmed `PlaybackSession` rows, runs room-scoped queries, and prunes raw events by `ANALYTICS_RETENTION_DAYS`. Definitions and counting rules: `docs/analytics.md`.
 - **HTML helpers** (`src/helpers/util.ts`): `escapeHtml`, `htmlBold`, `htmlCode`, etc. Never spread a joined string into a message array (`...map().join()` spreads characters and breaks HTML tags).
 - **`/info`**: uses Bot API `sendRichMessage` with rich HTML `<table>` (telegraf has no typed helper yet — `callApi('sendRichMessage', …)`).

@@ -1,7 +1,7 @@
 /* Characterization tests: they pin the current Telegram replies and gateway
    calls so the move onto authorizeControl cannot change behavior. Partial
    Telegraf contexts are deliberate test doubles. */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import { authorizeControl } from './core/control-access';
 import { VoteService } from './core/vote.service';
 import { buildController, groupContext } from './testing/controller-harness';

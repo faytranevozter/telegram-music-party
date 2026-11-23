@@ -1,5 +1,5 @@
 /* Feature and room fixtures are partial by design. */
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { VoteService } from './vote.service';
 import { Actor } from './actor';
 
