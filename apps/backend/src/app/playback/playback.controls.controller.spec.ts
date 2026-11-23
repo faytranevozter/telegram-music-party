@@ -198,7 +198,10 @@ describe('vote_next', () => {
             voteService: playback.voteService as any,
         });
         const { ctx } = groupContext();
+        // The reply text is chosen at random; pin it so the assertion is stable.
+        const random = jest.spyOn(Math, 'random').mockReturnValue(0);
         await controller.vote_next(ctx);
+        random.mockRestore();
         expect(playback.playback.addVote).toHaveBeenCalledWith('room', '7');
         expect(ctx.reply.mock.calls[0][0]).toContain('2/3');
         expect(playback.gateway.nextCommand).not.toHaveBeenCalled();
@@ -226,7 +229,9 @@ describe('vote_next', () => {
             voteService: playback.voteService as any,
         });
         const { ctx } = groupContext();
+        const random = jest.spyOn(Math, 'random').mockReturnValue(0);
         await controller.vote_next(ctx);
+        random.mockRestore();
         expect(ctx.reply.mock.calls[0][0]).toContain('/5');
     });
 });
