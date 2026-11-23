@@ -118,10 +118,12 @@ describe('song search availability', () => {
                 thumbnailUrl: null,
             },
         ];
-        const http = jest.spyOn(global, 'fetch').mockImplementation(async () =>
-            new Response(JSON.stringify({ results }), {
-                headers: { 'content-type': 'application/json' },
-            }),
+        const http = jest.spyOn(global, 'fetch').mockImplementation(() =>
+            Promise.resolve(
+                new Response(JSON.stringify({ results }), {
+                    headers: { 'content-type': 'application/json' },
+                }),
+            ),
         );
         expect(await service.searchSongs(' Hello   World ')).toEqual(results);
         jest.advanceTimersByTime(60_000);
