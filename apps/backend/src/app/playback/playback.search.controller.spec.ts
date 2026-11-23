@@ -205,9 +205,6 @@ describe('inline song search and queue contract', () => {
                 playNextQuota,
             } = setup();
             await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
-            jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
-                true,
-            );
             playNextQuota.used.mockResolvedValue(0);
             await (controller as any)[action](ctx, {
                 videoId: result.videoId,
@@ -242,6 +239,22 @@ describe('inline song search and queue contract', () => {
             ).toBeUndefined();
         },
     );
+    it('records the requester for Add to Queue', async () => {
+        const { controller, cache, playback, analytics, ctx } = setup();
+        await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
+        await (controller as any).completeAddToQueue(ctx, {
+            videoId: result.videoId,
+            inlineMessageId: 'inline',
+            chatId: '-100',
+            threadId: null,
+            userId: 42,
+        });
+        expect(analytics.recordRequest).toHaveBeenCalledWith(
+            expect.objectContaining({ requesterId: '42', source: 'queue' }),
+        );
+        expect(playback.addToQueue).toHaveBeenCalled();
+    });
+
     it('labels video channels without claiming an artist', async () => {
         const { controller, cache, playback, analytics, ctx } = setup();
         const video: VideoSearchResult = {
@@ -250,7 +263,6 @@ describe('inline song search and queue contract', () => {
             channelName: 'A & B',
         };
         await cache.set('song:v3:inline:dQw4w9WgXcQ', video);
-        jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(true);
         playback.getRoomByChatId.mockResolvedValue({
             id: 'room',
             Feature: {
@@ -284,9 +296,6 @@ describe('inline song search and queue contract', () => {
                 artistName: null,
                 channelName: 'Channel',
             });
-            jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
-                true,
-            );
             await (controller as any)[action](ctx, {
                 videoId: result.videoId,
                 inlineMessageId: 'inline',

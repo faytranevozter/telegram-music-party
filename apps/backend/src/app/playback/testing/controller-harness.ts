@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import Keyv from 'keyv';
 import { PlaybackTelegramController } from '../playback.controller';
+import { QueueRequestService } from '../core/queue-request.service';
 
 type Deps = {
     cache: Keyv;
@@ -12,6 +13,7 @@ type Deps = {
     ytmusic: Record<string, jest.Mock>;
     voteService: Record<string, jest.Mock>;
     playNextQuota: Record<string, jest.Mock>;
+    queueRequest: QueueRequestService;
 };
 
 /** Build the controller with mocked collaborators; override any dependency. */
@@ -72,6 +74,14 @@ export function buildController(overrides: Partial<Deps> = {}) {
             remaining: jest.fn().mockResolvedValue(null),
             record: jest.fn(),
         } as Record<string, jest.Mock>);
+    const queueRequest =
+        overrides.queueRequest ??
+        new QueueRequestService(
+            playback as any,
+            analytics as any,
+            playNextQuota as any,
+            gateway as any,
+        );
 
     const controller = new PlaybackTelegramController(
         cache,
@@ -81,6 +91,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
         ytmusic as any,
         voteService as any,
         playNextQuota as any,
+        queueRequest as any,
     );
     return {
         controller,
@@ -91,6 +102,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
         ytmusic,
         voteService,
         playNextQuota,
+        queueRequest,
     };
 }
 

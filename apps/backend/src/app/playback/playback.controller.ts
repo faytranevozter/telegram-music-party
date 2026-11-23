@@ -20,7 +20,7 @@ import { PlaybackService } from './playback.service';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
-import { creditLabel, isVideoResult } from 'src/platform/video-search';
+import { creditLabel } from 'src/platform/video-search';
 import {
     escapeHtml,
     formatDateTime,
@@ -40,6 +40,8 @@ import { authorizeControl } from './core/control-access';
 import { ControlAccess, ControlName } from './core/actor';
 import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
+import { QueueRequestService } from './core/queue-request.service';
+import { describeSongPlain } from './core/song-label';
 import { telegramActor } from './telegram-actor';
 import type { Feature } from '@prisma/client';
 
@@ -219,6 +221,7 @@ export class PlaybackTelegramController {
         private readonly ytmusicService: YTMusicService,
         private readonly voteService: VoteService,
         private readonly playNextQuota: PlayNextQuotaService,
+        private readonly queueRequest: QueueRequestService,
     ) {}
 
     /** Remember where this user last interacted (chat + topic) for inline callbacks. */
@@ -273,12 +276,6 @@ export class PlaybackTelegramController {
             if (this.isMessageNotModifiedError(error)) return;
             throw error;
         }
-    }
-
-    private async isRoomAdmin(ctx: Context, chatId: string, userId: number) {
-        if (ctx.chat?.type === 'private') return true;
-        const chatMember = await ctx.telegram.getChatMember(chatId, userId);
-        return ['administrator', 'creator'].includes(chatMember?.status);
     }
 
     private formatConfigValue(feature: Feature, key: ConfigKey) {
@@ -451,15 +448,11 @@ export class PlaybackTelegramController {
 
     /** Plain and HTML forms of "title - credit [duration]". */
     private describeSong(song: Song) {
-        const credit = creditLabel(song);
-        const duration =
-            song.durationSeconds == null
-                ? 'Duration unavailable'
-                : formatDuration(song.durationSeconds);
+        const { credit, duration, plain } = describeSongPlain(song);
         return {
             credit,
             duration,
-            plain: `${song.title} - ${credit} [${duration}]`,
+            plain,
             html: `<i>${escapeHtml(song.title)}</i> - ${escapeHtml(credit)} [${escapeHtml(duration)}]`,
         };
     }
@@ -1944,6 +1937,7 @@ export class PlaybackTelegramController {
             inlineMessageId: string;
             chatId: string;
             threadId: number | null;
+            userId?: number;
         },
     ) {
         const { videoId, inlineMessageId, chatId, threadId } = params;
@@ -1974,95 +1968,60 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const roomId = room.id;
-            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
-            const queues = await this.playbackService.getQueues(roomId);
-            if (queues.length >= queueLimit) {
-                await ctx.answerCbQuery('Queue is full');
-                return;
-            }
-
             const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
-            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
-            if (!cachedSong) {
-                // Race: primary path already added and cleared cache — stay silent.
-                if (await this.cacheManager.get(doneKey)) return;
-                if (queues.find((q) => q.url === videoId)) return;
+            const result = await this.queueRequest.request({
+                room,
+                videoId,
+                position: 'end',
+                actor: telegramActor(ctx, chatId),
+                loadSong: () => this.cacheManager.get<Song>(cacheKey),
+            });
 
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔗 This link has expired. Please try generating a new one.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
+            switch (result.status) {
+                case 'queue-full':
+                    await ctx.answerCbQuery('Queue is full');
+                    return;
+                case 'song-expired':
+                    // Race: primary path already added and cleared cache — stay silent.
+                    if (await this.cacheManager.get(doneKey)) return;
+                    if (result.alreadyQueued) return;
+
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔗 This link has expired. Please try generating a new one.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'video-disabled':
+                    await this.refuseVideoSearch(ctx, inlineMessageId);
+                    return;
+                case 'duplicate':
+                    await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔁 "<i>${escapeHtml(result.song.title)} • ${escapeHtml(creditLabel(result.song))}</i>" is already in the queue.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'play-next-disabled':
+                case 'limit-reached':
+                    // Only reachable for Play Next, which this path never uses.
+                    return;
             }
 
-            // Authoritative per-room gate for video results: inline queries
-            // have no chat, so the room is only certain here.
-            if (
-                isVideoResult(cachedSong) &&
-                room.Feature?.allowVideoSearch !== true
-            ) {
-                await this.refuseVideoSearch(ctx, inlineMessageId);
-                return;
-            }
-
-            if (queues.find((q) => q.url === videoId)) {
-                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔁 "<i>${escapeHtml(cachedSong.title)} • ${escapeHtml(creditLabel(cachedSong))}</i>" is already in the queue.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
-            }
-
-            const song = this.describeSong(cachedSong);
-
-            // Analytics is best-effort: a tracking failure must never block a
-            // song request. The request ID becomes the queue row ID.
-            let requestId: string | undefined;
-            try {
-                requestId = await this.analyticsService.recordRequest({
-                    roomId,
-                    requesterId: ctx.from?.id ?? null,
-                    videoId,
-                    title: cachedSong.title,
-                    // Song results carry real artists; video channels stay unknown.
-                    artist: cachedSong.artistName ?? '',
-                    source: 'queue',
-                });
-            } catch (error) {
-                console.error('recordRequest failed', error);
-            }
-
-            try {
-                await this.playbackService.addToQueue(
-                    roomId,
-                    videoId,
-                    song.plain,
-                    requestId,
-                );
-            } catch (error) {
-                if (requestId) {
-                    await this.analyticsService
-                        .markRequestFailed(requestId)
-                        .catch(() => undefined);
-                }
-                throw error;
-            }
+            const song = this.describeSong(result.song);
 
             // Mark done before clearing song cache so a concurrent path cannot
             // rewrite the success message as "link expired".
@@ -2083,13 +2042,6 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(
-                roomId,
-                videoId,
-                'end',
-                song.plain,
-                requestId,
-            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }
@@ -2105,7 +2057,7 @@ export class PlaybackTelegramController {
             userId: number;
         },
     ) {
-        const { videoId, inlineMessageId, chatId, threadId, userId } = params;
+        const { videoId, inlineMessageId, chatId, threadId } = params;
         const doneKey = `playnext-added:${inlineMessageId}:${videoId}`;
         const lockKey = `playnext-adding:${inlineMessageId}:${videoId}`;
 
@@ -2132,103 +2084,57 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            if (room.Feature?.playNextCommand !== true) {
-                await ctx.answerCbQuery('Play Next is disabled in this room');
-                return;
-            }
-
-            const roomId = room.id;
-            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
-            const queues = await this.playbackService.getQueues(roomId);
-            if (queues.length >= queueLimit) {
-                await ctx.answerCbQuery('Queue is full');
-                return;
-            }
-
             const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
-            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
-            if (!cachedSong) {
-                if (await this.cacheManager.get(doneKey)) return;
-                if (queues.find((q) => q.url === videoId)) return;
+            const result = await this.queueRequest.request({
+                room,
+                videoId,
+                position: 'next',
+                actor: telegramActor(ctx, chatId),
+                loadSong: () => this.cacheManager.get<Song>(cacheKey),
+            });
 
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔗 This link has expired. Please try generating a new one.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
+            switch (result.status) {
+                case 'play-next-disabled':
+                    await ctx.answerCbQuery(
+                        'Play Next is disabled in this room',
+                    );
+                    return;
+                case 'queue-full':
+                    await ctx.answerCbQuery('Queue is full');
+                    return;
+                case 'song-expired':
+                    if (await this.cacheManager.get(doneKey)) return;
+                    if (result.alreadyQueued) return;
+
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔗 This link has expired. Please try generating a new one.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'video-disabled':
+                    await this.refuseVideoSearch(ctx, inlineMessageId);
+                    return;
+                case 'duplicate':
+                    await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+                    await ctx.answerCbQuery(
+                        'This song is already in the queue',
+                    );
+                    return;
+                case 'limit-reached':
+                    await ctx.answerCbQuery(
+                        `Daily Play Next limit reached (${result.used}/${result.limit})`,
+                    );
+                    return;
             }
 
-            // Authoritative per-room gate for video results; see completeAddToQueue.
-            if (
-                isVideoResult(cachedSong) &&
-                room.Feature?.allowVideoSearch !== true
-            ) {
-                await this.refuseVideoSearch(ctx, inlineMessageId);
-                return;
-            }
-
-            if (queues.find((q) => q.url === videoId)) {
-                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-                await ctx.answerCbQuery('This song is already in the queue');
-                return;
-            }
-
-            const isAdmin = await this.isRoomAdmin(ctx, chatId, userId);
-            const dailyLimit = room.Feature.dailyPlayNextLimit;
-            const playNextCount = await this.playNextQuota.used(
-                roomId,
-                String(userId),
-            );
-            if (!isAdmin && dailyLimit > 0 && playNextCount >= dailyLimit) {
-                await ctx.answerCbQuery(
-                    `Daily Play Next limit reached (${playNextCount}/${dailyLimit})`,
-                );
-                return;
-            }
-
-            const song = this.describeSong(cachedSong);
-
-            // Analytics is best-effort; see completeAddToQueue.
-            let requestId: string | undefined;
-            try {
-                requestId = await this.analyticsService.recordRequest({
-                    roomId,
-                    requesterId: userId,
-                    videoId,
-                    title: cachedSong.title,
-                    artist: cachedSong.artistName ?? '',
-                    source: 'play_next',
-                });
-            } catch (error) {
-                console.error('recordRequest failed', error);
-            }
-
-            try {
-                await this.playbackService.addPlayNext(
-                    roomId,
-                    videoId,
-                    song.plain,
-                    requestId,
-                );
-            } catch (error) {
-                if (requestId) {
-                    await this.analyticsService
-                        .markRequestFailed(requestId)
-                        .catch(() => undefined);
-                }
-                throw error;
-            }
-
-            if (!isAdmin) {
-                await this.playNextQuota.record(roomId, String(userId));
-            }
+            const song = this.describeSong(result.song);
 
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
             await ctx.answerCbQuery('Added to Play Next');
@@ -2247,13 +2153,6 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(
-                roomId,
-                videoId,
-                'next',
-                song.plain,
-                requestId,
-            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }
@@ -2476,6 +2375,7 @@ export class PlaybackTelegramController {
             inlineMessageId,
             chatId,
             threadId,
+            userId: ctx.from.id,
         });
     }
 

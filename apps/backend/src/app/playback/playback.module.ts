@@ -7,6 +7,7 @@ import { AnalyticsModule } from 'src/app/analytics/analytics.module';
 import { YTMusicService } from 'src/platform/yt-music.service';
 import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
+import { QueueRequestService } from './core/queue-request.service';
 
 @Module({
     imports: [AnalyticsModule],
@@ -19,6 +20,7 @@ import { PlayNextQuotaService } from './core/play-next-quota.service';
         YTMusicService,
         VoteService,
         PlayNextQuotaService,
+        QueueRequestService,
     ],
     exports: [],
 })
