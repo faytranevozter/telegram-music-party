@@ -1,0 +1,91 @@
+/* Test double wiring for PlaybackTelegramController. Partial Telegraf contexts
+   are deliberate. */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+import Keyv from 'keyv';
+import { PlaybackTelegramController } from '../playback.controller';
+
+type Deps = {
+    cache: Keyv;
+    gateway: Record<string, jest.Mock>;
+    playback: Record<string, jest.Mock>;
+    analytics: Record<string, jest.Mock>;
+    ytmusic: Record<string, jest.Mock>;
+};
+
+/** Build the controller with mocked collaborators; override any dependency. */
+export function buildController(overrides: Partial<Deps> = {}) {
+    const cache = overrides.cache ?? new Keyv();
+    const gateway =
+        overrides.gateway ??
+        ({
+            playCommand: jest.fn(),
+            pauseCommand: jest.fn(),
+            nextCommand: jest.fn(),
+            previousCommand: jest.fn(),
+            muteCommand: jest.fn(),
+            unmuteCommand: jest.fn(),
+            lyricsCommand: jest.fn(),
+            volumeUp: jest.fn(),
+            volumeDown: jest.fn(),
+            addToQueueCommand: jest.fn(),
+            leave: jest.fn(),
+        } as Record<string, jest.Mock>);
+    const playback =
+        overrides.playback ??
+        ({
+            getRoomByChatId: jest.fn().mockResolvedValue({
+                id: 'room',
+                Feature: {
+                    maxQueueSize: 10,
+                    playNextCommand: true,
+                    dailyPlayNextLimit: 0,
+                    allowVideoSearch: false,
+                },
+            }),
+            getQueues: jest.fn().mockResolvedValue([]),
+            addToQueue: jest.fn(),
+            addPlayNext: jest.fn(),
+        } as Record<string, jest.Mock>);
+    const analytics =
+        overrides.analytics ??
+        ({ recordRequest: jest.fn().mockResolvedValue('request') } as Record<
+            string,
+            jest.Mock
+        >);
+    const ytmusic =
+        overrides.ytmusic ??
+        ({ searchSongs: jest.fn().mockResolvedValue([]) } as Record<
+            string,
+            jest.Mock
+        >);
+
+    const controller = new PlaybackTelegramController(
+        cache,
+        gateway as any,
+        playback as any,
+        analytics as any,
+        ytmusic as any,
+    );
+    return { controller, cache, gateway, playback, analytics, ytmusic };
+}
+
+/** A group context whose membership lookup answers `status`. */
+export function groupContext(
+    options: {
+        status?: string;
+        chatType?: 'private' | 'supergroup';
+        userId?: number;
+    } = {},
+) {
+    const { status = 'member', chatType = 'supergroup', userId = 7 } = options;
+    const getChatMember = jest.fn().mockResolvedValue({ status });
+    const ctx: any = {
+        chat: { id: -100, type: chatType },
+        from: { id: userId, first_name: 'Ana' },
+        reply: jest.fn(),
+        answerCbQuery: jest.fn(),
+        getChatMember,
+        telegram: { getChatMember },
+    };
+    return { ctx, getChatMember };
+}

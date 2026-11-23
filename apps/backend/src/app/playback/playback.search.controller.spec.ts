@@ -1,7 +1,6 @@
 /* Partial Telegraf contexts and private callback seams are deliberate test doubles. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
-import Keyv from 'keyv';
-import { PlaybackTelegramController } from './playback.controller';
+import { buildController, groupContext } from './testing/controller-harness';
 import { VideoSearchResult } from 'src/platform/video-search';
 
 const result: VideoSearchResult = {
@@ -14,31 +13,11 @@ const result: VideoSearchResult = {
 };
 
 function setup() {
-    const cache = new Keyv();
-    const gateway = { addToQueueCommand: jest.fn() };
-    const playback = {
-        getRoomByChatId: jest.fn().mockResolvedValue({
-            id: 'room',
-            Feature: {
-                maxQueueSize: 10,
-                playNextCommand: true,
-                dailyPlayNextLimit: 0,
-                allowVideoSearch: false,
-            },
-        }),
-        getQueues: jest.fn().mockResolvedValue([]),
-        addToQueue: jest.fn(),
-        addPlayNext: jest.fn(),
-    };
-    const analytics = { recordRequest: jest.fn().mockResolvedValue('request') };
-    const provider = { searchSongs: jest.fn().mockResolvedValue([result]) };
-    const controller = new PlaybackTelegramController(
-        cache,
-        gateway as any,
-        playback as any,
-        analytics as any,
-        provider as any,
-    );
+    const { cache, gateway, playback, analytics, ytmusic, controller } =
+        buildController({
+            ytmusic: { searchSongs: jest.fn().mockResolvedValue([result]) },
+        });
+    const provider = ytmusic;
     const ctx: any = {
         from: { id: 42 },
         update: { inline_query: { id: 'query', query: 'a title' } },

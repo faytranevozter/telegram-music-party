@@ -36,6 +36,9 @@ import { InlineChatLocation, Song } from 'src/types/cache.type';
 import type { AutoplayResult } from 'src/types/playback.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
+import { authorizeControl } from './core/control-access';
+import { ControlAccess, ControlName } from './core/actor';
+import { telegramActor } from './telegram-actor';
 import type { Feature } from '@prisma/client';
 
 const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -886,27 +889,10 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.nextCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'next'))
+        ) {
             return;
-        }
-
-        if (room.Feature && room.Feature.nextOnlyAdmin === true) {
-            // if not in private chat
-            if (ctx.chat?.type !== 'private') {
-                // only admins can register & unregister
-                const userId = ctx.from?.id || 0;
-                const chatMember = await ctx.getChatMember(userId);
-                const isAdmin = ['administrator', 'creator'].includes(
-                    chatMember?.status,
-                );
-                if (!isAdmin) {
-                    await ctx.reply(
-                        '⚠️ This feature is available for admin only.',
-                    );
-                    return;
-                }
-            }
         }
 
         this.gateway.nextCommand(room.id);
@@ -931,70 +917,46 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.previousCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'previous',
+            ))
+        ) {
             return;
-        }
-
-        if (room.Feature && room.Feature.previousOnlyAdmin === true) {
-            // if not in private chat
-            if (ctx.chat?.type !== 'private') {
-                // only admins can register & unregister
-                const userId = ctx.from?.id || 0;
-                const chatMember = await ctx.getChatMember(userId);
-                const isAdmin = ['administrator', 'creator'].includes(
-                    chatMember?.status,
-                );
-                if (!isAdmin) {
-                    await ctx.reply(
-                        '⚠️ This feature is available for admin only.',
-                    );
-                    return;
-                }
-            }
         }
 
         this.gateway.previousCommand(room.id);
     }
 
-    private async autoplayAccessError(
+    private async controlAccessError(
         ctx: Context,
+        chatId: string,
         feature: Feature | null,
-        enabled: boolean,
-        onlyAdmin: boolean,
-    ): Promise<'disabled' | 'admin' | null> {
-        if (feature && !enabled) return 'disabled';
-
-        if (feature && onlyAdmin && ctx.chat?.type !== 'private') {
-            const chatId = ctx.chat?.id;
-            const userId = ctx.from?.id || 0;
-            if (!chatId) return 'admin';
-            const chatMember = await ctx.telegram.getChatMember(chatId, userId);
-            if (!['administrator', 'creator'].includes(chatMember?.status)) {
-                return 'admin';
-            }
-        }
-
-        return null;
+        control: ControlName,
+    ): Promise<ControlAccess> {
+        return authorizeControl(feature, control, telegramActor(ctx, chatId));
     }
 
-    private async checkAutoplayAccess(
+    private async checkControlAccess(
         ctx: Context,
+        chatId: string,
         feature: Feature | null,
-        enabled: boolean,
-        onlyAdmin: boolean,
+        control: ControlName,
     ): Promise<boolean> {
-        const error = await this.autoplayAccessError(
+        const access = await this.controlAccessError(
             ctx,
+            chatId,
             feature,
-            enabled,
-            onlyAdmin,
+            control,
         );
-        if (error === 'disabled') {
+        if (access === 'disabled') {
             await ctx.reply('⚠️ This feature is currently disabled.');
             return false;
         }
-        if (error === 'admin') {
+        if (access === 'admin-only') {
             await ctx.reply('⚠️ This feature is available for admin only.');
             return false;
         }
@@ -1116,17 +1078,13 @@ export class PlaybackTelegramController {
         }
 
         const radio = action === 'radio';
-        const error = await this.autoplayAccessError(
+        const access = await this.controlAccessError(
             ctx,
+            chatId,
             room.Feature,
-            radio
-                ? room.Feature?.radioCommand === true
-                : room.Feature?.refreshCommand === true,
-            radio
-                ? room.Feature?.radioOnlyAdmin === true
-                : room.Feature?.refreshOnlyAdmin === true,
+            radio ? 'radio' : 'refresh',
         );
-        if (error === 'disabled') {
+        if (access === 'disabled') {
             await ctx.answerCbQuery('Feature disabled');
             await this.safeEdit(() =>
                 ctx.editMessageText('⚠️ This feature is currently disabled.', {
@@ -1135,7 +1093,7 @@ export class PlaybackTelegramController {
             );
             return;
         }
-        if (error === 'admin') {
+        if (access === 'admin-only') {
             await ctx.answerCbQuery('Admin only');
             return;
         }
@@ -1178,12 +1136,7 @@ export class PlaybackTelegramController {
         }
 
         if (
-            !(await this.checkAutoplayAccess(
-                ctx,
-                room.Feature,
-                room.Feature?.radioCommand === true,
-                room.Feature?.radioOnlyAdmin === true,
-            ))
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'radio'))
         ) {
             return;
         }
@@ -1210,11 +1163,11 @@ export class PlaybackTelegramController {
         }
 
         if (
-            !(await this.checkAutoplayAccess(
+            !(await this.checkControlAccess(
                 ctx,
+                chatId,
                 room.Feature,
-                room.Feature?.refreshCommand === true,
-                room.Feature?.refreshOnlyAdmin === true,
+                'refresh',
             ))
         ) {
             return;
@@ -1242,8 +1195,9 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.muteCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'mute'))
+        ) {
             return;
         }
 
@@ -1269,8 +1223,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.unmuteCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'unmute',
+            ))
+        ) {
             return;
         }
 
@@ -1317,8 +1277,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.volumeCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'volume',
+            ))
+        ) {
             return;
         }
 
@@ -1344,8 +1310,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.volumeCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'volume',
+            ))
+        ) {
             return;
         }
 

@@ -1,3 +1,5 @@
+/* Feature fixtures are partial by design. */
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment */
 import { authorizeControl } from './control-access';
 import { Actor } from './actor';
 
