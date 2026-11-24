@@ -9,6 +9,9 @@ import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { QueueRequestService } from './core/queue-request.service';
 import { TelegramNotifier } from './telegram-notifier';
+import { ENV } from 'src/config/env';
+import { WebSession } from './web/web-session';
+import { WebRoomAccessService } from './web/web-room-access.service';
 
 @Module({
     imports: [AnalyticsModule],
@@ -23,6 +26,15 @@ import { TelegramNotifier } from './telegram-notifier';
         PlayNextQuotaService,
         QueueRequestService,
         TelegramNotifier,
+        ...(ENV.WEB_ROOMS.enabled
+            ? [
+                  {
+                      provide: WebSession,
+                      useValue: new WebSession(ENV.WEB_ROOMS.secret),
+                  },
+                  WebRoomAccessService,
+              ]
+            : []),
     ],
     exports: [],
 })
