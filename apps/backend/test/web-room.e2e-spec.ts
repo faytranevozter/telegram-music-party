@@ -1,8 +1,9 @@
 import { Global, Module, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { io, type Socket } from 'socket.io-client';
 import Keyv from 'keyv';
+import KeyvRedis from '@keyv/redis';
 import { ENV } from 'src/config/env';
 import { PlaybackModule } from 'src/app/playback/playback.module';
 import { PlaybackService } from 'src/app/playback/playback.service';
@@ -108,6 +109,14 @@ suite('shared web room HTTP and observer contract', () => {
             socket.on(name, receive);
         });
     }
+
+    beforeEach(async () => {
+        // Only the disposable test server's entry budget is reset; production
+        // and other Redis keys are never touched.
+        const store = app.get<Keyv>('KEYV_CACHE').store as KeyvRedis<unknown>;
+        const digest = createHash('sha256').update('127.0.0.1').digest('hex');
+        await store.client.del(`ytparty:web-limit:entry:${digest}`);
+    });
 
     it('shares requests with Telegram and streams player state until the invite is rotated', async () => {
         const access = app.get(WebRoomAccessService);
@@ -326,12 +335,31 @@ suite('shared web room HTTP and observer contract', () => {
             const enabled = event<State>(observer, 'room:state', (state) => state.capabilities.videoSearch && state.capabilities.playNext);
             expect((await route('room/settings', { allowVideoSearch: true, playNextCommand: true }, owner)).status).toBe(201);
             expect(await enabled).not.toHaveProperty('settings');
+            const search = await route('room/search', { query: 'test song' }, guest);
+            const [selection] = (await search.json()) as { selectionId: string }[];
+            const playback = app.get(PlaybackService);
+            await playback.addToQueue(id, 'existing', 'Existing');
+            await playback.addVote(id, 'web:existing');
             const disabled = event<State>(observer, 'room:state', (state) => !state.capabilities.videoSearch && !state.capabilities.playNext);
             expect((await route('room/settings', { allowVideoSearch: false, playNextCommand: false, maxQueueSize: 1 }, owner)).status).toBe(201);
             await disabled;
             expect((await route('room/search', { query: 'test song', type: 'video' }, guest)).status).toBe(403);
+            expect((await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest)).status).toBe(403);
+            expect((await route('room/requests', { selectionId: selection.selectionId, position: 'end' }, guest)).status).toBe(409);
+            expect(await playback.getQueues(id)).toHaveLength(1);
+            expect(await playback.countVotes(id)).toBe(1);
             expect(await (await route('room/settings', undefined, owner)).json()).toMatchObject({ maxQueueSize: 1, playNextCommand: false, allowVideoSearch: false });
             expect((await route('room/settings', undefined, guest)).status).toBe(403);
+            const reenabled = event<State>(observer, 'room:state', (state) => state.capabilities.videoSearch && state.capabilities.playNext);
+            expect((await route('room/settings', { allowVideoSearch: true, playNextCommand: true }, owner)).status).toBe(201);
+            await reenabled;
+            await playback.removeQueue(id, 'existing');
+            expect((await route('room/settings', { dailyPlayNextLimit: 1 }, owner)).status).toBe(201);
+            expect((await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest)).status).toBe(201);
+            await playback.removeQueue(id, song.videoId);
+            const quota = await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest);
+            expect(quota.status).toBe(409);
+            expect(await quota.json()).toMatchObject({ status: 'limit-reached' });
         } finally { await app.get(PlaybackService).removeRoom(id); }
     }, 15000);
 
@@ -361,8 +389,8 @@ suite('shared web room HTTP and observer contract', () => {
                 ),
             );
             const statuses = results.map((response) => response.status);
-            expect(statuses.filter((status) => status === 404)).toHaveLength(7);
-            expect(statuses.filter((status) => status === 429)).toHaveLength(4);
+            expect(statuses.filter((status) => status === 404)).toHaveLength(9);
+            expect(statuses.filter((status) => status === 429)).toHaveLength(2);
             expect(
                 statuses.every((status) => status === 404 || status === 429),
             ).toBe(true);

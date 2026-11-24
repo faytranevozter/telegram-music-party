@@ -93,3 +93,16 @@ it('denies invite management to a regular group member', async () => {
     expect(setInvite).not.toHaveBeenCalled();
     expect(ctx.answerCbQuery).toHaveBeenCalledWith('Admin only');
 });
+
+it('publishes room changes when Telegram configuration changes', async () => {
+    const roomChanged = jest.fn();
+    const { controller, playback } = buildController({ gateway: { roomChanged } });
+    playback.setFeature = jest.fn().mockResolvedValue(undefined);
+    const { ctx } = groupContext({ status: 'administrator' });
+    ctx.match = ['', 'toggle:allowVideoSearch'];
+    ctx.callbackQuery = { message: { chat: { id: -100 } } };
+    ctx.editMessageText = jest.fn();
+    await controller.updateConfig(ctx);
+    expect(playback.setFeature).toHaveBeenCalledWith('room', 'allowVideoSearch', true);
+    expect(roomChanged).toHaveBeenCalledWith('room');
+});

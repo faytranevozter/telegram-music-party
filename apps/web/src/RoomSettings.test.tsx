@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createWebApi } from './api';
+import { ApiError, createWebApi } from './api';
 import { RoomSettings } from './RoomSettings';
 
 const settings = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false };
@@ -39,4 +39,96 @@ it('retains the Play Next limit and draft through a failed save', async () => {
     expect(flash).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
     await act(async () => root.unmount());
     await flush();
+});
+
+it('shows current settings with accessible labels and numeric limits', async () => {
+    const api = { settings: vi.fn().mockResolvedValue(settings), updateSettings: vi.fn() };
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={vi.fn()} />); });
+    const labels = [...container.querySelectorAll('label')];
+    expect(labels.map((label) => label.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Maximum queue size'), expect.stringContaining('Votes needed to skip'), expect.stringContaining('Allow Play Next'), expect.stringContaining('Daily Play Next limit'), expect.stringContaining('Allow video search')]));
+    const numbers = [...container.querySelectorAll<HTMLInputElement>('input[type=number]')];
+    expect(numbers.map((input) => [input.value, input.min, input.max])).toEqual([['10', '1', '2147483647'], ['2', '1', '2147483647'], ['3', '0', '2147483647']]);
+    expect(container.textContent).toContain('0 means unlimited');
+    await act(async () => root.unmount());
+});
+
+it('offers retry after loading fails and restores the form', async () => {
+    const api = { settings: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(settings), updateSettings: vi.fn() };
+    const flash = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={flash} />); });
+    expect(container.textContent).toContain('Retry loading settings');
+    await act(async () => { container.querySelector('button')!.click(); });
+    expect(container.querySelector('form')).not.toBeNull();
+    expect(flash).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }));
+    await act(async () => root.unmount());
+});
+
+it('revokes the session after an unauthorized save', async () => {
+    const api = { settings: vi.fn().mockResolvedValue(settings), updateSettings: vi.fn().mockRejectedValue(new ApiError(401)) };
+    const revoked = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={revoked} onFlash={vi.fn()} />); });
+    await act(async () => { container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(revoked).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+});
+
+it('revokes the session after an unauthorized load', async () => {
+    const api = { settings: vi.fn().mockRejectedValue(new ApiError(401)), updateSettings: vi.fn() };
+    const revoked = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={revoked} onFlash={vi.fn()} />); });
+    expect(revoked).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+});
+
+it('ignores a pending load after unmount', async () => {
+    let fail!: (reason: unknown) => void;
+    const api = { settings: vi.fn().mockReturnValue(new Promise((_resolve, reject) => { fail = reject; })), updateSettings: vi.fn() };
+    const revoked = vi.fn(); const flash = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={revoked} onFlash={flash} />); });
+    expect(container.textContent).toContain('Loading settings');
+    await act(async () => root.unmount());
+    await act(async () => fail(new ApiError(401)));
+    expect(revoked).not.toHaveBeenCalled();
+    expect(flash).not.toHaveBeenCalled();
+});
+
+it('ignores a pending save after unmount', async () => {
+    let finish!: (value: typeof settings) => void;
+    const api = { settings: vi.fn().mockResolvedValue(settings), updateSettings: vi.fn().mockReturnValue(new Promise<typeof settings>((resolve) => { finish = resolve; })) };
+    const flash = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={flash} />); });
+    await act(async () => { container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(container.querySelector('fieldset')?.disabled).toBe(true);
+    await act(async () => root.unmount());
+    await act(async () => finish(settings));
+    expect(flash).not.toHaveBeenCalled();
+});
+
+it('rejects invalid numeric drafts without saving', async () => {
+    const api = { settings: vi.fn().mockResolvedValue(settings), updateSettings: vi.fn() };
+    const flash = vi.fn();
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={flash} />); });
+    const input = container.querySelector<HTMLInputElement>('input[type=number]')!;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '0');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(api.updateSettings).not.toHaveBeenCalled();
+    expect(flash).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }));
+    await act(async () => root.unmount());
 });
