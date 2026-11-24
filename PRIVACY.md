@@ -8,6 +8,10 @@ The Extension connects [YouTube Music](https://music.youtube.com) to a Telegram 
 
 The Extension is not affiliated with YouTube, Google, Chrome, or Telegram.
 
+## Browser rooms
+
+Guests can join a room without a Telegram account. The room server uses the invite code to grant access and your chosen nickname in the signed session token. The room page stores that token and its expiry in the current tab's session storage, along with a digest used to match the invite. The server attributes song requests and votes to a random participant reference rather than your Telegram account. It uses connection addresses and participant references to rate-limit access and actions. Leaving clears the current tab's session. Invite rotation or disablement revokes guest access; it does not delete past room activity.
+
 ## Summary
 
 - We do **not** sell your data.

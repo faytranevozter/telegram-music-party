@@ -12,14 +12,30 @@ const { PrismaService } = require('../dist/platform/prisma.service');
 const { PlaybackService } = require('../dist/app/playback/playback.service');
 const { AnalyticsService } = require('../dist/app/analytics/analytics.service');
 const prisma = new PrismaService();
-const playback = new PlaybackService(prisma, {});
+const playback = new PlaybackService(prisma);
 const analytics = new AnalyticsService(prisma);
 const roomId = randomUUID();
 const topicRoomId = randomUUID();
+const chatlessRooms = [randomUUID(), randomUUID()];
 try {
     prisma.onModuleInit();
     await playback.addRoom(roomId, roomId, null, 'Integration test');
     await playback.addRoom(topicRoomId, roomId, 42, 'Topic');
+    for (const id of chatlessRooms) {
+        await playback.addRoom(id, null, null, 'Web room');
+        const room = await prisma.room.findUnique({
+            where: { id }, include: { Feature: true },
+        });
+        assert.equal(room.chatId, null);
+        assert.equal(room.shareCode, null);
+        assert.equal(room.ownerUserRef, null);
+        assert.equal(room.Feature.minimumVotes, 5);
+    }
+    await prisma.room.update({ where: { id: chatlessRooms[0] }, data: { shareCode: roomId } });
+    await assert.rejects(
+        prisma.room.update({ where: { id: chatlessRooms[1] }, data: { shareCode: roomId } }),
+        { code: 'P2002' },
+    );
     assert.equal((await playback.getRoomByChatId(roomId)).id, roomId);
     assert.equal((await playback.getRoomByChatId(roomId, 42)).id, topicRoomId);
     await assert.rejects(
@@ -44,7 +60,7 @@ try {
     assert.equal((await playback.getRoomDevices(roomId)).length, 1);
     await Promise.all(
         Array.from({ length: 8 }, (_, i) =>
-            playback.addVote(roomId, String(i)),
+            playback.addVote(roomId, `telegram:${i + 1}`),
         ),
     );
     assert.equal(await playback.countVotes(roomId), 8);
@@ -53,7 +69,7 @@ try {
         videoId: 'first',
         title: 'First',
         artist: 'Artist',
-        requesterId: '123',
+        requesterId: 'telegram:123',
         source: 'queue',
     });
     const report = {
@@ -135,7 +151,7 @@ try {
     );
 } finally {
     await prisma.room.deleteMany({
-        where: { id: { in: [roomId, topicRoomId] } },
+        where: { id: { in: [roomId, topicRoomId, ...chatlessRooms] } },
     });
     await prisma.$disconnect();
 }

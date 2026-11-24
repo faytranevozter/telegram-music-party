@@ -1,0 +1,30 @@
+{
+    "name": "web",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --port 5173 --strictPort",
+        "build": "tsc --noEmit && vite build",
+        "test": "vitest run",
+        "lint": "eslint src"
+    },
+    "dependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "socket.io-client": "4.8.1"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "4",
+        "@types/react": "^19.0.10",
+        "@types/react-dom": "^19.0.4",
+        "@vitejs/plugin-react-swc": "^3.8.0",
+        "daisyui": "5.8.2",
+        "eslint": "^9.21.0",
+        "postcss": "^8.5.3",
+        "tailwindcss": "^4.0.17",
+        "typescript": "~5.7.2",
+        "typescript-eslint": "^8.24.1",
+        "vite": "^6.4.1",
+        "vitest": "^4.1.10"
+    }
+}

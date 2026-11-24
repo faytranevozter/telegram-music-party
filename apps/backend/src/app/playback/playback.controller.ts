@@ -20,7 +20,7 @@ import { PlaybackService } from './playback.service';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
 import { getRandomHumanReadable } from '@marianmeres/random-human-readable';
 import { YTMusicService } from 'src/platform/yt-music.service';
-import { creditLabel, isVideoResult } from 'src/platform/video-search';
+import { creditLabel } from 'src/platform/video-search';
 import {
     escapeHtml,
     formatDateTime,
@@ -31,11 +31,21 @@ import {
     htmlItalic,
 } from 'src/helpers/util';
 import { firstValueFrom } from 'rxjs';
-import { Inject } from '@nestjs/common';
+import { Inject, Optional } from '@nestjs/common';
+import { ENV } from 'src/config/env';
+import { WebRoomAccessService } from './web/web-room-access.service';
 import { InlineChatLocation, Song } from 'src/types/cache.type';
 import type { AutoplayResult } from 'src/types/playback.type';
 import Keyv from 'keyv';
 import { validateConfigNumber } from 'src/helpers/validation';
+import { authorizeControl } from './core/control-access';
+import { ControlAccess, ControlName } from './core/actor';
+import { VoteService } from './core/vote.service';
+import { PlayNextQuotaService } from './core/play-next-quota.service';
+import { QueueRequestService } from './core/queue-request.service';
+import { describeSongPlain } from './core/song-label';
+import { telegramActor } from './telegram-actor';
+import { telegramUserRef } from './core/user-ref';
 import type { Feature } from '@prisma/client';
 
 const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -212,6 +222,10 @@ export class PlaybackTelegramController {
         private readonly playbackService: PlaybackService,
         private readonly analyticsService: AnalyticsService,
         private readonly ytmusicService: YTMusicService,
+        private readonly voteService: VoteService,
+        private readonly playNextQuota: PlayNextQuotaService,
+        private readonly queueRequest: QueueRequestService,
+        @Optional() private readonly webAccess?: WebRoomAccessService,
     ) {}
 
     /** Remember where this user last interacted (chat + topic) for inline callbacks. */
@@ -268,64 +282,12 @@ export class PlaybackTelegramController {
         }
     }
 
-    private getLocalDateKey() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = `${now.getMonth() + 1}`.padStart(2, '0');
-        const day = `${now.getDate()}`.padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    private getMillisecondsUntilLocalMidnight() {
-        const now = new Date();
-        const midnight = new Date(now);
-        midnight.setHours(24, 0, 0, 0);
-        return midnight.getTime() - now.getTime();
-    }
-
-    private async isRoomAdmin(ctx: Context, chatId: string, userId: number) {
-        if (ctx.chat?.type === 'private') return true;
-        const chatMember = await ctx.telegram.getChatMember(chatId, userId);
-        return ['administrator', 'creator'].includes(chatMember?.status);
-    }
-
-    private async getPlayNextCount(roomId: string, userId: number) {
-        return (
-            (await this.cacheManager.get<number>(
-                `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`,
-            )) || 0
-        );
-    }
-
-    private async incrementPlayNextCount(roomId: string, userId: number) {
-        const key = `playnext-daily:${roomId}:${userId}:${this.getLocalDateKey()}`;
-        const count = ((await this.cacheManager.get<number>(key)) || 0) + 1;
-        await this.cacheManager.set(
-            key,
-            count,
-            this.getMillisecondsUntilLocalMidnight() + 60_000,
-        );
-    }
-
     private formatConfigValue(feature: Feature, key: ConfigKey) {
         const value = feature[key];
         if (typeof value === 'boolean') return value ? 'on' : 'off';
         if (key === 'dailyPlayNextLimit' && value === 0) return 'unlimited';
         if (key === 'dailyPlayNextLimit') return `${value}/day`;
         return `${value}`;
-    }
-
-    private async getPlayNextRemaining(
-        room: {
-            id: string;
-            Feature: Feature | null;
-        },
-        userId: number,
-    ) {
-        const limit = room.Feature?.dailyPlayNextLimit || 0;
-        if (limit <= 0) return null;
-        const used = await this.getPlayNextCount(room.id, userId);
-        return Math.max(limit - used, 0);
     }
 
     private formatPlayNextLabel(
@@ -404,7 +366,7 @@ export class PlaybackTelegramController {
         );
     }
 
-    private buildConfigKeyboard(feature: Feature) {
+    private buildConfigKeyboard(feature: Feature, shareCode: string | null) {
         const toggle = (key: ConfigKey) =>
             this.configToggleButton(feature, key);
         return Markup.inlineKeyboard([
@@ -424,6 +386,38 @@ export class PlaybackTelegramController {
             ...NUMBER_CONFIG_KEYS.map((key) => [
                 this.configNumberButton(feature, key),
             ]),
+            ...(ENV.WEB_ROOMS.enabled && this.webAccess
+                ? shareCode
+                    ? [
+                          [
+                              this.styledButton(
+                                  'Send web invite',
+                                  'config:web:enable',
+                              ),
+                          ],
+                          [
+                              this.styledButton(
+                                  'Rotate web invite',
+                                  'config:web:rotate',
+                              ),
+                          ],
+                          [
+                              this.styledButton(
+                                  'Disable web invite',
+                                  'config:web:disable',
+                                  'danger',
+                              ),
+                          ],
+                      ]
+                    : [
+                          [
+                              this.styledButton(
+                                  'Enable web invite',
+                                  'config:web:enable',
+                              ),
+                          ],
+                      ]
+                : []),
             [this.styledButton('✖️ Close', 'config:close', 'danger')],
         ]);
     }
@@ -490,15 +484,11 @@ export class PlaybackTelegramController {
 
     /** Plain and HTML forms of "title - credit [duration]". */
     private describeSong(song: Song) {
-        const credit = creditLabel(song);
-        const duration =
-            song.durationSeconds == null
-                ? 'Duration unavailable'
-                : formatDuration(song.durationSeconds);
+        const { credit, duration, plain } = describeSongPlain(song);
         return {
             credit,
             duration,
-            plain: `${song.title} - ${credit} [${duration}]`,
+            plain,
             html: `<i>${escapeHtml(song.title)}</i> - ${escapeHtml(credit)} [${escapeHtml(duration)}]`,
         };
     }
@@ -541,7 +531,10 @@ export class PlaybackTelegramController {
         );
         // Hide until we know the room has Play Next enabled.
         if (!room?.Feature) return null;
-        const remaining = await this.getPlayNextRemaining(room, userId);
+        const remaining = await this.playNextQuota.remaining(
+            room,
+            telegramUserRef(userId),
+        );
         return this.formatPlayNextLabel(room.Feature, remaining);
     }
 
@@ -604,7 +597,7 @@ export class PlaybackTelegramController {
         await this.safeEdit(() =>
             ctx.editMessageText(this.buildConfigText(feature), {
                 parse_mode: 'HTML',
-                ...this.buildConfigKeyboard(feature),
+                ...this.buildConfigKeyboard(feature, room.shareCode),
             }),
         );
     }
@@ -886,27 +879,10 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.nextCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'next'))
+        ) {
             return;
-        }
-
-        if (room.Feature && room.Feature.nextOnlyAdmin === true) {
-            // if not in private chat
-            if (ctx.chat?.type !== 'private') {
-                // only admins can register & unregister
-                const userId = ctx.from?.id || 0;
-                const chatMember = await ctx.getChatMember(userId);
-                const isAdmin = ['administrator', 'creator'].includes(
-                    chatMember?.status,
-                );
-                if (!isAdmin) {
-                    await ctx.reply(
-                        '⚠️ This feature is available for admin only.',
-                    );
-                    return;
-                }
-            }
         }
 
         this.gateway.nextCommand(room.id);
@@ -931,70 +907,46 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.previousCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'previous',
+            ))
+        ) {
             return;
-        }
-
-        if (room.Feature && room.Feature.previousOnlyAdmin === true) {
-            // if not in private chat
-            if (ctx.chat?.type !== 'private') {
-                // only admins can register & unregister
-                const userId = ctx.from?.id || 0;
-                const chatMember = await ctx.getChatMember(userId);
-                const isAdmin = ['administrator', 'creator'].includes(
-                    chatMember?.status,
-                );
-                if (!isAdmin) {
-                    await ctx.reply(
-                        '⚠️ This feature is available for admin only.',
-                    );
-                    return;
-                }
-            }
         }
 
         this.gateway.previousCommand(room.id);
     }
 
-    private async autoplayAccessError(
+    private async controlAccessError(
         ctx: Context,
+        chatId: string,
         feature: Feature | null,
-        enabled: boolean,
-        onlyAdmin: boolean,
-    ): Promise<'disabled' | 'admin' | null> {
-        if (feature && !enabled) return 'disabled';
-
-        if (feature && onlyAdmin && ctx.chat?.type !== 'private') {
-            const chatId = ctx.chat?.id;
-            const userId = ctx.from?.id || 0;
-            if (!chatId) return 'admin';
-            const chatMember = await ctx.telegram.getChatMember(chatId, userId);
-            if (!['administrator', 'creator'].includes(chatMember?.status)) {
-                return 'admin';
-            }
-        }
-
-        return null;
+        control: ControlName,
+    ): Promise<ControlAccess> {
+        return authorizeControl(feature, control, telegramActor(ctx, chatId));
     }
 
-    private async checkAutoplayAccess(
+    private async checkControlAccess(
         ctx: Context,
+        chatId: string,
         feature: Feature | null,
-        enabled: boolean,
-        onlyAdmin: boolean,
+        control: ControlName,
     ): Promise<boolean> {
-        const error = await this.autoplayAccessError(
+        const access = await this.controlAccessError(
             ctx,
+            chatId,
             feature,
-            enabled,
-            onlyAdmin,
+            control,
         );
-        if (error === 'disabled') {
+        if (access === 'disabled') {
             await ctx.reply('⚠️ This feature is currently disabled.');
             return false;
         }
-        if (error === 'admin') {
+        if (access === 'admin-only') {
             await ctx.reply('⚠️ This feature is available for admin only.');
             return false;
         }
@@ -1116,17 +1068,13 @@ export class PlaybackTelegramController {
         }
 
         const radio = action === 'radio';
-        const error = await this.autoplayAccessError(
+        const access = await this.controlAccessError(
             ctx,
+            chatId,
             room.Feature,
-            radio
-                ? room.Feature?.radioCommand === true
-                : room.Feature?.refreshCommand === true,
-            radio
-                ? room.Feature?.radioOnlyAdmin === true
-                : room.Feature?.refreshOnlyAdmin === true,
+            radio ? 'radio' : 'refresh',
         );
-        if (error === 'disabled') {
+        if (access === 'disabled') {
             await ctx.answerCbQuery('Feature disabled');
             await this.safeEdit(() =>
                 ctx.editMessageText('⚠️ This feature is currently disabled.', {
@@ -1135,7 +1083,7 @@ export class PlaybackTelegramController {
             );
             return;
         }
-        if (error === 'admin') {
+        if (access === 'admin-only') {
             await ctx.answerCbQuery('Admin only');
             return;
         }
@@ -1178,12 +1126,7 @@ export class PlaybackTelegramController {
         }
 
         if (
-            !(await this.checkAutoplayAccess(
-                ctx,
-                room.Feature,
-                room.Feature?.radioCommand === true,
-                room.Feature?.radioOnlyAdmin === true,
-            ))
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'radio'))
         ) {
             return;
         }
@@ -1210,11 +1153,11 @@ export class PlaybackTelegramController {
         }
 
         if (
-            !(await this.checkAutoplayAccess(
+            !(await this.checkControlAccess(
                 ctx,
+                chatId,
                 room.Feature,
-                room.Feature?.refreshCommand === true,
-                room.Feature?.refreshOnlyAdmin === true,
+                'refresh',
             ))
         ) {
             return;
@@ -1242,8 +1185,9 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.muteCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(ctx, chatId, room.Feature, 'mute'))
+        ) {
             return;
         }
 
@@ -1269,8 +1213,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.unmuteCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'unmute',
+            ))
+        ) {
             return;
         }
 
@@ -1317,8 +1267,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.volumeCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'volume',
+            ))
+        ) {
             return;
         }
 
@@ -1344,8 +1300,14 @@ export class PlaybackTelegramController {
         }
 
         // check if feature is enabled
-        if (room.Feature && room.Feature.volumeCommand !== true) {
-            await ctx.reply('⚠️ This feature is currently disabled.');
+        if (
+            !(await this.checkControlAccess(
+                ctx,
+                chatId,
+                room.Feature,
+                'volume',
+            ))
+        ) {
             return;
         }
 
@@ -1410,23 +1372,24 @@ export class PlaybackTelegramController {
             return;
         }
 
-        // check already voted
-        const userId = ctx.from?.id.toString() || '';
-        const alreadyVoted = room.Votes.find((v) => v.userId === userId);
-        if (alreadyVoted) {
+        const result = await this.voteService.castNextVote(
+            room,
+            telegramActor(ctx, chatId),
+        );
+
+        if (result.status === 'already-voted') {
             await ctx.reply(
                 `Nice try, DJ—but you've already voted! Let's see what the others pick 🎧`,
             );
             return;
         }
 
-        const MINIMUM_VOTE = room.Feature ? room.Feature.minimumVotes : 5;
+        if (result.status === 'skip-pending') {
+            await ctx.reply('The player is already moving to the next song.');
+            return;
+        }
 
-        // if will be last voter reach minimum vote
-        if (room.Votes.length + 1 >= MINIMUM_VOTE) {
-            // emit next command
-            this.gateway.nextCommand(room.id);
-
+        if (result.status === 'passed') {
             await ctx.reply(
                 [
                     '🗳️ The people have spoken.',
@@ -1436,15 +1399,13 @@ export class PlaybackTelegramController {
             return;
         }
 
-        // add vote
-        await this.playbackService.addVote(room.id, userId);
-
+        const { count, required } = result;
         const randomText = [
-            `We're at ${room.Votes.length + 1}/${MINIMUM_VOTE} votes for the next track—who's holding us up? 😄`,
-            `${room.Votes.length + 1}/${MINIMUM_VOTE} votes locked! ${MINIMUM_VOTE - (room.Votes.length + 1)} more to go—your pick could change everything 🔥`,
-            `Only ${room.Votes.length + 1} out of ${MINIMUM_VOTE} votes so far... who's lagging behind? 😏`,
-            `The fate of the next track hangs in the balance… only ${room.Votes.length + 1}/${MINIMUM_VOTE} votes in. Who will decide what's next? 🎭`,
-            `Just ${room.Votes.length + 1}/${MINIMUM_VOTE} votes in for the next track—don't be shy, cast yours! 🎶`,
+            `We're at ${count}/${required} votes for the next track—who's holding us up? 😄`,
+            `${count}/${required} votes locked! ${required - count} more to go—your pick could change everything 🔥`,
+            `Only ${count} out of ${required} votes so far... who's lagging behind? 😏`,
+            `The fate of the next track hangs in the balance… only ${count}/${required} votes in. Who will decide what's next? 🎭`,
+            `Just ${count}/${required} votes in for the next track—don't be shy, cast yours! 🎶`,
         ];
 
         // send message
@@ -1500,7 +1461,7 @@ export class PlaybackTelegramController {
 
         await ctx.reply(this.buildConfigText(feature), {
             parse_mode: 'HTML',
-            ...this.buildConfigKeyboard(feature),
+            ...this.buildConfigKeyboard(feature, room.shareCode),
         });
     }
 
@@ -1525,6 +1486,45 @@ export class PlaybackTelegramController {
         );
         if (!room?.Feature) {
             await ctx.answerCbQuery('No room found');
+            return;
+        }
+
+        if (action === 'web') {
+            if (!this.webAccess || !ENV.WEB_ROOMS.enabled || !ctx.from?.id) {
+                await ctx.answerCbQuery('Web invites unavailable');
+                return;
+            }
+            if (
+                rawValue ||
+                (rawKey !== 'enable' &&
+                    rawKey !== 'rotate' &&
+                    rawKey !== 'disable')
+            ) {
+                await ctx.answerCbQuery('Unknown setting');
+                return;
+            }
+            const code = await this.webAccess.setInvite(room.id, rawKey);
+            if (code) {
+                try {
+                    await ctx.telegram.sendMessage(
+                        ctx.from.id,
+                        `Web room invite: ${ENV.WEB_ROOMS.origin}/#${code}`,
+                        {
+                            link_preview_options: { is_disabled: true },
+                        },
+                    );
+                } catch {
+                    await ctx.answerCbQuery(
+                        'Start the bot privately, then tap Send web invite.',
+                    );
+                    await this.editConfigMessage(ctx, chatId, threadId);
+                    return;
+                }
+            }
+            await ctx.answerCbQuery(
+                code ? 'Invite sent privately' : 'Web invite disabled',
+            );
+            await this.editConfigMessage(ctx, chatId, threadId);
             return;
         }
 
@@ -1554,6 +1554,7 @@ export class PlaybackTelegramController {
         if (action === 'toggle' && field.type === 'boolean') {
             const value = !(room.Feature[key] as boolean);
             await this.playbackService.setFeature(room.id, key, value);
+            this.gateway.roomChanged?.(room.id);
             await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
             await this.editConfigMessage(ctx, chatId, threadId);
             return;
@@ -1587,6 +1588,7 @@ export class PlaybackTelegramController {
             }
             const value = parseInt(rawValue);
             await this.playbackService.setFeature(room.id, key, value);
+            this.gateway.roomChanged?.(room.id);
             await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
             await this.editConfigMessage(ctx, chatId, threadId);
             return;
@@ -1643,7 +1645,7 @@ export class PlaybackTelegramController {
 
         const rows: Array<[string, string]> = [
             ['Room', room.id],
-            ['Chat', room.chatId],
+            ['Chat', chatId],
         ];
         if (room.threadId != null) {
             rows.push(['Topic', String(room.threadId)]);
@@ -1933,6 +1935,7 @@ export class PlaybackTelegramController {
                                     pendingConfig.key,
                                     value,
                                 );
+                                this.gateway.roomChanged?.(room.id);
                                 await this.cacheManager.delete(
                                     `config-custom:${userId}`,
                                 );
@@ -2047,95 +2050,60 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            const roomId = room.id;
-            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
-            const queues = await this.playbackService.getQueues(roomId);
-            if (queues.length >= queueLimit) {
-                await ctx.answerCbQuery('Queue is full');
-                return;
-            }
-
             const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
-            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
-            if (!cachedSong) {
-                // Race: primary path already added and cleared cache — stay silent.
-                if (await this.cacheManager.get(doneKey)) return;
-                if (queues.find((q) => q.url === videoId)) return;
+            const result = await this.queueRequest.request({
+                room,
+                videoId,
+                position: 'end',
+                actor: telegramActor(ctx, chatId),
+                loadSong: () => this.cacheManager.get<Song>(cacheKey),
+            });
 
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔗 This link has expired. Please try generating a new one.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
+            switch (result.status) {
+                case 'queue-full':
+                    await ctx.answerCbQuery('Queue is full');
+                    return;
+                case 'song-expired':
+                    // Race: primary path already added and cleared cache — stay silent.
+                    if (await this.cacheManager.get(doneKey)) return;
+                    if (result.alreadyQueued) return;
+
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔗 This link has expired. Please try generating a new one.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'video-disabled':
+                    await this.refuseVideoSearch(ctx, inlineMessageId);
+                    return;
+                case 'duplicate':
+                    await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔁 "<i>${escapeHtml(result.song.title)} • ${escapeHtml(creditLabel(result.song))}</i>" is already in the queue.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'play-next-disabled':
+                case 'limit-reached':
+                    // Only reachable for Play Next, which this path never uses.
+                    return;
             }
 
-            // Authoritative per-room gate for video results: inline queries
-            // have no chat, so the room is only certain here.
-            if (
-                isVideoResult(cachedSong) &&
-                room.Feature?.allowVideoSearch !== true
-            ) {
-                await this.refuseVideoSearch(ctx, inlineMessageId);
-                return;
-            }
-
-            if (queues.find((q) => q.url === videoId)) {
-                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔁 "<i>${escapeHtml(cachedSong.title)} • ${escapeHtml(creditLabel(cachedSong))}</i>" is already in the queue.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
-            }
-
-            const song = this.describeSong(cachedSong);
-
-            // Analytics is best-effort: a tracking failure must never block a
-            // song request. The request ID becomes the queue row ID.
-            let requestId: string | undefined;
-            try {
-                requestId = await this.analyticsService.recordRequest({
-                    roomId,
-                    requesterId: ctx.from?.id ?? null,
-                    videoId,
-                    title: cachedSong.title,
-                    // Song results carry real artists; video channels stay unknown.
-                    artist: cachedSong.artistName ?? '',
-                    source: 'queue',
-                });
-            } catch (error) {
-                console.error('recordRequest failed', error);
-            }
-
-            try {
-                await this.playbackService.addToQueue(
-                    roomId,
-                    videoId,
-                    song.plain,
-                    requestId,
-                );
-            } catch (error) {
-                if (requestId) {
-                    await this.analyticsService
-                        .markRequestFailed(requestId)
-                        .catch(() => undefined);
-                }
-                throw error;
-            }
+            const song = this.describeSong(result.song);
 
             // Mark done before clearing song cache so a concurrent path cannot
             // rewrite the success message as "link expired".
@@ -2156,13 +2124,6 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(
-                roomId,
-                videoId,
-                'end',
-                song.plain,
-                requestId,
-            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }
@@ -2175,10 +2136,9 @@ export class PlaybackTelegramController {
             inlineMessageId: string;
             chatId: string;
             threadId: number | null;
-            userId: number;
         },
     ) {
-        const { videoId, inlineMessageId, chatId, threadId, userId } = params;
+        const { videoId, inlineMessageId, chatId, threadId } = params;
         const doneKey = `playnext-added:${inlineMessageId}:${videoId}`;
         const lockKey = `playnext-adding:${inlineMessageId}:${videoId}`;
 
@@ -2205,100 +2165,57 @@ export class PlaybackTelegramController {
                 return;
             }
 
-            if (room.Feature?.playNextCommand !== true) {
-                await ctx.answerCbQuery('Play Next is disabled in this room');
-                return;
-            }
-
-            const roomId = room.id;
-            const queueLimit = room.Feature ? room.Feature.maxQueueSize : 10;
-            const queues = await this.playbackService.getQueues(roomId);
-            if (queues.length >= queueLimit) {
-                await ctx.answerCbQuery('Queue is full');
-                return;
-            }
-
             const cacheKey = `song:v3:${inlineMessageId}:${videoId}`;
-            const cachedSong = await this.cacheManager.get<Song>(cacheKey);
-            if (!cachedSong) {
-                if (await this.cacheManager.get(doneKey)) return;
-                if (queues.find((q) => q.url === videoId)) return;
+            const result = await this.queueRequest.request({
+                room,
+                videoId,
+                position: 'next',
+                actor: telegramActor(ctx, chatId),
+                loadSong: () => this.cacheManager.get<Song>(cacheKey),
+            });
 
-                await this.safeEdit(() =>
-                    ctx.telegram.editMessageText(
-                        undefined,
-                        undefined,
-                        inlineMessageId,
-                        `🔗 This link has expired. Please try generating a new one.`,
-                        {
-                            parse_mode: 'HTML',
-                        },
-                    ),
-                );
-                return;
+            switch (result.status) {
+                case 'play-next-disabled':
+                    await ctx.answerCbQuery(
+                        'Play Next is disabled in this room',
+                    );
+                    return;
+                case 'queue-full':
+                    await ctx.answerCbQuery('Queue is full');
+                    return;
+                case 'song-expired':
+                    if (await this.cacheManager.get(doneKey)) return;
+                    if (result.alreadyQueued) return;
+
+                    await this.safeEdit(() =>
+                        ctx.telegram.editMessageText(
+                            undefined,
+                            undefined,
+                            inlineMessageId,
+                            `🔗 This link has expired. Please try generating a new one.`,
+                            {
+                                parse_mode: 'HTML',
+                            },
+                        ),
+                    );
+                    return;
+                case 'video-disabled':
+                    await this.refuseVideoSearch(ctx, inlineMessageId);
+                    return;
+                case 'duplicate':
+                    await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
+                    await ctx.answerCbQuery(
+                        'This song is already in the queue',
+                    );
+                    return;
+                case 'limit-reached':
+                    await ctx.answerCbQuery(
+                        `Daily Play Next limit reached (${result.used}/${result.limit})`,
+                    );
+                    return;
             }
 
-            // Authoritative per-room gate for video results; see completeAddToQueue.
-            if (
-                isVideoResult(cachedSong) &&
-                room.Feature?.allowVideoSearch !== true
-            ) {
-                await this.refuseVideoSearch(ctx, inlineMessageId);
-                return;
-            }
-
-            if (queues.find((q) => q.url === videoId)) {
-                await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
-                await ctx.answerCbQuery('This song is already in the queue');
-                return;
-            }
-
-            const isAdmin = await this.isRoomAdmin(ctx, chatId, userId);
-            const dailyLimit = room.Feature.dailyPlayNextLimit;
-            const playNextCount = await this.getPlayNextCount(roomId, userId);
-            if (!isAdmin && dailyLimit > 0 && playNextCount >= dailyLimit) {
-                await ctx.answerCbQuery(
-                    `Daily Play Next limit reached (${playNextCount}/${dailyLimit})`,
-                );
-                return;
-            }
-
-            const song = this.describeSong(cachedSong);
-
-            // Analytics is best-effort; see completeAddToQueue.
-            let requestId: string | undefined;
-            try {
-                requestId = await this.analyticsService.recordRequest({
-                    roomId,
-                    requesterId: userId,
-                    videoId,
-                    title: cachedSong.title,
-                    artist: cachedSong.artistName ?? '',
-                    source: 'play_next',
-                });
-            } catch (error) {
-                console.error('recordRequest failed', error);
-            }
-
-            try {
-                await this.playbackService.addPlayNext(
-                    roomId,
-                    videoId,
-                    song.plain,
-                    requestId,
-                );
-            } catch (error) {
-                if (requestId) {
-                    await this.analyticsService
-                        .markRequestFailed(requestId)
-                        .catch(() => undefined);
-                }
-                throw error;
-            }
-
-            if (!isAdmin) {
-                await this.incrementPlayNextCount(roomId, userId);
-            }
+            const song = this.describeSong(result.song);
 
             await this.cacheManager.set(doneKey, true, SONG_CACHE_TTL);
             await ctx.answerCbQuery('Added to Play Next');
@@ -2317,13 +2234,6 @@ export class PlaybackTelegramController {
 
             await this.cacheManager.delete(cacheKey);
             await this.cacheManager.delete(`inline-loc:${inlineMessageId}`);
-            this.gateway.addToQueueCommand(
-                roomId,
-                videoId,
-                'next',
-                song.plain,
-                requestId,
-            );
         } finally {
             await this.cacheManager.delete(lockKey);
         }
@@ -2443,7 +2353,6 @@ export class PlaybackTelegramController {
             inlineMessageId,
             chatId,
             threadId,
-            userId: ctx.from.id,
         });
     }
 

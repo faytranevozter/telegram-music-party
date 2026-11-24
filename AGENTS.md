@@ -16,6 +16,7 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
 - `apps/web-landing` — Cloudflare Worker serving `https://ytparty.my.id`. Static assets in `public/`; `src/worker.ts` routes `/`, `/privacy`, `/terms`, `/support`, `/gallery`.
   - **`wrangler.toml` requires explicit `binding = "ASSETS"`** when `main` is set — wrangler does not inject it automatically, and `env.ASSETS` will be `undefined` without it.
   - `/privacy` and `/terms` are generated from the root `PRIVACY.md` and `TERMS.md` by `scripts/build-privacy.mjs` / `scripts/build-terms.mjs` (shared renderer in `scripts/legal-page.mjs`, or `pnpm --filter=web-landing build:legal` for both). Regenerate after editing either document.
+- `apps/web` — standalone invite-based browser room client (React/Vite and daisyUI). Build with `VITE_PARTY_API_ORIGIN` and serve `apps/web/dist` at `/` on a separate origin. The extension still plays the music. See `docs/web-room-api.md`.
 - `packages/` — currently empty (reserved).
 
 ## Public URLs
@@ -90,8 +91,13 @@ See `apps/backend/.env.example`.
 - **PlaybackModule** (`src/app/playback/`):
   - `playback.controller.ts` — Telegram handlers (`@Update()`). Commands: play/pause/next/prev, queue, register, config, info, devices, inline search, etc. **No `/set`** — use `/config`.
   - `playback.gateway.ts` — Socket.IO. On `join`: reject another device with `join-rejected` (`room-busy`); the existing device must leave or disconnect first. Unknown rooms currently return without an admission response. Emits `play`/`pause`/`next`/`prev`/`volume*`/`mute`/`addToQueue` (with optional `title` + `requestId`)/`leave`. Accepts `playback-report` only from the admitted device.
-  - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features.
+  - `playback.service.ts` — rooms, queues, devices (`removeOtherDevices`), votes, features. No Telegram dependency.
   - `playback.stats.controller.ts` — room analytics commands: `/stats`, `/top`, `/history`, `/mystats`.
+  - `playback/core/*` — transport-neutral services: `authorizeControl` (feature flags plus a lazy admin check), `VoteService`, `PlayNextQuotaService`, `QueueRequestService`, `describeSongPlain`. They take an `Actor` (`userRef`, `displayName`, `source`, `isAdmin()`), never Telegraf types. Telegram references use `telegram:<id>`; Play Next reads the legacy daily Redis counter only when the new key is absent. New callers go through these services, not the controller.
+  - `Room.chatId`, `shareCode`, and `ownerUserRef` are nullable. Stage 2 adds storage only; it does not enable guest links or room creation over HTTP.
+  - `telegram-actor.ts` — builds an `Actor` from a Telegraf context.
+  - `telegram-notifier.ts` — the only place that sends through the bot (`sendMessage`, `sendPlaybackNotification`). The gateway skips it for rooms with no `chatId` (web-only rooms).
+  - Telegram reply text and keyboards stay in `playback.controller.ts`.
 - **AnalyticsModule** (`src/app/analytics/`) — `AnalyticsService` records durable `SongRequest` and confirmed `PlaybackSession` rows, runs room-scoped queries, and prunes raw events by `ANALYTICS_RETENTION_DAYS`. Definitions and counting rules: `docs/analytics.md`.
 - **HTML helpers** (`src/helpers/util.ts`): `escapeHtml`, `htmlBold`, `htmlCode`, etc. Never spread a joined string into a message array (`...map().join()` spreads characters and breaks HTML tags).
 - **`/info`**: uses Bot API `sendRichMessage` with rich HTML `<table>` (telegraf has no typed helper yet — `callApi('sendRichMessage', …)`).

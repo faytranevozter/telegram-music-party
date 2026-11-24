@@ -11,6 +11,9 @@ on:
     paths:
       - "apps/web-landing/**"
       - "PRIVACY.md"
+      - "TERMS.md"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/web-deploy.yml"
   workflow_dispatch:
 

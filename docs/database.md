@@ -92,6 +92,30 @@ switching providers. Do not upgrade Prisma as part of a database-provider switch
 
 ## Verification
 
+### Stage 2 room identity upgrade
+
+Rehearse on disposable databases for both providers. Apply the pre-Stage-2
+migrations first, load `apps/backend/scripts/fixtures/stage-2-before.sql` using
+`prisma db execute` with the provider's schema, then apply the Stage 2 migration.
+After generating and building for the selected provider, run
+`pnpm --filter=backend exec node scripts/test-stage-2-upgrade.mjs` against
+that fixture database, before running the standard integration test below.
+Use explicit disposable `DATABASE_PROVIDER` and `DATABASE_URL` settings.
+
+For a real rollout, stop all old backend writers, back up the database, and
+preserve the corresponding Redis state. Deploy the migration and new backend
+together; do not mix versions. Smoke-test Telegram root/topic lookup, voting,
+and `/mystats` before reopening traffic. The new backend reads today's legacy
+Play Next key when no namespaced key exists, then writes only the namespaced
+key. Both expire naturally; no Redis key scan is needed.
+
+Do not roll back the app alone after the migration: the old backend does not
+read namespaced IDs. To restore the old build, stop writers, reconcile any
+writes since cutover, and restore the matching database and cache backups first.
+The optional room invite and owner fields do not enable web access by themselves.
+
+### Standard database checks
+
 Against a disposable database, select a provider and run:
 
 ```sh

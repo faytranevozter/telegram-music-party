@@ -1,6 +1,7 @@
 import { Command, Ctx, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { PlaybackService } from './playback.service';
+import { telegramIdFromUserRef, telegramUserRef } from './core/user-ref';
 import {
     AnalyticsService,
     type RecentPlayback,
@@ -48,7 +49,8 @@ const formatListeningTime = (listenedMs: number) =>
     formatDuration(Math.round(listenedMs / 1000));
 
 const formatRequester = (requesterId: string) => {
-    const id = requesterId.replace(/[^0-9-]/g, '');
+    if (/^web:[A-Za-z0-9_-]+$/.test(requesterId)) return 'Web guest';
+    const id = telegramIdFromUserRef(requesterId);
     if (!id) return 'unknown';
     return `<a href="tg://user?id=${id}">User ${id}</a>`;
 };
@@ -331,7 +333,7 @@ export class PlaybackStatsController {
 
         const overview = await this.analyticsService.getRequesterOverview(
             room.id,
-            String(userId),
+            telegramUserRef(userId),
             period,
         );
         const name = ctx.from?.first_name

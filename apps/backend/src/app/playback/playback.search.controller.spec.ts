@@ -1,7 +1,6 @@
 /* Partial Telegraf contexts and private callback seams are deliberate test doubles. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
-import Keyv from 'keyv';
-import { PlaybackTelegramController } from './playback.controller';
+import { buildController } from './testing/controller-harness';
 import { VideoSearchResult } from 'src/platform/video-search';
 
 const result: VideoSearchResult = {
@@ -14,42 +13,43 @@ const result: VideoSearchResult = {
 };
 
 function setup() {
-    const cache = new Keyv();
-    const gateway = { addToQueueCommand: jest.fn() };
-    const playback = {
-        getRoomByChatId: jest.fn().mockResolvedValue({
-            id: 'room',
-            Feature: {
-                maxQueueSize: 10,
-                playNextCommand: true,
-                dailyPlayNextLimit: 0,
-                allowVideoSearch: false,
-            },
-        }),
-        getQueues: jest.fn().mockResolvedValue([]),
-        addToQueue: jest.fn(),
-        addPlayNext: jest.fn(),
-    };
-    const analytics = { recordRequest: jest.fn().mockResolvedValue('request') };
-    const provider = { searchSongs: jest.fn().mockResolvedValue([result]) };
-    const controller = new PlaybackTelegramController(
+    const {
         cache,
-        gateway as any,
-        playback as any,
-        analytics as any,
-        provider as any,
-    );
+        gateway,
+        playback,
+        analytics,
+        ytmusic,
+        voteService,
+        playNextQuota,
+        controller,
+    } = buildController({
+        ytmusic: { searchSongs: jest.fn().mockResolvedValue([result]) },
+    });
+    const provider = ytmusic;
+    const getChatMember = jest.fn().mockResolvedValue({ status: 'member' });
     const ctx: any = {
         from: { id: 42 },
         update: { inline_query: { id: 'query', query: 'a title' } },
         answerInlineQuery: jest.fn(),
         answerCbQuery: jest.fn(),
+        getChatMember,
         telegram: {
+            getChatMember,
             editMessageText: jest.fn(),
             editMessageReplyMarkup: jest.fn(),
         },
     };
-    return { cache, gateway, playback, analytics, provider, controller, ctx };
+    return {
+        cache,
+        gateway,
+        playback,
+        analytics,
+        provider,
+        controller,
+        ctx,
+        voteService,
+        playNextQuota,
+    };
 }
 
 describe('inline song search and queue contract', () => {
@@ -198,21 +198,22 @@ describe('inline song search and queue contract', () => {
     it.each(['completeAddToQueue', 'completePlayNext'])(
         'preserves %s action, records song artists and leaves channels unknown',
         async (action) => {
-            const { controller, cache, ctx, gateway, analytics, playback } =
-                setup();
+            const {
+                controller,
+                cache,
+                ctx,
+                gateway,
+                analytics,
+                playback,
+                playNextQuota,
+            } = setup();
             await cache.set('song:v3:inline:dQw4w9WgXcQ', result);
-            jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
-                true,
-            );
-            jest.spyOn(controller as any, 'getPlayNextCount').mockResolvedValue(
-                0,
-            );
+            playNextQuota.used.mockResolvedValue(0);
             await (controller as any)[action](ctx, {
                 videoId: result.videoId,
                 inlineMessageId: 'inline',
                 chatId: '-100',
                 threadId: null,
-                userId: 42,
             });
             const next = action === 'completePlayNext';
             expect(
@@ -248,7 +249,6 @@ describe('inline song search and queue contract', () => {
             channelName: 'A & B',
         };
         await cache.set('song:v3:inline:dQw4w9WgXcQ', video);
-        jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(true);
         playback.getRoomByChatId.mockResolvedValue({
             id: 'room',
             Feature: {
@@ -263,7 +263,6 @@ describe('inline song search and queue contract', () => {
             inlineMessageId: 'inline',
             chatId: '-100',
             threadId: null,
-            userId: 42,
         });
         expect(analytics.recordRequest).toHaveBeenCalledWith(
             expect.objectContaining({ artist: '' }),
@@ -282,15 +281,11 @@ describe('inline song search and queue contract', () => {
                 artistName: null,
                 channelName: 'Channel',
             });
-            jest.spyOn(controller as any, 'isRoomAdmin').mockResolvedValue(
-                true,
-            );
             await (controller as any)[action](ctx, {
                 videoId: result.videoId,
                 inlineMessageId: 'inline',
                 chatId: '-100',
                 threadId: null,
-                userId: 42,
             });
             expect(playback.addToQueue).not.toHaveBeenCalled();
             expect(playback.addPlayNext).not.toHaveBeenCalled();

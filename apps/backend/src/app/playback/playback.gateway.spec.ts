@@ -1,5 +1,6 @@
 import { PlaybackGateway } from './playback.gateway';
 import { PlaybackService } from './playback.service';
+import { TelegramNotifier } from './telegram-notifier';
 import type { AnalyticsService } from 'src/app/analytics/analytics.service';
 import type { Server } from 'socket.io';
 
@@ -16,6 +17,7 @@ describe('PlaybackGateway player queue', () => {
         gateway = new PlaybackGateway(
             {} as PlaybackService,
             {} as AnalyticsService,
+            {} as TelegramNotifier,
         );
         gateway.wss = {
             in: inRoom,
@@ -75,6 +77,7 @@ describe('PlaybackGateway autoplay commands', () => {
         gateway = new PlaybackGateway(
             {} as PlaybackService,
             {} as AnalyticsService,
+            {} as TelegramNotifier,
         );
         gateway.wss = {
             in: inRoom,
@@ -178,6 +181,10 @@ describe('PlaybackGateway room admission', () => {
     const room = { id: 'room', chatId: 'chat', threadId: null };
     let gateway: PlaybackGateway;
     let analytics: { closeRoomSessions: jest.Mock };
+    let notifier: {
+        sendMessage: jest.Mock;
+        sendPlaybackNotification: jest.Mock;
+    };
     let service: {
         getRoom: jest.Mock;
         getRoomDevices: jest.Mock;
@@ -185,7 +192,6 @@ describe('PlaybackGateway room admission', () => {
         addDevice: jest.Mock;
         removeDevice: jest.Mock;
         getQueues: jest.Mock;
-        sendMessage: jest.Mock;
     };
 
     function makeSocket(id = 'socket-1') {
@@ -216,11 +222,15 @@ describe('PlaybackGateway room admission', () => {
             addDevice: jest.fn().mockResolvedValue(undefined),
             removeDevice: jest.fn().mockResolvedValue(undefined),
             getQueues: jest.fn().mockResolvedValue([]),
+        };
+        notifier = {
             sendMessage: jest.fn().mockResolvedValue(undefined),
+            sendPlaybackNotification: jest.fn().mockResolvedValue(undefined),
         };
         gateway = new PlaybackGateway(
             service as unknown as PlaybackService,
             analytics as unknown as AnalyticsService,
+            notifier as unknown as TelegramNotifier,
         );
         gateway.wss = {
             in: jest.fn(() => ({
@@ -292,6 +302,40 @@ describe('PlaybackGateway room admission', () => {
         });
     });
 
+    it('announces a new player in the room chat', async () => {
+        const socket = makeSocket();
+
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+
+        expect(notifier.sendMessage).toHaveBeenCalledWith(
+            'chat',
+            null,
+            'Chrome joined',
+        );
+    });
+
+    it('stays silent when the room has no Telegram chat', async () => {
+        service.getRoom.mockResolvedValue({
+            id: 'room',
+            chatId: '',
+            threadId: null,
+        });
+        const socket = makeSocket();
+
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+
+        expect(notifier.sendMessage).not.toHaveBeenCalled();
+        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+    });
+
     it('frees the room when the owning socket disconnects', async () => {
         service.getRoomDevice.mockResolvedValue({
             id: 'd1',
@@ -361,6 +405,9 @@ describe('PlaybackGateway playback reports', () => {
     const getRoomDevice = jest.fn();
     const recordPlayback = jest.fn();
     const sendPlaybackNotification = jest.fn();
+    const notifier = {
+        sendPlaybackNotification,
+    } as unknown as TelegramNotifier;
     let gateway: PlaybackGateway;
 
     const report = () => ({
@@ -394,9 +441,9 @@ describe('PlaybackGateway playback reports', () => {
         gateway = new PlaybackGateway(
             {
                 getRoomDevice,
-                sendPlaybackNotification,
             } as unknown as PlaybackService,
             { recordPlayback } as unknown as AnalyticsService,
+            notifier,
         );
     });
 
@@ -455,6 +502,11 @@ describe('PlaybackGateway playback reports', () => {
 });
 
 describe('PlaybackGateway song starts', () => {
+    const player = (roomId = 'room-id') =>
+        ({
+            data: { session: { roomId, fingerprint: 'device' } },
+            rooms: new Set([roomId]),
+        }) as never;
     const getRoom = jest.fn();
     const removeQueue = jest.fn();
     const removeQueueBefore = jest.fn();
@@ -470,20 +522,28 @@ describe('PlaybackGateway song starts', () => {
         gateway = new PlaybackGateway(
             {
                 getRoom,
+                getRoomDevice: jest.fn().mockResolvedValue({ id: 'device' }),
                 removeQueue,
                 removeQueueBefore,
                 removeRoomVotes,
             } as unknown as PlaybackService,
             {} as AnalyticsService,
+            {} as TelegramNotifier,
         );
     });
 
     it('clears the started track and the one it replaced', async () => {
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'first' });
-        await gateway.onStartedNewSong({
-            roomId: 'room-id',
-            videoId: 'second',
-        });
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'first' },
+            player(),
+        );
+        await gateway.onStartedNewSong(
+            {
+                roomId: 'room-id',
+                videoId: 'second',
+            },
+            player(),
+        );
 
         expect(removeQueue).toHaveBeenLastCalledWith('room-id', 'second');
         expect(removeQueueBefore).toHaveBeenCalledTimes(1);
@@ -496,8 +556,14 @@ describe('PlaybackGateway song starts', () => {
     });
 
     it('never deletes a repeat through the previous-track path', async () => {
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'song' },
+            player(),
+        );
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'song' },
+            player(),
+        );
 
         expect(removeQueueBefore).not.toHaveBeenCalled();
     });
@@ -505,11 +571,23 @@ describe('PlaybackGateway song starts', () => {
     it('ignores starts reported for unknown rooms', async () => {
         getRoom.mockResolvedValue(null);
 
-        await gateway.onStartedNewSong({
-            roomId: 'missing-room',
-            videoId: 'song',
-        });
+        await gateway.onStartedNewSong(
+            {
+                roomId: 'missing-room',
+                videoId: 'song',
+            },
+            player('missing-room'),
+        );
 
+        expect(removeQueue).not.toHaveBeenCalled();
+        expect(removeRoomVotes).not.toHaveBeenCalled();
+    });
+
+    it('does not change votes or queue for a socket that was not admitted', async () => {
+        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' }, {
+            data: {},
+            rooms: new Set(),
+        } as never);
         expect(removeQueue).not.toHaveBeenCalled();
         expect(removeRoomVotes).not.toHaveBeenCalled();
     });
@@ -521,9 +599,11 @@ describe('PlaybackGateway notifications', () => {
     const removeQueue = jest.fn();
     const playbackService = {
         getRoom,
-        sendPlaybackNotification,
         removeQueue,
     } as unknown as PlaybackService;
+    const notifier = {
+        sendPlaybackNotification,
+    } as unknown as TelegramNotifier;
     let gateway: PlaybackGateway;
 
     beforeEach(() => {
@@ -531,7 +611,11 @@ describe('PlaybackGateway notifications', () => {
         sendPlaybackNotification.mockReset();
         removeQueue.mockReset();
         removeQueue.mockResolvedValue(undefined);
-        gateway = new PlaybackGateway(playbackService, {} as AnalyticsService);
+        gateway = new PlaybackGateway(
+            playbackService,
+            {} as AnalyticsService,
+            notifier,
+        );
     });
 
     /** The admitted player socket, as the gateway records it on join. */
@@ -631,6 +715,41 @@ describe('PlaybackGateway notifications', () => {
         });
 
         expect(removeQueue).not.toHaveBeenCalled();
+        expect(sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing for a room with no Telegram chat', async () => {
+        getRoom.mockResolvedValue({
+            id: 'room-id',
+            chatId: '',
+            threadId: null,
+        });
+
+        await gateway.onPlaybackNotification(makeSocket() as never, {
+            roomId: 'room-id',
+            type: 'now-playing',
+            song: 'Title',
+            artist: 'Artist',
+        });
+
+        expect(sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('still drops a refused track in a room with no Telegram chat', async () => {
+        getRoom.mockResolvedValue({
+            id: 'room-id',
+            chatId: '',
+            threadId: null,
+        });
+
+        await gateway.onPlaybackNotification(makeSocket() as never, {
+            roomId: 'room-id',
+            type: 'queue-unavailable',
+            videoId: 'dQw4w9WgXcQ',
+            song: 'Title',
+        });
+
+        expect(removeQueue).toHaveBeenCalledWith('room-id', 'dQw4w9WgXcQ');
         expect(sendPlaybackNotification).not.toHaveBeenCalled();
     });
 });

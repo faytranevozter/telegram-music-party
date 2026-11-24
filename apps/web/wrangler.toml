@@ -1,0 +1,8 @@
+name = "ytparty-room"
+compatibility_date = "2026-11-25"
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "room.ytparty.my.id", custom_domain = true }]
+
+[assets]
+directory = "./dist"

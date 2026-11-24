@@ -12,3 +12,4 @@ client_secret_*.json
 *.db-journal
 *.db-shm
 *.db-wal
+/apps/web-landing/public/room-app/
