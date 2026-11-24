@@ -225,7 +225,7 @@ describe('vote_next', () => {
     const ALREADY = `Nice try, DJ—but you've already voted! Let's see what the others pick 🎧`;
 
     it('refuses a second vote from the same user', async () => {
-        const playback = votingRoom({ votes: ['7'] });
+        const playback = votingRoom({ votes: ['telegram:7'] });
         const { controller } = buildController({
             playback: playback.playback as any,
             gateway: playback.gateway,
@@ -250,7 +250,10 @@ describe('vote_next', () => {
         const random = jest.spyOn(Math, 'random').mockReturnValue(0);
         await controller.vote_next(ctx);
         random.mockRestore();
-        expect(playback.playback.addVote).toHaveBeenCalledWith('room', '7');
+        expect(playback.playback.addVote).toHaveBeenCalledWith(
+            'room',
+            'telegram:7',
+        );
         expect(ctx.reply.mock.calls[0][0]).toContain('2/3');
         expect(playback.gateway.nextCommand).not.toHaveBeenCalled();
     });

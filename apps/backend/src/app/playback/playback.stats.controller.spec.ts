@@ -126,13 +126,49 @@ describe('PlaybackStatsController room and topic isolation', () => {
 
         expect(analyticsService.getRequesterOverview).toHaveBeenCalledWith(
             'room-9',
-            '77',
+            'telegram:77',
             'month',
         );
     });
 });
 
 describe('PlaybackStatsController commands', () => {
+    it('only links valid Telegram references in requester rankings and history', async () => {
+        const { controller, playbackService, analyticsService } =
+            makeController();
+        playbackService.getRoomByChatId.mockResolvedValue({ id: 'room-1' });
+        analyticsService.getRoomOverview.mockResolvedValue(overview());
+        const ids = ['telegram:77', 'web:77', 'telegram:4<script>'];
+        analyticsService.getTopRequesters.mockResolvedValue(
+            ids.map((requesterId) => ({
+                requesterId,
+                requests: 1,
+                uniqueTracks: 1,
+            })),
+        );
+        analyticsService.getRecentPlaybacks.mockResolvedValue(
+            ids.map((requesterId) => ({
+                requesterId,
+                title: 'Song',
+                artist: 'Artist',
+                startedAt: new Date(),
+                listenedMs: 0,
+            })),
+        );
+        for (const command of ['/stats', '/history']) {
+            const ctx = makeCtx(command);
+            if (command === '/history') await controller.history(ctx);
+            else await controller.stats(ctx);
+            const text = String((ctx.reply.mock.calls[0] as unknown[])[0]);
+            expect(text.match(/tg:\/\/user\?id=\d+/g)).toEqual([
+                'tg://user?id=77',
+            ]);
+            expect(text).toContain('Web guest');
+            expect(text).toContain('unknown');
+            expect(text).not.toContain('<script>');
+        }
+    });
+
     it('ranks played songs for /top songs', async () => {
         const { controller, playbackService, analyticsService } =
             makeController();

@@ -17,6 +17,31 @@ function build() {
 }
 
 describe('PlayNextQuotaService', () => {
+    it('carries forward only the matching legacy Telegram counter', async () => {
+        jest.useFakeTimers({ now: new Date(2026, 10, 24, 12) });
+        try {
+            const { cache, service } = build();
+            await cache.set('playnext-daily:room:42:2026-11-24', 2);
+            await cache.set('playnext-daily:room:43:2026-11-23', 9);
+            expect(await service.used('room', 'web:42')).toBe(0);
+            expect(await service.used('other', 'telegram:42')).toBe(0);
+            expect(await service.used('room', 'telegram:43')).toBe(0);
+            expect(await service.used('room', 'telegram:42')).toBe(2);
+            await service.record('room', 'telegram:42');
+            expect(
+                await cache.get('playnext-daily:room:telegram:42:2026-11-24'),
+            ).toBe(3);
+            await service.record('room', 'telegram:42');
+            expect(await service.used('room', 'telegram:42')).toBe(4);
+            expect(await cache.get('playnext-daily:room:42:2026-11-24')).toBe(
+                2,
+            );
+            await cache.set('playnext-daily:room:telegram:42:2026-11-24', 0);
+            expect(await service.used('room', 'telegram:42')).toBe(0);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
     it('has no remaining count when the room limit is unlimited', async () => {
         const { service } = build();
         const room = { id: 'room', Feature: { dailyPlayNextLimit: 0 } };

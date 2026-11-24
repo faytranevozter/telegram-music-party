@@ -1,12 +1,9 @@
 import type { Context } from 'telegraf';
 import { Actor } from './core/actor';
+import { telegramUserRef } from './core/user-ref';
 
 /**
  * Describe the Telegram user behind `ctx` as a neutral actor.
- *
- * In stage 1 `userRef` is the bare Telegram user ID so that cache keys, votes
- * and request history stay identical. Stage 2 adds the `telegram:` prefix
- * together with the data migration.
  */
 export function telegramActor(ctx: Context, chatId: string): Actor {
     const from = ctx.from;
@@ -22,7 +19,7 @@ export function telegramActor(ctx: Context, chatId: string): Actor {
         return admin;
     };
     return {
-        userRef: String(from?.id || 0),
+        userRef: from?.id ? telegramUserRef(from.id) : '',
         displayName: name,
         source: 'telegram',
         isAdmin,

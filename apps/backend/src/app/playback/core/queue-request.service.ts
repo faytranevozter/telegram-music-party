@@ -104,7 +104,7 @@ export class QueueRequestService {
         try {
             requestId = await this.analyticsService.recordRequest({
                 roomId: room.id,
-                requesterId: actor.userRef,
+                requesterId: actor.userRef || null,
                 videoId,
                 title: song.title,
                 // Song results carry real artists; video channels stay unknown.

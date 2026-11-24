@@ -22,9 +22,16 @@ function makeCtx(options: {
 }
 
 describe('telegramActor', () => {
-    it('uses the bare Telegram user id as the user ref', () => {
+    it('does not fabricate an ID for an update with no sender', () => {
         const { ctx } = makeCtx({});
-        expect(telegramActor(ctx, '-100').userRef).toBe('7');
+        expect(telegramActor({ ...ctx, from: undefined }, '-100').userRef).toBe(
+            '',
+        );
+    });
+
+    it('uses the namespaced Telegram user id as the user ref', () => {
+        const { ctx } = makeCtx({});
+        expect(telegramActor(ctx, '-100').userRef).toBe('telegram:7');
         expect(telegramActor(ctx, '-100').source).toBe('telegram');
     });
 

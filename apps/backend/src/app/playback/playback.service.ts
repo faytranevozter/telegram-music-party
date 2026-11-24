@@ -133,7 +133,7 @@ export class PlaybackService {
 
     async addRoom(
         roomID: string,
-        chatId: string,
+        chatId: string | null,
         threadId: number | null,
         name: string,
     ) {

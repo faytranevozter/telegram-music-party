@@ -43,6 +43,7 @@ import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { QueueRequestService } from './core/queue-request.service';
 import { describeSongPlain } from './core/song-label';
 import { telegramActor } from './telegram-actor';
+import { telegramUserRef } from './core/user-ref';
 import type { Feature } from '@prisma/client';
 
 const SONG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -497,7 +498,7 @@ export class PlaybackTelegramController {
         if (!room?.Feature) return null;
         const remaining = await this.playNextQuota.remaining(
             room,
-            String(userId),
+            telegramUserRef(userId),
         );
         return this.formatPlayNextLabel(room.Feature, remaining);
     }
@@ -1563,7 +1564,7 @@ export class PlaybackTelegramController {
 
         const rows: Array<[string, string]> = [
             ['Room', room.id],
-            ['Chat', room.chatId],
+            ['Chat', chatId],
         ];
         if (room.threadId != null) {
             rows.push(['Topic', String(room.threadId)]);

@@ -107,6 +107,18 @@ describe('describeSongPlain', () => {
 });
 
 describe('QueueRequestService.request', () => {
+    it('records a request without a known actor as anonymous', async () => {
+        const { service, analytics, input } = build();
+        await service.request({
+            ...input,
+            position: 'end',
+            actor: makeActor(''),
+        });
+        expect(analytics.recordRequest).toHaveBeenCalledWith(
+            expect.objectContaining({ requesterId: null }),
+        );
+    });
+
     it('refuses Play Next in a room that disabled it', async () => {
         const { service, input } = build({
             feature: { playNextCommand: false, maxQueueSize: 10 },
