@@ -5,6 +5,7 @@ import type { Actor } from '../core/actor';
 import type { Feature } from '@prisma/client';
 import { authorizeControl } from '../core/control-access';
 import { PlayNextQuotaService } from '../core/play-next-quota.service';
+import { voteProgress } from '../core/vote.service';
 
 export const controls = [
     'play',
@@ -59,6 +60,7 @@ export class WebRoomStateService {
             role: owner ? 'owner' : 'guest',
             queue: queue.map(({ title, url }) => ({ title, videoId: url })),
             playerOnline,
+            voteProgress: voteProgress(room, actor.userRef),
             nowPlaying: playerOnline ? this.player.currentTrack(roomId) : null,
             capabilities: {
                 controls: controls.filter(

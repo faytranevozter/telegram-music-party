@@ -17,7 +17,7 @@ function votingRoom(options: {
     votes: string[];
 }) {
     const { minimumVotes = 3, votes } = options;
-    const gateway = { nextCommand: jest.fn() };
+    const gateway = { nextCommand: jest.fn(), roomChanged: jest.fn() };
     const room = {
         id: 'room',
         Feature: minimumVotes === null ? null : { minimumVotes },
@@ -67,6 +67,7 @@ describe('VoteService.castNextVote', () => {
         );
         expect(result).toEqual({ status: 'counted', count: 2, required: 3 });
         expect(options.playback.addVote).toHaveBeenCalledWith('room', '7');
+        expect(options.gateway.roomChanged).toHaveBeenCalledWith('room');
     });
 
     it('skips without storing the deciding vote', async () => {

@@ -17,6 +17,14 @@ type VotingRoom = {
     Votes: Array<{ userId: string }>;
 };
 
+export function voteProgress(room: VotingRoom, userRef: string) {
+    return {
+        count: room.Votes.length,
+        required: room.Feature?.minimumVotes ?? 5,
+        hasVoted: room.Votes.some((vote) => vote.userId === userRef),
+    };
+}
+
 /**
  * Counting rule for skipping the current track by vote. The vote that reaches
  * the minimum is not stored: it takes effect instead.
@@ -47,12 +55,13 @@ export class VoteService {
         room: VotingRoom,
         actor: Actor,
     ): Promise<VoteResult> {
-        if (room.Votes.some((vote) => vote.userId === actor.userRef)) {
+        const progress = voteProgress(room, actor.userRef);
+        if (progress.hasVoted) {
             return { status: 'already-voted' };
         }
 
-        const required = room.Feature ? room.Feature.minimumVotes : 5;
-        const count = room.Votes.length + 1;
+        const required = progress.required;
+        const count = progress.count + 1;
 
         if (count >= required) {
             const epoch = this.gateway.trackEpoch?.(room.id);
@@ -68,6 +77,7 @@ export class VoteService {
         }
 
         await this.playbackService.addVote(room.id, actor.userRef);
+        this.gateway.roomChanged(room.id);
         return { status: 'counted', count, required };
     }
 }

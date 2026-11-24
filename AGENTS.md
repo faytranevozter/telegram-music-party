@@ -16,7 +16,7 @@ pnpm monorepo (Turborepo) for a Telegram music party bot. Users control YouTube 
 - `apps/web-landing` — Cloudflare Worker serving `https://ytparty.my.id`. Static assets in `public/`; `src/worker.ts` routes `/`, `/privacy`, `/terms`, `/support`, `/gallery`.
   - **`wrangler.toml` requires explicit `binding = "ASSETS"`** when `main` is set — wrangler does not inject it automatically, and `env.ASSETS` will be `undefined` without it.
   - `/privacy` and `/terms` are generated from the root `PRIVACY.md` and `TERMS.md` by `scripts/build-privacy.mjs` / `scripts/build-terms.mjs` (shared renderer in `scripts/legal-page.mjs`, or `pnpm --filter=web-landing build:legal` for both). Regenerate after editing either document.
-- `apps/web` — invite-based browser room client (React/Vite), built with `VITE_PARTY_API_ORIGIN` and staged via `pnpm --filter=web-landing stage:room`. The Worker serves `/room`; the extension still plays the music. See `docs/web-room-api.md`.
+- `apps/web` — standalone invite-based browser room client (React/Vite and daisyUI). Build with `VITE_PARTY_API_ORIGIN` and serve `apps/web/dist` at `/` on a separate origin. The extension still plays the music. See `docs/web-room-api.md`.
 - `packages/` — currently empty (reserved).
 
 ## Public URLs

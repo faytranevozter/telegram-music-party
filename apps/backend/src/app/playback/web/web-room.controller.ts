@@ -188,6 +188,6 @@ export class WebRoomController {
             throw new BadRequestException();
         if (!ENV.WEB_ROOMS.enabled) throw new NotFoundException();
         const code = await this.access.setInvite(room.id, mode);
-        return { url: code ? `${ENV.WEB_ROOMS.origin}/room#${code}` : null };
+        return { url: code ? `${ENV.WEB_ROOMS.origin}/#${code}` : null };
     }
 }

@@ -54,11 +54,9 @@ export function App({ origin }: { origin?: string }) {
             const inviteKey = invite ? await digestInvite(invite).catch(() => null) : null;
             if (attempt !== generation.current || location.hash !== hash) return;
             const next = { token: joined.token, expiresAt: joined.expiresAt, inviteKey, origin: api.origin };
-            history.replaceState(null, '', location.pathname + location.search);
             saveSession(storage, next);
             setSaved(next);
-            setHash('');
-            setActive({ session: next, hash: '' });
+            setActive({ session: next, hash });
         } catch (cause) {
             if (attempt === generation.current) setError(explain(cause, cause instanceof ApiError && cause.http === 404 && invite ? 'This invite is unavailable. Ask the host for a new link.' : 'Could not open the room. Check the form and try again.'));
         } finally { if (attempt === generation.current) setBusy(false); }
@@ -72,28 +70,27 @@ export function App({ origin }: { origin?: string }) {
     }
 
     return <div className="frame">
-        <header className="mast"><a href="/" className="brand"><span aria-hidden="true">◉</span> Music Party</a><a href="/support" className="underline">Help</a></header>
+        <header className="navbar min-h-0 border-b border-base-300 px-0 py-3"><a href="/" className="flex flex-1 items-center gap-2 font-bold"><img src="/music-party-mark.jpg" alt="" width="32" height="32" className="rounded-lg" /> Music Party</a><a href="https://ytparty.my.id/support" className="btn btn-ghost btn-sm">Help</a></header>
         <main>
             {api && session ? <Room key={session.token} api={api} token={session.token} onLeave={() => close(session.token)} onRevoked={() => close(session.token, true)} /> :
-                <div className="entry">
-                    <div className="sleeve" aria-hidden="true"><div className="record"><i /><i /><i /></div><span>Music<br />Party</span></div>
-                    <section className="entry-form">
+                <div className="mx-auto max-w-lg">
+                    <section className="card border border-base-300 bg-base-100"><div className="card-body gap-4">
                         <h1>{invite ? 'Join the room' : 'Start a room'}</h1>
                         <p>{invite ? 'Pick a nickname and add a song to the shared queue. No Telegram account needed.' : 'Create a shared queue for your friends. One person connects the YouTube Music extension to play it.'}</p>
                         {!api ? <p role="alert">This build doesn’t have a party server configured.</p> : <>
-                            {!hash && saved && saved.expiresAt > Date.now() && <button type="button" className="secondary" onClick={() => setActive({ session: saved, hash })}>Resume room</button>}
+                            {!hash && saved && saved.expiresAt > Date.now() && <button type="button" className="btn btn-outline" onClick={() => setActive({ session: saved, hash })}>Resume room</button>}
                             {hash && !invite ? <p role="alert">This invite link is invalid. Ask the host for a new one.</p> :
                                 <form onSubmit={enter}>
-                                    {!invite && <label>Room name<input id="room-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label>}
-                                    <label>Nickname<input id="nickname" required maxLength={64} value={nickname} onChange={(event) => setNickname(event.target.value)} /></label>
+                                    {!invite && <label>Room name<input className="input input-bordered w-full" id="room-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label>}
+                                    <label>Nickname<input className="input input-bordered w-full" id="nickname" required maxLength={64} value={nickname} onChange={(event) => setNickname(event.target.value)} /></label>
                                     {!invite && <small>Keep this tab open to retain owner access. Leaving the room clears it.</small>}
-                                    <button className="primary" disabled={busy || !nickname.trim() || [...nickname.trim()].length > 32 || (!invite && !name.trim())}>{busy ? 'Opening room…' : invite ? 'Join room' : 'Create room'}</button>
+                                    <button className="btn btn-primary" disabled={busy || !nickname.trim() || [...nickname.trim()].length > 32 || (!invite && !name.trim())}>{busy ? 'Opening room…' : invite ? 'Join room' : 'Create room'}</button>
                                 </form>}
                         </>}
-                        {error && <p role="alert" className="notice">{error}</p>}
-                    </section>
+                        {error && <p role="alert" className="alert alert-warning">{error}</p>}
+                    </div></section>
                 </div>}
         </main>
-        <footer><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
+        <footer><a className="link link-hover" href="https://ytparty.my.id/privacy">Privacy</a><a className="link link-hover" href="https://ytparty.my.id/terms">Terms</a></footer>
     </div>;
 }

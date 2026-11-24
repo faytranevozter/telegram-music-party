@@ -85,7 +85,8 @@ export class WebRoomService {
         const song = await this.cache.get<Song>(
             this.selectionKey(roomId, actor, selectionId),
         );
-        if (!song) throw new NotFoundException('Selection not found');
+        if (!song)
+            throw new NotFoundException({ status: 'selection-not-found' });
         const result = await this.queue.request({
             room: await this.room(roomId),
             actor,

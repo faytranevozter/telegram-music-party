@@ -46,5 +46,4 @@ jobs:
           pnpm --filter=web lint
           pnpm --filter=web test
           pnpm --filter=web build
-          pnpm --filter=web-landing stage:room
           pnpm --filter=web-landing test

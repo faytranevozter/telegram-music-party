@@ -9,8 +9,7 @@
         "deploy": "wrangler deploy",
         "build:privacy": "node scripts/build-privacy.mjs",
         "build:terms": "node scripts/build-terms.mjs",
-        "build:legal": "node scripts/build-privacy.mjs && node scripts/build-terms.mjs",
-        "stage:room": "node scripts/stage-room.mjs"
+        "build:legal": "node scripts/build-privacy.mjs && node scripts/build-terms.mjs"
     },
     "devDependencies": {
         "wrangler": "^4.0.0"

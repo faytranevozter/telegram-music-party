@@ -1,81 +1,121 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, explain, type Control, type Selection, type WebApi } from './api';
 import { OwnerSetup } from './OwnerSetup';
 import { useRoom } from './use-room';
+import { TrackCover } from './TrackCover';
+import { formatTrackDuration, queueTrackDisplay } from './track-art';
 
-const labels: Record<Control, string> = {play: 'Play', pause: 'Pause', next: 'Next', previous: 'Previous', radio: 'Start radio', refresh: 'Refresh player queue', mute: 'Mute', unmute: 'Unmute', 'volume-up': 'Volume up', 'volume-down': 'Volume down'};
+import { controlLabels, PlayerBar } from './PlaybackControls';
+import { NowPlayingPanel, RoomPanelTabs, SearchResultsSkeleton, SearchTrackRow, SkipVoteProgress, SongSearchForm, UpNextPanel } from './RoomPanels';
+import { RoomFlash, RoomHeader, type FlashMessage } from './RoomChrome';
+import { queueSelection, type SelectionSearch } from './queue-selection';
+
+const playbackActions = Object.keys(controlLabels) as Control[];
 
 export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: string; onLeave: () => void; onRevoked: () => void}) {
     const { state, live, error, refresh } = useRoom(api, token, onRevoked);
     const [query, setQuery] = useState('');
     const [type, setType] = useState<'song' | 'video'>('song');
     const [results, setResults] = useState<Selection[] | null>(null);
+    const [selectionSearch, setSelectionSearch] = useState<SelectionSearch | null>(null);
     const [searching, setSearching] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [feedback, setFeedback] = useState('');
+    const [lastPlaybackCommand, setLastPlaybackCommand] = useState<'play' | 'pause'>();
+    const [muted, setMuted] = useState(false);
+    const [feedback, setFeedback] = useState<FlashMessage | null>(null);
+    const dismissFeedback = useCallback(() => setFeedback(null), []);
     const [confirmLeave, setConfirmLeave] = useState(false);
+    const [panel, setPanel] = useState<'search' | 'queue'>('search');
     const pending = useRef<AbortController | undefined>(undefined);
+    const pendingSelection = useRef<AbortController | undefined>(undefined);
     const mounted = useRef(true);
-    useEffect(() => { mounted.current = true; return () => { mounted.current = false; pending.current?.abort(); }; }, []);
+    useEffect(() => { mounted.current = true; return () => { mounted.current = false; pending.current?.abort(); pendingSelection.current?.abort(); }; }, []);
     function resetSearch() { pending.current?.abort(); setSearching(false); setResults(null); }
     async function search(event: FormEvent) {
         event.preventDefault();
         resetSearch();
         const abort = new AbortController();
-        pending.current = abort; setSearching(true); setFeedback('');
+        pending.current = abort; setSearching(true); setFeedback(null);
         try {
-            const found = await api.search(token, query.trim(), state?.capabilities.videoSearch ? type : 'song', abort.signal);
-            if (!abort.signal.aborted) setResults(found);
+            const selection: SelectionSearch = { query: query.trim(), type: state?.capabilities.videoSearch ? type : 'song' };
+            const found = await api.search(token, selection.query, selection.type, abort.signal);
+            if (!abort.signal.aborted) { setResults(found); setSelectionSearch(selection); }
         } catch (cause) {
             if (!abort.signal.aborted) report(cause, 'Search is unavailable. Try again.');
         } finally { if (!abort.signal.aborted) setSearching(false); }
     }
     function report(cause: unknown, fallback?: string) {
         if (cause instanceof ApiError && cause.http === 401) onRevoked();
-        else setFeedback(explain(cause, fallback));
+        else setFeedback({ text: explain(cause, fallback), tone: 'error' });
     }
     async function act(action: () => Promise<string>, fallback?: string) {
         if (busy) return;
-        setBusy(true); setFeedback('');
-        try { const message = await action(); if (mounted.current) { setFeedback(message); refresh(); } }
+        setBusy(true); setFeedback(null);
+        try { const message = await action(); if (mounted.current) { setFeedback({ text: message, tone: 'success' }); refresh(); } }
         catch (cause) { if (mounted.current) report(cause, fallback); }
         finally { if (mounted.current) setBusy(false); }
     }
+    function addTrack(song: Selection, position: 'end' | 'next') {
+        if (!selectionSearch || busy) return;
+        const request = new AbortController();
+        pendingSelection.current = request;
+        void act(async () => {
+            await queueSelection(api, token, song, position, selectionSearch, request.signal);
+            return position === 'next' ? 'Added to Play Next.' : 'Added to the shared queue.';
+        }, 'Could not add this track. Try again.');
+    }
     return <section className="room">
-        <div className="room-heading"><h1>{state?.name ?? 'Listening room'}</h1><button onClick={() => state?.role === 'owner' || !state ? setConfirmLeave(true) : onLeave()}>Leave room</button></div>
-        {confirmLeave && <div className="notice"><p>Leaving clears your session in this tab. If you own the room, you won’t be able to recover owner access.</p><div className="actions"><button onClick={onLeave}>Confirm leave</button><button onClick={() => setConfirmLeave(false)}>Stay in room</button></div></div>}
-        {error && <div className="notice" role="alert">{error} <button onClick={refresh}>Retry connection</button></div>}
+        <RoomHeader name={state?.name ?? 'Listening room'} role={state ? state.role === 'owner' ? 'Host' : 'Guest' : undefined} connection={state ? { label: state.playerOnline ? 'Player connected' : 'Player offline', online: state.playerOnline } : undefined}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => state?.role === 'owner' || !state ? setConfirmLeave(true) : onLeave()}>Leave room</button>
+        </RoomHeader>
+        {state?.role === 'owner' && <OwnerSetup api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} />}
+        {confirmLeave && <div className="alert alert-warning"><p>Leaving clears your session in this tab. If you own the room, you won’t be able to recover owner access.</p><div className="actions"><button className="btn btn-sm" onClick={onLeave}>Confirm leave</button><button className="btn btn-ghost btn-sm" onClick={() => setConfirmLeave(false)}>Stay in room</button></div></div>}
+        {error && <div className="alert alert-error" role="alert">{error} <button className="btn btn-sm" onClick={refresh}>Retry connection</button></div>}
         {!state ? !error && <p role="status">Opening the room…</p> : <>
-            <section className="playing" aria-label="Now playing">
-                <div className="playing-mark" aria-hidden="true"><span>◉</span></div>
-                <div><div className="connection" aria-live="polite">{live ? 'Live updates on' : 'Live updates disconnected'}</div>
-                    {!live && !error && <button onClick={refresh}>Reconnect live updates</button>}
-                    <h2>{state.nowPlaying?.title ?? (state.playerOnline ? 'Nothing playing yet' : 'Player offline')}</h2>
-                    <p>{state.nowPlaying?.artist || (state.playerOnline ? 'Songs play through the host’s extension.' : 'You can still add songs to the queue.')}</p>
-                    <div className="actions">{state.capabilities.controls.map((action) => <button key={action} disabled={busy || !state.playerOnline} onClick={() => void act(async () => { await api.control(token, action); return `${labels[action]} sent to player.`; })}>{labels[action]}</button>)}</div>
-                </div>
-            </section>
-            <p className="feedback" role="status">{feedback}</p>
+            <NowPlayingPanel
+                cover={state.nowPlaying && <TrackCover key={state.nowPlaying.videoId} videoId={state.nowPlaying.videoId} large />}
+                status={lastPlaybackCommand === 'pause' ? 'Paused' : 'Now playing'}
+                title={state.nowPlaying?.title ?? (state.playerOnline ? 'Nothing playing yet' : 'Player offline')}
+                description={state.nowPlaying?.artist || (state.playerOnline ? 'Songs play through the host’s extension.' : 'You can still add songs to the queue.')}
+                controls={<PlayerBar
+                        paused={lastPlaybackCommand ? lastPlaybackCommand === 'pause' : !state.nowPlaying}
+                        muted={muted}
+                        disabled={busy || !state.playerOnline}
+                        disabledControls={playbackActions.filter((action) => !state.capabilities.controls.includes(action))}
+                        onControl={(action) => void act(async () => {
+                            await api.control(token, action);
+                            if (mounted.current) {
+                                if (action === 'play' || action === 'pause') setLastPlaybackCommand(action);
+                                if (action === 'mute' || action === 'unmute') setMuted(action === 'mute');
+                            }
+                            return `${controlLabels[action]} sent to player.`;
+                        })}
+                />}
+            />
+            {!live && !error && <div className="flex flex-wrap items-center gap-2 text-sm"><span role="status">Live updates disconnected</span><button className="btn btn-outline btn-sm" onClick={refresh}>Reconnect live updates</button></div>}
+            <RoomPanelTabs panel={panel} count={state.queue.length} onChange={setPanel} />
             <div className="room-columns">
-                <section aria-labelledby="search-title"><h2 id="search-title">Find a song</h2>
-                    <form className="search" onSubmit={search}>
-                        <label>Song or artist<input id="song-query" type="search" required value={query} maxLength={200} onChange={(event) => { resetSearch(); setQuery(event.target.value); }} /></label>
-                        {state.capabilities.videoSearch && <label>Search in<select value={type} onChange={(event) => { resetSearch(); setType(event.target.value === 'video' ? 'video' : 'song'); }}><option value="song">Songs</option><option value="video">Videos</option></select></label>}
-                        <button className="primary" disabled={searching || query.trim().length < 3}>{searching ? 'Searching…' : 'Search'}</button>
-                    </form>
+                <section className={`card border border-base-300 bg-base-100 ${panel !== 'search' ? 'hidden md:flex' : ''}`} aria-labelledby="search-title"><div className="card-body gap-4 p-4 sm:p-6"><h2 id="search-title">Find a song</h2>
+                    <SongSearchForm query={query} searching={searching} onChange={(value) => { resetSearch(); setQuery(value); }} onSearch={search}>
+                        {state.capabilities.videoSearch && <label>Search in<select className="select select-bordered w-full" value={type} onChange={(event) => { resetSearch(); setType(event.target.value === 'video' ? 'video' : 'song'); }}><option value="song">Songs</option><option value="video">Videos</option></select></label>}
+                    </SongSearchForm>
                     {results?.length === 0 && <p>No results. Try a different song or artist.</p>}
-                    <ul className="tracks">{results?.map((song) => <li key={song.selectionId}><div><strong>{song.title}</strong><p>{song.artistName ?? song.channelName ?? 'Unknown artist'}</p></div><div className="actions">
-                        <button disabled={busy} onClick={() => void act(async () => { await api.queue(token, song.selectionId, 'end'); return 'Added to the shared queue.'; }, 'Could not add this result. Search again if the selection has expired.')}>Add to queue</button>
-                        {state.capabilities.playNext && <button disabled={busy || state.capabilities.playNextRemaining === 0} onClick={() => void act(async () => { await api.queue(token, song.selectionId, 'next'); return 'Added to Play Next.'; }, 'Could not add this result. Search again if the selection has expired.')}>Play Next</button>}
-                    </div></li>)}</ul>
+                    {results === null && !searching && <p className="text-sm text-base-content/70">Search for a song or artist to add something to the room.</p>}
+                    {searching ? <SearchResultsSkeleton /> : <ul className="list -mx-2" aria-label="Search results">{results?.map((song) => {
+                        const duration = formatTrackDuration(song.durationSeconds);
+                        const queued = state.queue.some((track) => track.videoId === song.videoId);
+                        return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<>
+                        <button className="btn btn-primary btn-soft btn-sm" disabled={busy || queued} aria-label={queued ? `${song.title} is queued` : `Add ${song.title} to queue`} onClick={() => addTrack(song, 'end')}>{queued ? 'Queued' : '+ Add'}</button>
+                        {state.capabilities.playNext && !queued && <button className="btn btn-ghost btn-sm" disabled={busy || state.capabilities.playNextRemaining === 0} onClick={() => addTrack(song, 'next')}>Play Next</button>}
+                    </>} />; })}</ul>}
                     {state.capabilities.playNext && state.capabilities.playNextRemaining !== null && <p>Play Next uses left today: {state.capabilities.playNextRemaining}</p>}
-                </section>
-                <section aria-labelledby="queue-title"><h2 id="queue-title">Shared queue <span className="count">{state.queue.length}</span></h2>
-                    {state.queue.length ? <ol className="queue">{state.queue.map((track, index) => <li key={`${track.videoId}:${index}`}>{track.title}</li>)}</ol> : <p>No songs queued. Add one from search.</p>}
-                    <button disabled={busy || !state.playerOnline} onClick={() => void act(async () => { const result = await api.vote(token); return result.status === 'passed' ? 'The room voted to skip.' : `Vote recorded (${result.count}/${result.required}).`; })}>Vote to skip</button>
-                </section>
+                </div></section>
+                <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title) }))}>
+                    {state.voteProgress && <SkipVoteProgress count={state.voteProgress.count} required={state.voteProgress.required} />}
+                    <button className="btn btn-outline btn-sm" disabled={busy || !state.playerOnline || state.voteProgress?.hasVoted} onClick={() => void act(async () => { const result = await api.vote(token); return result.status === 'passed' ? 'The room voted to skip.' : `Vote recorded (${result.count}/${result.required}).`; })}>{state.voteProgress?.hasVoted ? 'Vote recorded' : 'Vote to skip'}</button>
+                </UpNextPanel>
             </div>
-            {state.role === 'owner' && <OwnerSetup api={api} token={token} onRevoked={onRevoked} />}
         </>}
+        <RoomFlash message={feedback} onDismiss={dismissFeedback} />
     </section>;
 }

@@ -10,7 +10,6 @@ on:
     branches: [main, master]
     paths:
       - "apps/web-landing/**"
-      - "apps/web/**"
       - "PRIVACY.md"
       - "TERMS.md"
       - "pnpm-lock.yaml"
@@ -47,11 +46,6 @@ jobs:
       # /terms. Regenerate so the deployed pages always match the repository.
       - name: Generate legal pages
         run: pnpm --filter=web-landing build:legal
-
-      - name: Build and stage the room client
-        env:
-          VITE_PARTY_API_ORIGIN: https://music.ytparty.my.id
-        run: pnpm --filter=web build && pnpm --filter=web-landing stage:room
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

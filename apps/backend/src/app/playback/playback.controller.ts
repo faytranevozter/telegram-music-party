@@ -1508,7 +1508,7 @@ export class PlaybackTelegramController {
                 try {
                     await ctx.telegram.sendMessage(
                         ctx.from.id,
-                        `Web room invite: ${ENV.WEB_ROOMS.origin}/room#${code}`,
+                        `Web room invite: ${ENV.WEB_ROOMS.origin}/#${code}`,
                         {
                             link_preview_options: { is_disabled: true },
                         },

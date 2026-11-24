@@ -74,7 +74,7 @@ it.each(['enable', 'rotate', 'disable'] as const)(
         else
             expect(sendMessage).toHaveBeenCalledWith(
                 7,
-                expect.stringContaining('https://party.example/room#test-code'),
+                expect.stringContaining('https://party.example/#test-code'),
                 expect.any(Object),
             );
         expect(ctx.reply).not.toHaveBeenCalled();

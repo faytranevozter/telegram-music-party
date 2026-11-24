@@ -2,10 +2,11 @@ export type Control = 'play' | 'pause' | 'next' | 'previous' | 'radio' | 'refres
 export type Track = { title: string; videoId: string };
 export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
+    voteProgress?: { count: number; required: number; hasVoted: boolean };
     nowPlaying: (Track & { artist: string }) | null;
     capabilities: { controls: Control[]; playNext: boolean; playNextRemaining: number | null; videoSearch: boolean };
 };
-export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null};
+export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};
 type Admission = { token: string; expiresAt: number; room: {name: string} };
 export type Setup = { roomId: string; shareCode: string | null };
 
@@ -48,6 +49,8 @@ export type WebApi = ReturnType<typeof createWebApi>;
 export function explain(error: unknown, fallback = 'Could not reach the party server. Try again.') {
     if (!(error instanceof ApiError)) return fallback;
     const messages: Record<string, string> = {
+        'selection-not-found': 'Could not refresh this track. Try adding it again.',
+        'track-unavailable': 'This track is no longer in the search results.',
         'queue-full': 'The queue is full. Try again after a song starts.',
         duplicate: 'That song is already in the queue.',
         'limit-reached': 'You’ve used today’s Play Next allowance.',

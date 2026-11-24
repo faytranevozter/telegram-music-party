@@ -6,11 +6,10 @@ Use a disposable backend for local testing. Set `WEB_PUBLIC_ORIGIN=http://127.0.
 
 ```sh
 VITE_PARTY_API_ORIGIN=http://127.0.0.1:3033 pnpm --filter=web build
-pnpm --filter=web-landing stage:room
-pnpm --filter=web-landing dev --ip 127.0.0.1 --port 8787
+pnpm --filter=web exec vite preview --host 127.0.0.1 --port 8787 --strictPort
 ```
 
-Open `http://127.0.0.1:8787/room` or use a local invite link from the bot. The client does not default to the production API. Production builds use `https://music.ytparty.my.id`; production backend CORS and observer origin must be set to `https://ytparty.my.id`. Deploy the Worker and updated legal pages, confirm the origin pair and staged test-room flow, then enable web rooms only after launch approval.
+Open `http://127.0.0.1:8787/` or use a local invite link from the bot (`/#<code>`). The client does not default to the production API. For production, build with `VITE_PARTY_API_ORIGIN=https://music.ytparty.my.id` and serve `apps/web/dist` at `/` on a dedicated HTTPS origin. Set the backend's `WEB_PUBLIC_ORIGIN` to that exact origin for invites, CORS and observer connections. Publish the updated legal pages separately and enable web rooms only after launch approval. Previously issued `/room#…` URLs need to be replaced with fresh links; existing invite codes still work at the new root.
 
 Web rooms are disabled by default. Enable with `WEB_ROOMS_ENABLED=true`, set
 `WEB_PUBLIC_ORIGIN` to the exact client origin, and supply a random base64url

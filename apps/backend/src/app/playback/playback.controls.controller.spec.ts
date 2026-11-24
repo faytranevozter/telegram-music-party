@@ -212,6 +212,7 @@ function votingRoom(options: {
         addVote: jest.fn(),
     };
     const gateway = {
+        roomChanged: jest.fn(),
         nextCommand: jest.fn(),
         muteCommand: jest.fn(),
         previousCommand: jest.fn(),
