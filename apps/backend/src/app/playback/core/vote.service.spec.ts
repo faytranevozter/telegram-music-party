@@ -17,12 +17,15 @@ function votingRoom(options: {
     votes: string[];
 }) {
     const { minimumVotes = 3, votes } = options;
-    const playback = { addVote: jest.fn() };
     const gateway = { nextCommand: jest.fn() };
     const room = {
         id: 'room',
         Feature: minimumVotes === null ? null : { minimumVotes },
         Votes: votes.map((userId) => ({ userId })),
+    };
+    const playback = {
+        addVote: jest.fn(),
+        getRoomWithFeatures: jest.fn().mockResolvedValue(room),
     };
     return { playback, gateway, room };
 }
@@ -32,6 +35,19 @@ function build(options: ReturnType<typeof votingRoom>) {
 }
 
 describe('VoteService.castNextVote', () => {
+    it('only emits one skip when two votes reach the threshold concurrently', async () => {
+        const options = votingRoom({ votes: ['98', '99'] });
+        const service = build(options);
+        const results = await Promise.all([
+            service.castNextVote(options.room as any, makeActor('7')),
+            service.castNextVote(options.room as any, makeActor('8')),
+        ]);
+        expect(results.map(({ status }) => status)).toEqual([
+            'passed',
+            'skip-pending',
+        ]);
+        expect(options.gateway.nextCommand).toHaveBeenCalledTimes(1);
+    });
     it('refuses a vote from someone who already voted', async () => {
         const options = votingRoom({ votes: ['7'] });
         const result = await build(options).castNextVote(

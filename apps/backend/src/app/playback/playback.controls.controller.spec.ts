@@ -217,7 +217,13 @@ function votingRoom(options: {
         previousCommand: jest.fn(),
     };
     // Use the real service so the controller test still proves end behavior.
-    const voteService = new VoteService(playback as any, gateway as any);
+    const voteService = new VoteService(
+        {
+            ...playback,
+            getRoomWithFeatures: playback.getDevicesByChatId,
+        } as any,
+        gateway as any,
+    );
     return { playback, gateway, voteService };
 }
 

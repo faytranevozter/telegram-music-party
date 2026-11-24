@@ -136,6 +136,53 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         );
     }
 
+    async playerOnline(roomId: string): Promise<boolean> {
+        const sockets = await this.wss.in(roomId).fetchSockets();
+        const sessions = sockets.map((socket) => this.getSession(socket));
+        return (
+            sessions.length === 1 &&
+            sessions[0]?.roomId === roomId &&
+            Boolean(
+                await this.playbackService.getRoomDevice(
+                    roomId,
+                    sessions[0].fingerprint,
+                ),
+            )
+        );
+    }
+
+    private readonly webTracks = new Map<
+        string,
+        { playbackId: string; videoId: string; title: string; artist: string }
+    >();
+    private readonly webChanges = new Set<(roomId: string) => void>();
+
+    currentTrack(roomId: string) {
+        const track = this.webTracks.get(roomId);
+        return track
+            ? {
+                  videoId: track.videoId,
+                  title: track.title,
+                  artist: track.artist,
+              }
+            : null;
+    }
+
+    private readonly trackEpochs = new Map<string, object>();
+
+    trackEpoch(roomId: string) {
+        return this.trackEpochs.get(roomId);
+    }
+
+    watchRoomChanges(listener: (roomId: string) => void) {
+        this.webChanges.add(listener);
+        return () => this.webChanges.delete(listener);
+    }
+
+    roomChanged(roomId: string) {
+        for (const listener of this.webChanges) listener(roomId);
+    }
+
     pauseCommand(roomID: string) {
         console.log(`Emitting 'pause' event to ${roomID}`);
         this.wss.to(roomID).emit('pause');
@@ -187,11 +234,15 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         this.wss
             .to(roomID)
             .emit('addToQueue', { videoId, position, title, requestId });
+        this.roomChanged(roomID);
     }
 
     leave(roomID: string) {
         console.log(`Emitting 'leave' event to ${roomID}`);
         this.wss.to(roomID).emit('leave');
+        this.webTracks.delete(roomID);
+        this.trackEpochs.delete(roomID);
+        this.roomChanged(roomID);
     }
 
     @SubscribeMessage('join')
@@ -253,6 +304,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             // emit join with queue only to the joining socket
             const queues = await this.playbackService.getQueues(room.id);
             socket.emit('joined', queues);
+            this.roomChanged(room.id);
 
             console.log('player joined', data.id);
         });
@@ -296,6 +348,9 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         // actually leave the Socket.IO room so it stops receiving playback events
         void socket.leave(data.roomId);
         this.setSession(socket, null);
+        this.webTracks.delete(data.roomId);
+        this.trackEpochs.delete(data.roomId);
+        this.roomChanged(data.roomId);
     }
 
     async handleDisconnect(socket: Socket) {
@@ -325,6 +380,9 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         if (stillConnected) return;
 
         await this.playbackService.removeDevice(roomId, fingerprint);
+        this.webTracks.delete(roomId);
+        this.trackEpochs.delete(roomId);
+        this.roomChanged(roomId);
         // Playback cannot be confirmed while disconnected. A reconnect with the
         // same playback ID reopens an interrupted session.
         await this.analyticsService.closeRoomSessions(roomId, 'interrupted');
@@ -334,7 +392,24 @@ export class PlaybackGateway implements OnGatewayDisconnect {
     @SubscribeMessage('started')
     async onStartedNewSong(
         @MessageBody() data: { roomId: string; videoId: string },
+        @ConnectedSocket() socket: Socket,
     ) {
+        if (
+            !data ||
+            typeof data.roomId !== 'string' ||
+            typeof data.videoId !== 'string'
+        )
+            return;
+        const session = this.getSession(socket);
+        if (
+            session?.roomId !== data.roomId ||
+            !socket.rooms?.has(data.roomId) ||
+            !(await this.playbackService.getRoomDevice(
+                data.roomId,
+                session.fingerprint,
+            ))
+        )
+            return;
         console.log('Start new songs', data);
 
         // get room
@@ -368,6 +443,8 @@ export class PlaybackGateway implements OnGatewayDisconnect {
 
         // clear votes
         await this.playbackService.removeRoomVotes(data.roomId);
+        this.trackEpochs.set(data.roomId, {});
+        this.roomChanged(data.roomId);
     }
 
     /**
@@ -391,6 +468,21 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             session.fingerprint,
         );
         if (!device) return;
+
+        if (this.webChanges.size) {
+            const current = this.webTracks.get(report.roomId);
+            if (report.event !== 'end') {
+                this.webTracks.set(report.roomId, {
+                    playbackId: report.playbackId,
+                    videoId: report.videoId,
+                    title: report.title,
+                    artist: report.artist,
+                });
+            } else if (current?.playbackId === report.playbackId) {
+                this.webTracks.delete(report.roomId);
+            }
+            this.roomChanged(report.roomId);
+        }
 
         try {
             await this.analyticsService.recordPlayback(report);
@@ -421,6 +513,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             if (!session || session.roomId !== data.roomId) return;
             if (!socket.rooms?.has(data.roomId)) return;
             await this.playbackService.removeQueue(data.roomId, data.videoId);
+            this.roomChanged(data.roomId);
         }
 
         // Rooms without a Telegram chat (web-only rooms) have nowhere to send

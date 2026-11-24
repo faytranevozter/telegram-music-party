@@ -27,6 +27,12 @@ const codeVersion = (code: string) =>
 
 @Injectable()
 export class WebRoomAccessService {
+    private readonly inviteListeners = new Set<(roomId: string) => void>();
+
+    watchInvites(listener: (roomId: string) => void) {
+        this.inviteListeners.add(listener);
+        return () => this.inviteListeners.delete(listener);
+    }
     constructor(
         private readonly prisma: PrismaService,
         private readonly sessions: WebSession,
@@ -114,7 +120,7 @@ export class WebRoomAccessService {
                 return room.shareCode;
             });
         }
-        return this.retryCollision(async () => {
+        const code = await this.retryCollision(async () => {
             const shareCode = mode === 'disable' ? null : newCode();
             const room = await this.prisma.room.update({
                 where: { id: roomId },
@@ -122,6 +128,8 @@ export class WebRoomAccessService {
             });
             return room.shareCode;
         });
+        for (const listener of this.inviteListeners) listener(roomId);
+        return code;
     }
 
     private issue(

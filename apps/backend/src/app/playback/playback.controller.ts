@@ -1384,6 +1384,11 @@ export class PlaybackTelegramController {
             return;
         }
 
+        if (result.status === 'skip-pending') {
+            await ctx.reply('The player is already moving to the next song.');
+            return;
+        }
+
         if (result.status === 'passed') {
             await ctx.reply(
                 [
@@ -1549,6 +1554,7 @@ export class PlaybackTelegramController {
         if (action === 'toggle' && field.type === 'boolean') {
             const value = !(room.Feature[key] as boolean);
             await this.playbackService.setFeature(room.id, key, value);
+            this.gateway.roomChanged?.(room.id);
             await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
             await this.editConfigMessage(ctx, chatId, threadId);
             return;
@@ -1582,6 +1588,7 @@ export class PlaybackTelegramController {
             }
             const value = parseInt(rawValue);
             await this.playbackService.setFeature(room.id, key, value);
+            this.gateway.roomChanged?.(room.id);
             await ctx.answerCbQuery(`Set ${field.label} to ${value}`);
             await this.editConfigMessage(ctx, chatId, threadId);
             return;
@@ -1928,6 +1935,7 @@ export class PlaybackTelegramController {
                                     pendingConfig.key,
                                     value,
                                 );
+                                this.gateway.roomChanged?.(room.id);
                                 await this.cacheManager.delete(
                                     `config-custom:${userId}`,
                                 );

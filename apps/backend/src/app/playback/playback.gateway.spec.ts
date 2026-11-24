@@ -502,6 +502,11 @@ describe('PlaybackGateway playback reports', () => {
 });
 
 describe('PlaybackGateway song starts', () => {
+    const player = (roomId = 'room-id') =>
+        ({
+            data: { session: { roomId, fingerprint: 'device' } },
+            rooms: new Set([roomId]),
+        }) as never;
     const getRoom = jest.fn();
     const removeQueue = jest.fn();
     const removeQueueBefore = jest.fn();
@@ -517,6 +522,7 @@ describe('PlaybackGateway song starts', () => {
         gateway = new PlaybackGateway(
             {
                 getRoom,
+                getRoomDevice: jest.fn().mockResolvedValue({ id: 'device' }),
                 removeQueue,
                 removeQueueBefore,
                 removeRoomVotes,
@@ -527,11 +533,17 @@ describe('PlaybackGateway song starts', () => {
     });
 
     it('clears the started track and the one it replaced', async () => {
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'first' });
-        await gateway.onStartedNewSong({
-            roomId: 'room-id',
-            videoId: 'second',
-        });
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'first' },
+            player(),
+        );
+        await gateway.onStartedNewSong(
+            {
+                roomId: 'room-id',
+                videoId: 'second',
+            },
+            player(),
+        );
 
         expect(removeQueue).toHaveBeenLastCalledWith('room-id', 'second');
         expect(removeQueueBefore).toHaveBeenCalledTimes(1);
@@ -544,8 +556,14 @@ describe('PlaybackGateway song starts', () => {
     });
 
     it('never deletes a repeat through the previous-track path', async () => {
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
-        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' });
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'song' },
+            player(),
+        );
+        await gateway.onStartedNewSong(
+            { roomId: 'room-id', videoId: 'song' },
+            player(),
+        );
 
         expect(removeQueueBefore).not.toHaveBeenCalled();
     });
@@ -553,11 +571,23 @@ describe('PlaybackGateway song starts', () => {
     it('ignores starts reported for unknown rooms', async () => {
         getRoom.mockResolvedValue(null);
 
-        await gateway.onStartedNewSong({
-            roomId: 'missing-room',
-            videoId: 'song',
-        });
+        await gateway.onStartedNewSong(
+            {
+                roomId: 'missing-room',
+                videoId: 'song',
+            },
+            player('missing-room'),
+        );
 
+        expect(removeQueue).not.toHaveBeenCalled();
+        expect(removeRoomVotes).not.toHaveBeenCalled();
+    });
+
+    it('does not change votes or queue for a socket that was not admitted', async () => {
+        await gateway.onStartedNewSong({ roomId: 'room-id', videoId: 'song' }, {
+            data: {},
+            rooms: new Set(),
+        } as never);
         expect(removeQueue).not.toHaveBeenCalled();
         expect(removeRoomVotes).not.toHaveBeenCalled();
     });

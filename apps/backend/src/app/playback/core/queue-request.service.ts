@@ -8,6 +8,7 @@ import { Actor } from './actor';
 import { PlayNextQuotaService } from './play-next-quota.service';
 import { describeSongPlain } from './song-label';
 import type { Feature } from '@prisma/client';
+import { RoomLock } from './room-lock';
 
 export type RequestSongResult =
     | { status: 'play-next-disabled' }
@@ -38,6 +39,7 @@ export type RequestSongInput = {
  */
 @Injectable()
 export class QueueRequestService {
+    private readonly lock = new RoomLock();
     constructor(
         private readonly playbackService: PlaybackService,
         private readonly analyticsService: AnalyticsService,
@@ -45,7 +47,13 @@ export class QueueRequestService {
         private readonly gateway: PlaybackGateway,
     ) {}
 
-    async request(input: RequestSongInput): Promise<RequestSongResult> {
+    request(input: RequestSongInput): Promise<RequestSongResult> {
+        return this.lock.run(input.room.id, () => this.requestLocked(input));
+    }
+
+    private async requestLocked(
+        input: RequestSongInput,
+    ): Promise<RequestSongResult> {
         const { room, videoId, position, actor } = input;
         const playNext = position === 'next';
 

@@ -161,6 +161,13 @@ export class PlaybackService {
         });
     }
 
+    getRoomWithFeatures(id: string) {
+        return this.prisma.room.findUnique({
+            where: { id },
+            include: { Feature: true, Votes: true },
+        });
+    }
+
     async getRoomDevice(roomId: string, fingerprint: string) {
         return this.prisma.device.findFirst({
             where: {
