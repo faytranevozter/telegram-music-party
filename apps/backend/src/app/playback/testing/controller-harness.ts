@@ -4,6 +4,7 @@
 import Keyv from 'keyv';
 import { PlaybackTelegramController } from '../playback.controller';
 import { QueueRequestService } from '../core/queue-request.service';
+import { WebRoomAccessService } from '../web/web-room-access.service';
 
 type Deps = {
     cache: Keyv;
@@ -14,6 +15,7 @@ type Deps = {
     voteService: Record<string, jest.Mock>;
     playNextQuota: Record<string, jest.Mock>;
     queueRequest: QueueRequestService;
+    webAccess: WebRoomAccessService;
 };
 
 /** Build the controller with mocked collaborators; override any dependency. */
@@ -98,6 +100,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
         voteService as any,
         playNextQuota as any,
         queueRequest as any,
+        overrides.webAccess,
     );
     return {
         controller,

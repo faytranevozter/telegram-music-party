@@ -31,7 +31,9 @@ import {
     htmlItalic,
 } from 'src/helpers/util';
 import { firstValueFrom } from 'rxjs';
-import { Inject } from '@nestjs/common';
+import { Inject, Optional } from '@nestjs/common';
+import { ENV } from 'src/config/env';
+import { WebRoomAccessService } from './web/web-room-access.service';
 import { InlineChatLocation, Song } from 'src/types/cache.type';
 import type { AutoplayResult } from 'src/types/playback.type';
 import Keyv from 'keyv';
@@ -223,6 +225,7 @@ export class PlaybackTelegramController {
         private readonly voteService: VoteService,
         private readonly playNextQuota: PlayNextQuotaService,
         private readonly queueRequest: QueueRequestService,
+        @Optional() private readonly webAccess?: WebRoomAccessService,
     ) {}
 
     /** Remember where this user last interacted (chat + topic) for inline callbacks. */
@@ -363,7 +366,7 @@ export class PlaybackTelegramController {
         );
     }
 
-    private buildConfigKeyboard(feature: Feature) {
+    private buildConfigKeyboard(feature: Feature, shareCode: string | null) {
         const toggle = (key: ConfigKey) =>
             this.configToggleButton(feature, key);
         return Markup.inlineKeyboard([
@@ -383,6 +386,38 @@ export class PlaybackTelegramController {
             ...NUMBER_CONFIG_KEYS.map((key) => [
                 this.configNumberButton(feature, key),
             ]),
+            ...(ENV.WEB_ROOMS.enabled && this.webAccess
+                ? shareCode
+                    ? [
+                          [
+                              this.styledButton(
+                                  'Send web invite',
+                                  'config:web:enable',
+                              ),
+                          ],
+                          [
+                              this.styledButton(
+                                  'Rotate web invite',
+                                  'config:web:rotate',
+                              ),
+                          ],
+                          [
+                              this.styledButton(
+                                  'Disable web invite',
+                                  'config:web:disable',
+                                  'danger',
+                              ),
+                          ],
+                      ]
+                    : [
+                          [
+                              this.styledButton(
+                                  'Enable web invite',
+                                  'config:web:enable',
+                              ),
+                          ],
+                      ]
+                : []),
             [this.styledButton('✖️ Close', 'config:close', 'danger')],
         ]);
     }
@@ -562,7 +597,7 @@ export class PlaybackTelegramController {
         await this.safeEdit(() =>
             ctx.editMessageText(this.buildConfigText(feature), {
                 parse_mode: 'HTML',
-                ...this.buildConfigKeyboard(feature),
+                ...this.buildConfigKeyboard(feature, room.shareCode),
             }),
         );
     }
@@ -1421,7 +1456,7 @@ export class PlaybackTelegramController {
 
         await ctx.reply(this.buildConfigText(feature), {
             parse_mode: 'HTML',
-            ...this.buildConfigKeyboard(feature),
+            ...this.buildConfigKeyboard(feature, room.shareCode),
         });
     }
 
@@ -1446,6 +1481,45 @@ export class PlaybackTelegramController {
         );
         if (!room?.Feature) {
             await ctx.answerCbQuery('No room found');
+            return;
+        }
+
+        if (action === 'web') {
+            if (!this.webAccess || !ENV.WEB_ROOMS.enabled || !ctx.from?.id) {
+                await ctx.answerCbQuery('Web invites unavailable');
+                return;
+            }
+            if (
+                rawValue ||
+                (rawKey !== 'enable' &&
+                    rawKey !== 'rotate' &&
+                    rawKey !== 'disable')
+            ) {
+                await ctx.answerCbQuery('Unknown setting');
+                return;
+            }
+            const code = await this.webAccess.setInvite(room.id, rawKey);
+            if (code) {
+                try {
+                    await ctx.telegram.sendMessage(
+                        ctx.from.id,
+                        `Web room invite: ${ENV.WEB_ROOMS.origin}/room#${code}`,
+                        {
+                            link_preview_options: { is_disabled: true },
+                        },
+                    );
+                } catch {
+                    await ctx.answerCbQuery(
+                        'Start the bot privately, then tap Send web invite.',
+                    );
+                    await this.editConfigMessage(ctx, chatId, threadId);
+                    return;
+                }
+            }
+            await ctx.answerCbQuery(
+                code ? 'Invite sent privately' : 'Web invite disabled',
+            );
+            await this.editConfigMessage(ctx, chatId, threadId);
             return;
         }
 
