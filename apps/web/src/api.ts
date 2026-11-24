@@ -9,6 +9,7 @@ export type RoomState = {
 export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};
 type Admission = { token: string; expiresAt: number; room: {name: string} };
 export type Setup = { roomId: string; shareCode: string | null };
+export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean };
 
 export class ApiError extends Error {
     constructor(readonly http: number, readonly status?: string) { super(`Room request failed (${http})`); }
@@ -40,6 +41,8 @@ export function createWebApi(origin: string, transport: typeof fetch = fetch) {
         vote: (token: string) => request<{status: 'passed' | 'counted'; count?: number; required?: number}>('room/votes/next', token, {}),
         control: (token: string, action: Control) => request('room/control', token, { action }),
         setup: (token: string, signal?: AbortSignal) => request<Setup>('room/setup', token, undefined, signal),
+        settings: (token: string, signal?: AbortSignal) => request<RoomSettings>('room/settings', token, undefined, signal),
+        updateSettings: (token: string, settings: Partial<RoomSettings>) => request<RoomSettings>('room/settings', token, settings),
         invite: (token: string, mode: 'enable' | 'rotate' | 'disable') => request<{url: string | null}>('room/invite', token, { mode }),
     };
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, explain, type Control, type Selection, type WebApi } from './api';
 import { OwnerSetup } from './OwnerSetup';
+import { RoomSettings } from './RoomSettings';
 import { useRoom } from './use-room';
 import { TrackCover } from './TrackCover';
 import { formatTrackDuration, queueTrackDisplay } from './track-art';
@@ -69,6 +70,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => state?.role === 'owner' || !state ? setConfirmLeave(true) : onLeave()}>Leave room</button>
         </RoomHeader>
         {state?.role === 'owner' && <OwnerSetup api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} />}
+        {state?.role === 'owner' && <RoomSettings api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} />}
         {confirmLeave && <div className="alert alert-warning"><p>Leaving clears your session in this tab. If you own the room, you won’t be able to recover owner access.</p><div className="actions"><button className="btn btn-sm" onClick={onLeave}>Confirm leave</button><button className="btn btn-ghost btn-sm" onClick={() => setConfirmLeave(false)}>Stay in room</button></div></div>}
         {error && <div className="alert alert-error" role="alert">{error} <button className="btn btn-sm" onClick={refresh}>Retry connection</button></div>}
         {!state ? !error && <p role="status">Opening the room…</p> : <>
