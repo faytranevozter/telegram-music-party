@@ -122,7 +122,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
                 </div></section>
                 <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title) }))}
                     autoplayToggle={<label className="flex w-fit items-center gap-2 text-sm"><input className="toggle toggle-sm" type="checkbox" checked={showAutoplay} onChange={(event) => setShowAutoplay(event.target.checked)} /> Show autoplay</label>}
-                    autoplayPreview={showAutoplay && (desktop || panel === 'queue') && <AutoplayPreview api={api} token={token} online={state.playerOnline} onRevoked={onRevoked} />}>
+                    autoplayPreview={showAutoplay && (desktop || panel === 'queue') && <AutoplayPreview api={api} token={token} online={state.playerOnline} requestedCount={state.queue.length} onRevoked={onRevoked} />}>
                     {state.voteProgress && <SkipVoteProgress count={state.voteProgress.count} required={state.voteProgress.required} />}
                     <button className="btn btn-outline btn-sm" disabled={busy || !state.playerOnline || state.voteProgress?.hasVoted} onClick={() => void act(async () => { const result = await api.vote(token); return result.status === 'passed' ? 'The room voted to skip.' : `Vote recorded (${result.count}/${result.required}).`; })}>{state.voteProgress?.hasVoted ? 'Vote recorded' : 'Vote to skip'}</button>
                 </UpNextPanel>

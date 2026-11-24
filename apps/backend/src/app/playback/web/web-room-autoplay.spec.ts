@@ -15,9 +15,9 @@ function setup(result: PlayerQueueResult) {
 }
 
 it('shows the first five upcoming tracks in player order, excluding requests', async () => {
-    const { service } = setup({ status: 'ok', items: [track('history'), track('current', true), track('requested'), ...['a', 'b', 'c', 'd', 'e', 'f'].map((id) => track(id))] });
+    const { service } = setup({ status: 'ok', items: [track('history'), track('current', true), track('requested'), { ...track('a'), durationSeconds: 292 }, ...['b', 'c', 'd', 'e', 'f'].map((id) => track(id))] });
     const result = await service.autoplay('room');
-    expect(result).toEqual({ status: 'ok', tracks: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ videoId: id, title: id, artist: '' })) });
+    expect(result).toEqual({ status: 'ok', tracks: [{ videoId: 'a', title: 'a', artist: '', durationSeconds: 292 }, ...['b', 'c', 'd', 'e'].map((id) => ({ videoId: id, title: id, artist: '' }))] });
 });
 
 it('shares concurrent reads only within a room and does not cache results', async () => {

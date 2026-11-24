@@ -1,6 +1,6 @@
 export type Control = 'play' | 'pause' | 'next' | 'previous' | 'radio' | 'refresh' | 'mute' | 'unmute' | 'volume-up' | 'volume-down';
 export type Track = { title: string; videoId: string };
-export type AutoplayPreviewResult = { status: 'ok'; tracks: (Track & { artist: string })[] } | { status: 'offline' | 'unavailable' | 'timeout' };
+export type AutoplayPreviewResult = { status: 'ok'; tracks: (Track & { artist: string; durationSeconds?: number })[] } | { status: 'offline' | 'unavailable' | 'timeout' };
 export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
     voteProgress?: { count: number; required: number; hasVoted: boolean };

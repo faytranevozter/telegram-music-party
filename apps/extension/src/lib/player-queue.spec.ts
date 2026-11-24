@@ -25,6 +25,10 @@ afterEach(() => {
 });
 
 describe("player queue", () => {
+    it("reads known track lengths without guessing missing or malformed ones", () => {
+        const item = (lengthText: unknown) => ({ ...track("song").playlistPanelVideoRenderer, lengthText });
+        expect(parsePlayerQueue([item({ simpleText: "4:52" }), item({ runs: [{ text: "1:02:03" }] }), item("1:99"), item(undefined)]).map((entry) => entry.durationSeconds)).toEqual([292, 3723, undefined, undefined]);
+    });
     it("reads autoplay from queue.automixItems, not unrelated rendered rows", () => {
         const queue = document.createElement("ytmusic-player-queue");
         queue.id = "queue";

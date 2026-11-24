@@ -18,6 +18,7 @@ export type PlaybackInfo = {
 };
 
 export type QueueItem = {
+    durationSeconds?: number;
     id: string;
     url: string;
     title?: string;

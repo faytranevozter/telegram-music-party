@@ -17,7 +17,7 @@ import { PlaybackGateway } from '../playback.gateway';
 import { controlAccess, type WebControl } from './web-room-state.service';
 
 type AutoplayPreview =
-    | { status: 'ok'; tracks: { videoId: string; title: string; artist: string }[] }
+    | { status: 'ok'; tracks: { videoId: string; title: string; artist: string; durationSeconds?: number }[] }
     | { status: 'offline' | 'unavailable' | 'timeout' };
 
 @Injectable()
@@ -65,7 +65,7 @@ export class WebRoomService {
         const tracks = result.items.slice(anchors[0] + 1)
             .filter((track) => !requests.has(track.url))
             .slice(0, 5)
-            .map(({ url, title, artist }) => ({ videoId: url, title, artist }));
+            .map(({ url, title, artist, durationSeconds }) => ({ videoId: url, title, artist, ...(durationSeconds === undefined ? {} : { durationSeconds }) }));
         return { status: 'ok', tracks };
     }
 

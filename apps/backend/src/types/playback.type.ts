@@ -5,6 +5,7 @@ export interface Join {
 }
 
 export type PlayerQueueItem = {
+    durationSeconds?: number;
     url: string;
     title: string;
     artist: string;
@@ -45,6 +46,9 @@ export function validatePlayerQueue(value: unknown): PlayerQueueResult {
             title: item.title,
             artist: item.artist,
             current: item.current,
+            ...(typeof item.durationSeconds === 'number' && Number.isSafeInteger(item.durationSeconds) && item.durationSeconds > 0
+                ? { durationSeconds: item.durationSeconds }
+                : {}),
         });
     }
     return { status: 'ok', items };

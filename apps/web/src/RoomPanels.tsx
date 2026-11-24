@@ -89,6 +89,15 @@ export function SearchResultsSkeleton() {
 
 type QueueDisplayTrack = { key: string; title: string; detail?: string };
 
+export function QueueTrackList({ tracks, label, markNext = false, start = 1 }: { tracks: readonly QueueDisplayTrack[]; label: string; markNext?: boolean; start?: number }) {
+    return <ol className="list -mx-2" aria-label={label} start={start}>
+        {tracks.map(({ key, title, detail }, index) => <li className="list-row grid-cols-[2rem_minmax(0,1fr)] items-center gap-3" key={key}>
+            <span aria-hidden="true" className="text-center text-sm tabular-nums text-base-content/65">{String(index + start).padStart(2, '0')}</span>
+            <div className="min-w-0"><p className="break-words font-semibold">{title}</p>{detail && <p className="break-words text-sm text-base-content/70">{detail}</p>}{markNext && index === 0 && <span className="badge badge-primary badge-soft badge-sm mt-1">Next to play</span>}</div>
+        </li>)}
+    </ol>;
+}
+
 export function SkipVoteProgress({ count, required }: { count: number; required: number }) {
     return <div className="grid w-full gap-2">
         <div className="flex items-center justify-between gap-2 text-sm">
@@ -110,12 +119,7 @@ export function UpNextPanel({ tracks, hiddenOnMobile, autoplayToggle, autoplayPr
         <div className="card-body gap-4 p-4 sm:p-6">
             <div className="flex items-center justify-between gap-2"><h2>Up next</h2><span className="badge badge-outline">{tracks.length} {tracks.length === 1 ? 'song' : 'songs'}</span></div>
             {autoplayToggle}
-            {tracks.length ? <ol className="list -mx-2" aria-label="Playback order">
-                {tracks.map(({ key, title, detail }, index) => <li className="list-row grid-cols-[2rem_minmax(0,1fr)] items-center gap-3" key={key}>
-                    <span aria-hidden="true" className="text-center text-sm tabular-nums text-base-content/65">{String(index + 1).padStart(2, '0')}</span>
-                    <div className="min-w-0"><p className="break-words font-semibold">{title}</p>{detail && <p className="break-words text-sm text-base-content/70">{detail}</p>}{index === 0 && <span className="badge badge-primary badge-soft badge-sm mt-1">Next to play</span>}</div>
-                </li>)}
-            </ol> : <p className="text-sm text-base-content/70">No songs queued. Add one from search.</p>}
+            {tracks.length ? <QueueTrackList tracks={tracks} label="Playback order" markNext /> : <p className="text-sm text-base-content/70">No songs queued. Add one from search.</p>}
             {autoplayPreview}
             <div className="card-actions flex-col items-start gap-3 border-t border-base-300 pt-4">{children}</div>
         </div>

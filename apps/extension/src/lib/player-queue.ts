@@ -58,6 +58,10 @@ export function parsePlayerQueue(items: unknown[]): QueueItem[] {
         const renderer = record(content.playlistPanelVideoRenderer ??
             primary.playlistPanelVideoRenderer ?? content);
         const endpoint = record(record(renderer.navigationEndpoint).watchEndpoint);
+        const length = text(renderer.lengthText).trim();
+        const seconds = /^\d{1,6}(?::[0-5]\d){1,2}$/.test(length)
+            ? length.split(":").reduce((total, part) => total * 60 + Number(part), 0)
+            : 0;
         const videoId = renderer.videoId ?? item.videoId ??
             record(item.playlistItemData).videoId ?? endpoint.videoId;
         if (typeof videoId !== "string" || !videoId) return [];
@@ -67,6 +71,7 @@ export function parsePlayerQueue(items: unknown[]): QueueItem[] {
             title: text(renderer.title) || "Unknown track",
             artist: text(renderer.shortBylineText ?? renderer.longBylineText),
             current: renderer.selected === true,
+            ...(seconds > 0 ? { durationSeconds: seconds } : {}),
         }];
     });
 }
