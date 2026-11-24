@@ -19,7 +19,7 @@ or **Play Next**). The durable request row keeps its ID after the disposable
 |-------|---------|
 | `id` | Durable request ID; reused as the queue row ID for correlation |
 | `roomId` | Room the request belongs to |
-| `requesterId` | Telegram user ID, when known |
+| `requesterId` | Namespaced participant reference (e.g. `telegram:123`), or null when unknown |
 | `videoId` | Canonical YouTube video ID |
 | `title`, `artist` | Display snapshots at request time |
 | `source` | `queue` or `play_next` |
@@ -163,7 +163,7 @@ automatically.
 - To delete one user's attribution before retention expires, run:
 
   ```sql
-  UPDATE "SongRequest" SET "requesterId" = NULL WHERE "requesterId" = '<telegram-id>';
+  UPDATE "SongRequest" SET "requesterId" = NULL WHERE "requesterId" = 'telegram:<telegram-id>';
   ```
 
   To remove their attributed history entirely, delete those request rows;
