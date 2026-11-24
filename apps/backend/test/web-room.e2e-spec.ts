@@ -310,6 +310,31 @@ suite('shared web room HTTP and observer contract', () => {
         expect((await route('room', undefined, token)).status).toBe(401);
     }, 15_000);
 
+    it('publishes host settings changes to guests and enforces video search', async () => {
+        const created = await route('rooms', { name: 'Settings room', nickname: 'Host' });
+        const { token: owner, roomId: id, shareCode } = (await created.json()) as { token: string; roomId: string; shareCode: string };
+        try {
+            const joined = await route('rooms/join', { shareCode, nickname: 'Guest' });
+            const { token: guest } = (await joined.json()) as { token: string };
+            const origin = ENV.WEB_ROOMS.enabled ? ENV.WEB_ROOMS.origin : '';
+            const observer = io(`${base}/web-room`, { auth: { token: guest }, extraHeaders: { Origin: origin }, autoConnect: false, transports: ['websocket'], reconnection: false });
+            clients.push(observer);
+            const initial = event(observer, 'room:state');
+            observer.connect();
+            await initial;
+            type State = { capabilities: { playNext: boolean; videoSearch: boolean } };
+            const enabled = event<State>(observer, 'room:state', (state) => state.capabilities.videoSearch && state.capabilities.playNext);
+            expect((await route('room/settings', { allowVideoSearch: true, playNextCommand: true }, owner)).status).toBe(201);
+            expect(await enabled).not.toHaveProperty('settings');
+            const disabled = event<State>(observer, 'room:state', (state) => !state.capabilities.videoSearch && !state.capabilities.playNext);
+            expect((await route('room/settings', { allowVideoSearch: false, playNextCommand: false, maxQueueSize: 1 }, owner)).status).toBe(201);
+            await disabled;
+            expect((await route('room/search', { query: 'test song', type: 'video' }, guest)).status).toBe(403);
+            expect(await (await route('room/settings', undefined, owner)).json()).toMatchObject({ maxQueueSize: 1, playNextCommand: false, allowVideoSearch: false });
+            expect((await route('room/settings', undefined, guest)).status).toBe(403);
+        } finally { await app.get(PlaybackService).removeRoom(id); }
+    }, 15000);
+
     it('creates a web-only owner and throttles concurrent entry requests in Redis', async () => {
         const created = await route('rooms', {
             name: 'Web only',

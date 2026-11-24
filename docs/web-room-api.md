@@ -35,6 +35,8 @@ only the configured origin. HTTP tools without an Origin header can use the API.
 | `POST /rooms` | `{name, nickname}` → owner session plus invite code and extension room ID |
 | `GET /room` | Room name, role, queue, current track, player availability and capabilities |
 | `GET /room/setup` | Owner-only extension room ID and current invite code |
+| `GET /room/settings` | Web-only owner: current queue and search settings |
+| `POST /room/settings` | Web-only owner: nonempty partial settings object; returns all settings |
 | `POST /room/search` | `{query, type?}`; returns display metadata and a five-minute room/actor-scoped `selectionId` |
 | `POST /room/requests` | `{selectionId, position}` (`end` or `next`) |
 | `POST /room/votes/next` | `{}` |
@@ -47,6 +49,14 @@ state conflicts, and `429` for rate limits. Limits per minute: 10 room entries
 per direct peer IP (forwarded headers are ignored), 20 searches per actor, and
 30 mutations per actor. When requests share a reverse-proxy peer, they share
 its entry limit until a trusted proxy policy is configured.
+
+Settings are `maxQueueSize` and `minimumVotes` (integers from 1 through
+2,147,483,647), `dailyPlayNextLimit` (integer from 0 through 2,147,483,647;
+0 means unlimited), and the boolean fields `playNextCommand` and
+`allowVideoSearch`. Unknown fields and invalid values are rejected without
+applying any changes. Guests cannot read or edit this settings object. A
+successful update publishes fresh room snapshots so connected guests receive
+updated capabilities. Telegram room settings remain managed through `/config`.
 
 Connect to Socket.IO namespace `/web-room` with `auth.token` and the configured
 Origin. It emits full `room:state` snapshots, including an initial state after
