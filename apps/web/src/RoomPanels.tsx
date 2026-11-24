@@ -1,4 +1,5 @@
-import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { sampleArtworkGradient } from './artwork-gradient';
 
 type RoomPanel = 'search' | 'queue';
 
@@ -25,14 +26,26 @@ export function SongSearchForm({ query, searching = false, onChange, onSearch, c
     </form>;
 }
 
-export function NowPlayingPanel({ cover, status = 'Now playing', title, description, controls }: {
+export function NowPlayingPanel({ cover, artworkSource, status = 'Now playing', title, description, controls }: {
     cover?: ReactNode;
+    artworkSource?: string;
     status?: string;
     title: string;
     description?: string;
     controls: ReactNode;
 }) {
-    return <section className="card bg-neutral text-neutral-content" aria-label="Now playing">
+    const [artwork, setArtwork] = useState<{ source: string; gradient: string }>();
+    useEffect(() => {
+        setArtwork(undefined);
+        if (!artworkSource) return;
+        let current = true;
+        void sampleArtworkGradient(artworkSource).then((gradient) => {
+            if (current && gradient) setArtwork({ source: artworkSource, gradient });
+        });
+        return () => { current = false; };
+    }, [artworkSource]);
+    const gradient = artwork && artwork.source === artworkSource ? artwork.gradient : undefined;
+    return <section className="card bg-neutral text-neutral-content" aria-label="Now playing" style={gradient ? { backgroundImage: gradient } : undefined}>
         <div className="card-body flex-row items-center gap-4 p-4 sm:p-5">
             {cover}
             <div className="min-w-0 grow">

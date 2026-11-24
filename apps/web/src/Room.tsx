@@ -4,7 +4,7 @@ import { OwnerSetup } from './OwnerSetup';
 import { RoomSettings } from './RoomSettings';
 import { useRoom } from './use-room';
 import { TrackCover } from './TrackCover';
-import { formatTrackDuration, queueTrackDisplay } from './track-art';
+import { coverSources, formatTrackDuration, queueTrackDisplay } from './track-art';
 
 import { controlLabels, PlayerBar } from './PlaybackControls';
 import { NowPlayingPanel, RoomPanelTabs, SearchResultsSkeleton, SearchTrackRow, SkipVoteProgress, SongSearchForm, UpNextPanel } from './RoomPanels';
@@ -76,6 +76,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
         {!state ? !error && <p role="status">Opening the room…</p> : <>
             <NowPlayingPanel
                 cover={state.nowPlaying && <TrackCover key={state.nowPlaying.videoId} videoId={state.nowPlaying.videoId} large />}
+                artworkSource={state.playerOnline ? coverSources(state.nowPlaying?.videoId)[0] : undefined}
                 status={lastPlaybackCommand === 'pause' ? 'Paused' : 'Now playing'}
                 title={state.nowPlaying?.title ?? (state.playerOnline ? 'Nothing playing yet' : 'Player offline')}
                 description={state.nowPlaying?.artist || (state.playerOnline ? 'Songs play through the host’s extension.' : 'You can still add songs to the queue.')}
