@@ -14,6 +14,7 @@ import { WebSession } from './web/web-session';
 import { WebRoomAccessService } from './web/web-room-access.service';
 import { WebRoomController } from './web/web-room.controller';
 import { WebRoomService } from './web/web-room.service';
+import { WebRoomSettingsService } from './web/web-room-settings.service';
 import { WebRoomStateService } from './web/web-room-state.service';
 import { WebRateLimitService } from './web/web-rate-limit.service';
 import { WebRoomGateway } from './web/web-room.gateway';
@@ -40,6 +41,7 @@ import { webHttpBoundary } from './web/web-http.middleware';
                   },
                   WebRoomAccessService,
                   WebRoomService,
+                  WebRoomSettingsService,
                   WebRoomStateService,
                   WebRateLimitService,
                   WebRoomGateway,

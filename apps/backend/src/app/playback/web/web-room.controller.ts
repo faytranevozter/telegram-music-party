@@ -16,6 +16,7 @@ import { ENV } from 'src/config/env';
 import { WebRoomAccessService } from './web-room-access.service';
 import { WebRateLimitService } from './web-rate-limit.service';
 import { WebRoomService } from './web-room.service';
+import { WebRoomSettingsService } from './web-room-settings.service';
 import {
     controls,
     WebRoomStateService,
@@ -49,6 +50,7 @@ export class WebRoomController {
         private readonly limits: WebRateLimitService,
         private readonly rooms: WebRoomService,
         private readonly state: WebRoomStateService,
+        private readonly settings: WebRoomSettingsService,
     ) {}
 
     private authenticate(header: string | undefined) {
@@ -115,6 +117,22 @@ export class WebRoomController {
         const { room, actor } = await this.authenticate(header);
         if (!(await actor.isAdmin())) throw new ForbiddenException();
         return { roomId: room.id, shareCode: room.shareCode };
+    }
+
+    @Get('room/settings')
+    @Header('Cache-Control', 'no-store')
+    async getSettings(@Headers('authorization') header: string | undefined) {
+        const { room, actor } = await this.authenticate(header);
+        if (!(await actor.isAdmin())) throw new ForbiddenException();
+        return this.settings.get(room.id);
+    }
+
+    @Post('room/settings')
+    @Header('Cache-Control', 'no-store')
+    async updateSettings(@Headers('authorization') header: string | undefined, @Body() value: unknown) {
+        const { room, actor } = await this.authenticated(header, 'mutation');
+        if (!(await actor.isAdmin())) throw new ForbiddenException();
+        return this.settings.update(room.id, value);
     }
 
     @Post('room/search')

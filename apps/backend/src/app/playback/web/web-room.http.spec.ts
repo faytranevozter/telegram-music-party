@@ -4,6 +4,7 @@ import { WebRoomService } from './web-room.service';
 import { WebRoomAccessService } from './web-room-access.service';
 import { WebRateLimitService } from './web-rate-limit.service';
 import { WebRoomStateService } from './web-room-state.service';
+import { WebRoomSettingsService } from './web-room-settings.service';
 
 it('joins through HTTP, rejects extra fields, and requires room authentication', async () => {
     const join = jest
@@ -20,6 +21,7 @@ it('joins through HTTP, rejects extra fields, and requires room authentication',
             },
             { provide: WebRoomService, useValue: {} },
             { provide: WebRoomStateService, useValue: {} },
+            { provide: WebRoomSettingsService, useValue: {} },
         ],
     }).compile();
     const app = module.createNestApplication();
