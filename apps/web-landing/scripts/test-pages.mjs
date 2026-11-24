@@ -12,6 +12,7 @@ test('worker routes every public page, including the generated legal pages', () 
         '/terms': 'terms.html',
         '/support': 'support.html',
         '/gallery': 'gallery.html',
+        '/room': 'room-app/shell.html',
     };
     for (const [route, file] of Object.entries(routes)) {
         assert.ok(

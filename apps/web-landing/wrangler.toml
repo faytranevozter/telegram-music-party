@@ -8,6 +8,7 @@ main = "src/worker.ts"
 [assets]
 directory = "./public"
 binding = "ASSETS"
+html_handling = "none"
 
 # Production route — uncomment once the Cloudflare zone is connected.
 [[routes]]

@@ -1,5 +1,17 @@
 # Web room API (Stage 3)
 
+## Browser client (Stage 4)
+
+Use a disposable backend for local testing. Set `WEB_PUBLIC_ORIGIN=http://127.0.0.1:8787` on that backend (for example running at `http://127.0.0.1:3033`) and configure its web feature flag and secret. From the repository root:
+
+```sh
+VITE_PARTY_API_ORIGIN=http://127.0.0.1:3033 pnpm --filter=web build
+pnpm --filter=web-landing stage:room
+pnpm --filter=web-landing dev --ip 127.0.0.1 --port 8787
+```
+
+Open `http://127.0.0.1:8787/room` or use a local invite link from the bot. The client does not default to the production API. Production builds use `https://music.ytparty.my.id`; production backend CORS and observer origin must be set to `https://ytparty.my.id`. Deploy the Worker and updated legal pages, confirm the origin pair and staged test-room flow, then enable web rooms only after launch approval.
+
 Web rooms are disabled by default. Enable with `WEB_ROOMS_ENABLED=true`, set
 `WEB_PUBLIC_ORIGIN` to the exact client origin, and supply a random base64url
 `WEB_SESSION_SECRET` of at least 32 bytes. Use one backend instance for player

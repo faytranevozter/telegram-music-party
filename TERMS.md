@@ -8,7 +8,8 @@ The Service is open-source software released under the [MIT License](https://git
 
 ## What the Service does
 
-- The Extension connects a YouTube Music tab in your browser to a Telegram room, so people in that room can add tracks and control playback together.
+- The Extension connects a YouTube Music tab to a shared party room. People can participate through Telegram or through the browser room page with an invite and a nickname. Browser-only rooms are also supported.
+- Share invites only with people you want in the room. A host can rotate or disable an invite to revoke existing guest sessions. Keep owner credentials private; lost browser owner sessions cannot be recovered.
 - Playback happens in your own browser under your own YouTube Music session. The Service does not host, download, or distribute music, and does not bypass YouTube's restrictions.
 - You need your own access to YouTube Music. Whether a track can play is decided by YouTube and your account, not by the Service.
 
