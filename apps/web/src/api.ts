@@ -1,5 +1,6 @@
 export type Control = 'play' | 'pause' | 'next' | 'previous' | 'radio' | 'refresh' | 'mute' | 'unmute' | 'volume-up' | 'volume-down';
 export type Track = { title: string; videoId: string };
+export type AutoplayPreviewResult = { status: 'ok'; tracks: (Track & { artist: string })[] } | { status: 'offline' | 'unavailable' | 'timeout' };
 export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
     voteProgress?: { count: number; required: number; hasVoted: boolean };
@@ -36,6 +37,7 @@ export function createWebApi(origin: string, transport: typeof fetch = fetch) {
         join: (shareCode: string, nickname: string) => request<Admission>('rooms/join', undefined, { shareCode, nickname }),
         create: (name: string, nickname: string) => request<Admission & Setup>('rooms', undefined, { name, nickname }),
         state: (token: string, signal?: AbortSignal) => request<RoomState>('room', token, undefined, signal),
+        autoplay: (token: string, signal?: AbortSignal) => request<AutoplayPreviewResult>('room/autoplay', token, undefined, signal),
         search: (token: string, query: string, type: 'song' | 'video', signal?: AbortSignal) => request<Selection[]>('room/search', token, { query, type }, signal),
         queue: (token: string, selectionId: string, position: 'end' | 'next') => request('room/requests', token, { selectionId, position }),
         vote: (token: string) => request<{status: 'passed' | 'counted'; count?: number; required?: number}>('room/votes/next', token, {}),

@@ -34,6 +34,7 @@ only the configured origin. HTTP tools without an Origin header can use the API.
 | `POST /rooms/join` | `{shareCode, nickname}` → token, expiry (epoch ms), room name |
 | `POST /rooms` | `{name, nickname}` → owner session plus invite code and extension room ID |
 | `GET /room` | Room name, role, queue, current track, player availability and capabilities |
+| `GET /room/autoplay` | Read-only preview of up to five upcoming non-requested player tracks; `{status: 'ok', tracks: [{videoId, title, artist}]}` or `{status: 'offline' \| 'unavailable' \| 'timeout'}`. Hosts and guests can read it; 20 reads per actor per minute. |
 | `GET /room/setup` | Owner-only extension room ID and current invite code |
 | `GET /room/settings` | Web-only owner: current queue and search settings |
 | `POST /room/settings` | Web-only owner: nonempty partial settings object; returns all settings |

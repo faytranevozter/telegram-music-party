@@ -10,7 +10,7 @@ export class WebRateLimitService {
     constructor(@Inject('KEYV_CACHE') private readonly cache: Keyv) {}
 
     async require(
-        kind: 'entry' | 'search' | 'mutation',
+        kind: 'entry' | 'search' | 'mutation' | 'autoplay',
         subject: string,
         max: number,
     ) {

@@ -111,6 +111,16 @@ export class WebRoomController {
         return state;
     }
 
+    @Get('room/autoplay')
+    @Header('Cache-Control', 'no-store')
+    async autoplay(@Headers('authorization') header: string | undefined) {
+        const { room, actor } = await this.authenticate(header);
+        await this.limits.require('autoplay', actor.userRef, 20);
+        const preview = await this.rooms.autoplay(room.id);
+        await this.authenticate(header);
+        return preview;
+    }
+
     @Get('room/setup')
     @Header('Cache-Control', 'no-store')
     async setup(@Headers('authorization') header: string | undefined) {

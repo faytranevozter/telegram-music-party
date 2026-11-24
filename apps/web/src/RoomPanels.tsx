@@ -99,20 +99,24 @@ export function SkipVoteProgress({ count, required }: { count: number; required:
     </div>;
 }
 
-export function UpNextPanel({ tracks, hiddenOnMobile, children }: {
+export function UpNextPanel({ tracks, hiddenOnMobile, autoplayToggle, autoplayPreview, children }: {
     tracks: readonly QueueDisplayTrack[];
     hiddenOnMobile: boolean;
+    autoplayToggle?: ReactNode;
+    autoplayPreview?: ReactNode;
     children: ReactNode;
 }) {
     return <section className={`card border border-base-300 bg-base-100 ${hiddenOnMobile ? 'hidden md:flex' : ''}`} aria-label="Up next">
         <div className="card-body gap-4 p-4 sm:p-6">
             <div className="flex items-center justify-between gap-2"><h2>Up next</h2><span className="badge badge-outline">{tracks.length} {tracks.length === 1 ? 'song' : 'songs'}</span></div>
+            {autoplayToggle}
             {tracks.length ? <ol className="list -mx-2" aria-label="Playback order">
                 {tracks.map(({ key, title, detail }, index) => <li className="list-row grid-cols-[2rem_minmax(0,1fr)] items-center gap-3" key={key}>
                     <span aria-hidden="true" className="text-center text-sm tabular-nums text-base-content/65">{String(index + 1).padStart(2, '0')}</span>
                     <div className="min-w-0"><p className="break-words font-semibold">{title}</p>{detail && <p className="break-words text-sm text-base-content/70">{detail}</p>}{index === 0 && <span className="badge badge-primary badge-soft badge-sm mt-1">Next to play</span>}</div>
                 </li>)}
             </ol> : <p className="text-sm text-base-content/70">No songs queued. Add one from search.</p>}
+            {autoplayPreview}
             <div className="card-actions flex-col items-start gap-3 border-t border-base-300 pt-4">{children}</div>
         </div>
     </section>;

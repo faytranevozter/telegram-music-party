@@ -190,6 +190,18 @@ suite('shared web room HTTP and observer contract', () => {
         });
         await admitted;
         await online;
+        player.on('get-player-queue', (reply: (value: unknown) => void) => reply({
+            available: true,
+            items: [
+                { url: 'history', title: 'Earlier track', artist: '', current: false },
+                { url: 'current', title: 'Current track', artist: '', current: true },
+                { url: 'recommendation', title: 'Recommended track', artist: 'Artist', current: false },
+            ],
+        }));
+        expect((await route('room/autoplay')).status).toBe(401);
+        const preview = await route('room/autoplay', undefined, token);
+        expect(preview.status).toBe(200);
+        expect(await preview.json()).toEqual({ status: 'ok', tracks: [{ videoId: 'recommendation', title: 'Recommended track', artist: 'Artist' }] });
         const search = await route(
             'room/search',
             { query: 'test song' },
@@ -317,6 +329,7 @@ suite('shared web room HTTP and observer contract', () => {
         await access.setInvite(roomId, 'rotate');
         await disconnected;
         expect((await route('room', undefined, token)).status).toBe(401);
+        expect((await route('room/autoplay', undefined, token)).status).toBe(401);
     }, 15_000);
 
     it('publishes host settings changes to guests and enforces video search', async () => {

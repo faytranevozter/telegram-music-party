@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { ApiError, explain, type Control, type Selection, type WebApi } from './api';
 import { OwnerSetup } from './OwnerSetup';
 import { RoomSettings } from './RoomSettings';
@@ -11,8 +11,16 @@ import { NowPlayingPanel, RoomPanelTabs, SearchResultsSkeleton, SearchTrackRow, 
 import { RoomFlash, RoomHeader, type FlashMessage } from './RoomChrome';
 import { queueSelection, type SelectionSearch } from './queue-selection';
 import { QueueActions } from './QueueActions';
+import { AutoplayPreview } from './AutoplayPreview';
 
 const playbackActions = Object.keys(controlLabels) as Control[];
+const desktopQuery = '(min-width: 48rem)';
+function watchDesktop(onChange: () => void) {
+    const media = window.matchMedia?.(desktopQuery);
+    media?.addEventListener('change', onChange);
+    return () => media?.removeEventListener('change', onChange);
+}
+const isDesktop = () => window.matchMedia?.(desktopQuery).matches ?? false;
 
 export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: string; onLeave: () => void; onRevoked: () => void}) {
     const { state, live, error, refresh } = useRoom(api, token, onRevoked);
@@ -28,6 +36,8 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
     const dismissFeedback = useCallback(() => setFeedback(null), []);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [panel, setPanel] = useState<'search' | 'queue'>('search');
+    const [showAutoplay, setShowAutoplay] = useState(false);
+    const desktop = useSyncExternalStore(watchDesktop, isDesktop, () => false);
     const pending = useRef<AbortController | undefined>(undefined);
     const pendingSelection = useRef<AbortController | undefined>(undefined);
     const mounted = useRef(true);
@@ -110,7 +120,9 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
                         return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<QueueActions title={song.title} queued={queued} busy={busy} playNext={state.capabilities.playNext} remaining={state.capabilities.playNextRemaining} onAdd={(position) => addTrack(song, position)} />} />; })}</ul>}
                     {state.capabilities.playNext && state.capabilities.playNextRemaining !== null && <p>Play Next uses left today: {state.capabilities.playNextRemaining}</p>}
                 </div></section>
-                <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title) }))}>
+                <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title) }))}
+                    autoplayToggle={<label className="flex w-fit items-center gap-2 text-sm"><input className="toggle toggle-sm" type="checkbox" checked={showAutoplay} onChange={(event) => setShowAutoplay(event.target.checked)} /> Show autoplay</label>}
+                    autoplayPreview={showAutoplay && (desktop || panel === 'queue') && <AutoplayPreview api={api} token={token} online={state.playerOnline} onRevoked={onRevoked} />}>
                     {state.voteProgress && <SkipVoteProgress count={state.voteProgress.count} required={state.voteProgress.required} />}
                     <button className="btn btn-outline btn-sm" disabled={busy || !state.playerOnline || state.voteProgress?.hasVoted} onClick={() => void act(async () => { const result = await api.vote(token); return result.status === 'passed' ? 'The room voted to skip.' : `Vote recorded (${result.count}/${result.required}).`; })}>{state.voteProgress?.hasVoted ? 'Vote recorded' : 'Vote to skip'}</button>
                 </UpNextPanel>

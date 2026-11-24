@@ -16,8 +16,14 @@ import { PlaybackService } from '../playback.service';
 import { PlaybackGateway } from '../playback.gateway';
 import { controlAccess, type WebControl } from './web-room-state.service';
 
+type AutoplayPreview =
+    | { status: 'ok'; tracks: { videoId: string; title: string; artist: string }[] }
+    | { status: 'offline' | 'unavailable' | 'timeout' };
+
 @Injectable()
 export class WebRoomService {
+    private readonly autoplayReads = new Map<string, Promise<AutoplayPreview>>();
+
     constructor(
         @Inject('KEYV_CACHE') private readonly cache: Keyv,
         private readonly searchProvider: YTMusicService,
@@ -31,6 +37,36 @@ export class WebRoomService {
         const room = await this.playback.getRoomWithFeatures(id);
         if (!room) throw new NotFoundException();
         return room;
+    }
+
+    autoplay(roomId: string): Promise<AutoplayPreview> {
+        const pending = this.autoplayReads.get(roomId);
+        if (pending) return pending;
+        const read = this.readAutoplay(roomId).finally(() => this.autoplayReads.delete(roomId));
+        this.autoplayReads.set(roomId, read);
+        return read;
+    }
+
+    private async readAutoplay(roomId: string): Promise<AutoplayPreview> {
+        if (!(await this.player.playerOnline(roomId))) return { status: 'offline' };
+        const result = await this.player.getPlayerQueue(roomId);
+        if (!(await this.player.playerOnline(roomId))) return { status: 'offline' };
+        if (result.status !== 'ok') return { status: result.status };
+        if (!result.items.length) return { status: 'ok', tracks: [] };
+
+        const anchors = result.items.flatMap((track, index) => track.current ? [index] : []);
+        if (!anchors.length) {
+            const current = this.player.currentTrack(roomId)?.videoId;
+            result.items.forEach((track, index) => { if (track.url === current) anchors.push(index); });
+        }
+        if (anchors.length !== 1) return { status: 'unavailable' };
+
+        const requests = new Set((await this.playback.getQueues(roomId)).map((track) => track.url));
+        const tracks = result.items.slice(anchors[0] + 1)
+            .filter((track) => !requests.has(track.url))
+            .slice(0, 5)
+            .map(({ url, title, artist }) => ({ videoId: url, title, artist }));
+        return { status: 'ok', tracks };
     }
 
     private selectionKey(roomId: string, actor: Actor, selectionId: string) {
