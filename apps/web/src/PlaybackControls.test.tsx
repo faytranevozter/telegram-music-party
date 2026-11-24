@@ -20,3 +20,12 @@ it('disables all player commands offline without disabling More', () => {
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>More<\/button>/);
     expect(html).toContain('Unmute');
 });
+
+it.each([true, false])('keeps the disabled play/pause control visible on the player panel (paused=%s)', (paused) => {
+    const html = renderToStaticMarkup(<PlayerBar paused={paused} disabled onControl={action} />);
+    const label = paused ? 'Play' : 'Pause';
+    const button = html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0];
+    expect(button).toContain('disabled=""');
+    expect(button).toContain('disabled:bg-neutral-content/20');
+    expect(button).toContain('disabled:text-neutral-content');
+});

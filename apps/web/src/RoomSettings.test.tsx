@@ -24,7 +24,6 @@ it('retains the Play Next limit and draft through a failed save', async () => {
     const container = document.createElement('div'); document.body.append(container);
     const root = createRoot(container);
     await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={flash} />); });
-    expect(container.querySelector('details')?.open).toBe(false);
     const toggle = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     const daily = [...container.querySelectorAll<HTMLInputElement>('input[type="number"]')].find((input) => input.value === '3')!;
     await act(async () => { toggle.click(); });

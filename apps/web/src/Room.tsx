@@ -10,6 +10,7 @@ import { controlLabels, PlayerBar } from './PlaybackControls';
 import { NowPlayingPanel, RoomPanelTabs, SearchResultsSkeleton, SearchTrackRow, SkipVoteProgress, SongSearchForm, UpNextPanel } from './RoomPanels';
 import { RoomFlash, RoomHeader, type FlashMessage } from './RoomChrome';
 import { queueSelection, type SelectionSearch } from './queue-selection';
+import { QueueActions } from './QueueActions';
 
 const playbackActions = Object.keys(controlLabels) as Control[];
 
@@ -69,8 +70,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
         <RoomHeader name={state?.name ?? 'Listening room'} role={state ? state.role === 'owner' ? 'Host' : 'Guest' : undefined} connection={state ? { label: state.playerOnline ? 'Player connected' : 'Player offline', online: state.playerOnline } : undefined}>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => state?.role === 'owner' || !state ? setConfirmLeave(true) : onLeave()}>Leave room</button>
         </RoomHeader>
-        {state?.role === 'owner' && <OwnerSetup api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} />}
-        {state?.role === 'owner' && <RoomSettings api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} />}
+        {state?.role === 'owner' && <OwnerSetup api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback}><RoomSettings api={api} token={token} onRevoked={onRevoked} onFlash={setFeedback} /></OwnerSetup>}
         {confirmLeave && <div className="alert alert-warning"><p>Leaving clears your session in this tab. If you own the room, you won’t be able to recover owner access.</p><div className="actions"><button className="btn btn-sm" onClick={onLeave}>Confirm leave</button><button className="btn btn-ghost btn-sm" onClick={() => setConfirmLeave(false)}>Stay in room</button></div></div>}
         {error && <div className="alert alert-error" role="alert">{error} <button className="btn btn-sm" onClick={refresh}>Retry connection</button></div>}
         {!state ? !error && <p role="status">Opening the room…</p> : <>
@@ -99,17 +99,14 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
             <div className="room-columns">
                 <section className={`card border border-base-300 bg-base-100 ${panel !== 'search' ? 'hidden md:flex' : ''}`} aria-labelledby="search-title"><div className="card-body gap-4 p-4 sm:p-6"><h2 id="search-title">Find a song</h2>
                     <SongSearchForm query={query} searching={searching} onChange={(value) => { resetSearch(); setQuery(value); }} onSearch={search}>
-                        {state.capabilities.videoSearch && <label>Search in<select className="select select-bordered w-full" value={type} onChange={(event) => { resetSearch(); setType(event.target.value === 'video' ? 'video' : 'song'); }}><option value="song">Songs</option><option value="video">Videos</option></select></label>}
+                        {state.capabilities.videoSearch && <select aria-label="Search type" className="select join-item w-auto shrink-0" value={type} onChange={(event) => { resetSearch(); setType(event.target.value === 'video' ? 'video' : 'song'); }}><option value="song">Songs</option><option value="video">Videos</option></select>}
                     </SongSearchForm>
                     {results?.length === 0 && <p>No results. Try a different song or artist.</p>}
                     {results === null && !searching && <p className="text-sm text-base-content/70">Search for a song or artist to add something to the room.</p>}
                     {searching ? <SearchResultsSkeleton /> : <ul className="list -mx-2" aria-label="Search results">{results?.map((song) => {
                         const duration = formatTrackDuration(song.durationSeconds);
                         const queued = state.queue.some((track) => track.videoId === song.videoId);
-                        return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<>
-                        <button className="btn btn-primary btn-soft btn-sm" disabled={busy || queued} aria-label={queued ? `${song.title} is queued` : `Add ${song.title} to queue`} onClick={() => addTrack(song, 'end')}>{queued ? 'Queued' : '+ Add'}</button>
-                        {state.capabilities.playNext && !queued && <button className="btn btn-ghost btn-sm" disabled={busy || state.capabilities.playNextRemaining === 0} onClick={() => addTrack(song, 'next')}>Play Next</button>}
-                    </>} />; })}</ul>}
+                        return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<QueueActions title={song.title} queued={queued} busy={busy} playNext={state.capabilities.playNext} remaining={state.capabilities.playNextRemaining} onAdd={(position) => addTrack(song, position)} />} />; })}</ul>}
                     {state.capabilities.playNext && state.capabilities.playNextRemaining !== null && <p>Play Next uses left today: {state.capabilities.playNextRemaining}</p>}
                 </div></section>
                 <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title) }))}>

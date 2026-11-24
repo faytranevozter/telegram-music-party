@@ -21,6 +21,11 @@ it('shows settings only for a host, not an invited guest', async () => {
     room.role = 'owner';
     await act(async () => root.render(<Room api={api} token="token" onLeave={leave} onRevoked={revoked} />));
     expect(container.textContent).toContain('Room settings');
+    const panels = [...container.querySelectorAll('details')].filter((element) => element.textContent?.includes('Room settings'));
+    expect(panels).toHaveLength(1);
+    expect(panels[0].textContent).toContain('Guest access');
+    expect(panels[0].textContent).toContain('Player setup');
+    expect(panels[0].textContent).toContain('Maximum queue size');
     await act(async () => root.unmount());
     container.remove();
 });

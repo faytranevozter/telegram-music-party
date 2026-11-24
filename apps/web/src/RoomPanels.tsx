@@ -19,9 +19,9 @@ export function SongSearchForm({ query, searching = false, onChange, onSearch, c
     return <form onSubmit={onSearch}>
         <div className="join flex w-full">
             <input className="input join-item min-w-0 flex-1" type="search" aria-label="Song or artist" placeholder="Song or artist" required maxLength={200} value={query} onChange={(event) => onChange(event.target.value)} />
+            {children}
             <button className="btn btn-primary join-item shrink-0" disabled={searching || [...query.trim()].length < 3}>{searching ? 'Searching…' : 'Search'}</button>
         </div>
-        {children}
     </form>;
 }
 
@@ -51,10 +51,10 @@ export function SearchTrackRow({ cover, title, detail, actions }: {
     detail: string;
     actions: ReactNode;
 }) {
-    return <li className="list-row grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+    return <li className="list-row grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
         {cover}
         <div className="min-w-0"><p className="break-words font-semibold">{title}</p><p className="break-words text-sm text-base-content/70">{detail}</p></div>
-        <div className="flex flex-col items-end gap-1">{actions}</div>
+        <div className="col-span-2 flex flex-row flex-wrap items-center gap-2 sm:col-span-1 sm:justify-end">{actions}</div>
     </li>;
 }
 

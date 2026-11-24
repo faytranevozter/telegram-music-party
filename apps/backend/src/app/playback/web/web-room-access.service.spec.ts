@@ -74,7 +74,7 @@ it('retries a room creation collision with a fresh share code', async () => {
     );
     expect(store.create.mock.calls[1][0].data).toMatchObject({
         shareCode: result.shareCode,
-        Feature: { create: {} },
+        Feature: { create: { nextCommand: true, nextOnlyAdmin: true, previousCommand: true, previousOnlyAdmin: true } },
     });
 });
 

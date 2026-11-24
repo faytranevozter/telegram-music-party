@@ -63,7 +63,14 @@ export class WebRoomAccessService {
                     name,
                     shareCode,
                     ownerUserRef,
-                    Feature: { create: {} },
+                    Feature: {
+                        create: {
+                            nextCommand: true,
+                            nextOnlyAdmin: true,
+                            previousCommand: true,
+                            previousOnlyAdmin: true,
+                        },
+                    },
                 },
             });
             return {

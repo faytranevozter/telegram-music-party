@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError, explain, type Setup, type WebApi } from './api';
 import { readInvite } from './session';
 import type { FlashMessage } from './RoomChrome';
 
-export function OwnerSetup({ api, token, onRevoked, onFlash }: { api: Pick<WebApi, 'setup' | 'invite' | 'origin'>; token: string; onRevoked: () => void; onFlash: (message: FlashMessage) => void }) {
+export function OwnerSetup({ api, token, onRevoked, onFlash, children }: { api: Pick<WebApi, 'setup' | 'invite' | 'origin'>; token: string; onRevoked: () => void; onFlash: (message: FlashMessage) => void; children?: ReactNode }) {
     const [setup, setSetup] = useState<Setup>();
     const [loadFailed, setLoadFailed] = useState(false);
     const [loadAttempt, setLoadAttempt] = useState(0);
@@ -35,7 +35,7 @@ export function OwnerSetup({ api, token, onRevoked, onFlash }: { api: Pick<WebAp
         } finally { setBusy(false); }
     }
     return <details className="collapse collapse-arrow border border-base-300 bg-base-100">
-        <summary className="collapse-title flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-semibold">Room info &amp; invites</span>{setup && <span className={`badge badge-sm ${link ? 'badge-success badge-soft' : 'badge-outline'}`}>{link ? 'Invite active' : 'Invites off'}</span>}</summary>
+        <summary className="collapse-title flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-semibold">Room info &amp; settings</span>{setup && <span className={`badge badge-sm ${link ? 'badge-success badge-soft' : 'badge-outline'}`}>{link ? 'Invite active' : 'Invites off'}</span>}</summary>
         <div className="collapse-content space-y-4">
         {setup ? <>
             <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -54,5 +54,6 @@ export function OwnerSetup({ api, token, onRevoked, onFlash }: { api: Pick<WebAp
             </div>
             {confirm && <div className="alert alert-warning alert-soft flex flex-wrap justify-between gap-3"><p>The current link will stop working and connected guests will be signed out.</p><div className="actions"><button type="button" className="btn btn-sm" disabled={busy} onClick={() => void change(confirm)}>{confirm === 'rotate' ? 'Replace invite link' : 'Turn off invites'}</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(undefined)}>Cancel</button></div></div>}
         </> : loadFailed ? <button type="button" className="btn btn-sm" onClick={() => { setLoadFailed(false); setLoadAttempt((attempt) => attempt + 1); }}>Retry loading room info</button> : <p>Loading setup…</p>}
+        {children}
     </div></details>;
 }

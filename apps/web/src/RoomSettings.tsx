@@ -41,9 +41,8 @@ export function RoomSettings({ api, token, onRevoked, onFlash }: { api: Pick<Web
         } finally { if (mounted.current) setBusy(false); }
     }
 
-    return <details className="collapse collapse-arrow border border-base-300 bg-base-100">
-        <summary className="collapse-title font-semibold">Room settings</summary>
-        <div className="collapse-content">
+    return <section aria-label="Room settings" className="space-y-4">
+        <h2 className="font-semibold">Room settings</h2>
             {failed && <button type="button" className="btn btn-sm" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>Retry loading settings</button>}
             {!draft && !failed && <p role="status">Loading settings…</p>}
             {draft && <form className="space-y-4" onSubmit={(event) => void save(event)}>
@@ -56,6 +55,5 @@ export function RoomSettings({ api, token, onRevoked, onFlash }: { api: Pick<Web
                     <button className="btn" type="submit">{busy ? 'Saving…' : 'Save changes'}</button>
                 </fieldset>
             </form>}
-        </div>
-    </details>;
+    </section>;
 }

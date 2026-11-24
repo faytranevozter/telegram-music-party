@@ -325,6 +325,15 @@ suite('shared web room HTTP and observer contract', () => {
         try {
             const joined = await route('rooms/join', { shareCode, nickname: 'Guest' });
             const { token: guest } = (await joined.json()) as { token: string };
+            const ownerState = await (await route('room', undefined, owner)).json() as { capabilities: { controls: string[] } };
+            const guestState = await (await route('room', undefined, guest)).json() as { capabilities: { controls: string[] } };
+            expect(ownerState.capabilities.controls).toEqual(expect.arrayContaining(['next', 'previous']));
+            expect(guestState.capabilities.controls).not.toEqual(expect.arrayContaining(['next']));
+            expect(guestState.capabilities.controls).not.toEqual(expect.arrayContaining(['previous']));
+            for (const action of ['next', 'previous']) {
+                expect((await route('room/control', { action }, guest)).status).toBe(403);
+                expect((await route('room/control', { action }, owner)).status).toBe(409);
+            }
             const origin = ENV.WEB_ROOMS.enabled ? ENV.WEB_ROOMS.origin : '';
             const observer = io(`${base}/web-room`, { auth: { token: guest }, extraHeaders: { Origin: origin }, autoConnect: false, transports: ['websocket'], reconnection: false });
             clients.push(observer);

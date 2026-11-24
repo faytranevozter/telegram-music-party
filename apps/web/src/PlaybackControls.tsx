@@ -42,14 +42,14 @@ export function PlayerBar({ paused, muted = false, onControl, disabledControls =
             <button type="button" className={`${subtleButton} btn-square ${disabledButton}`} aria-label="Previous" title="Previous" disabled={unavailable('previous')} onClick={() => onControl('previous')}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d="M6 5h2v14H6zm12 0L9 12l9 7z" /></svg>
             </button>
-            <button type="button" className={`btn btn-primary btn-circle ${disabledButton}`} aria-label={controlLabels[toggle]} title={controlLabels[toggle]} disabled={unavailable(toggle)} onClick={() => onControl(toggle)}>
+            <button type="button" className="btn btn-primary btn-circle disabled:bg-neutral-content/20 disabled:text-neutral-content disabled:border-neutral-content/30 disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed" aria-label={controlLabels[toggle]} title={controlLabels[toggle]} disabled={unavailable(toggle)} onClick={() => onControl(toggle)}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d={paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zm6 0h4v14h-4z'} /></svg>
             </button>
             <button type="button" className={`${subtleButton} btn-square ${disabledButton}`} aria-label="Next" title="Next" disabled={unavailable('next')} onClick={() => onControl('next')}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z" /></svg>
             </button>
         </div>
-        <button type="button" className={`btn ${unavailable('radio') ? 'btn-outline disabled:border-neutral-content/30 disabled:bg-transparent disabled:text-neutral-content/70 disabled:opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed' : ''}`} disabled={unavailable('radio')} onClick={() => onControl('radio')}><PlayerIcon name="radio" /> Start radio</button>
+        <button type="button" className={`btn ${unavailable('radio') ? 'btn-outline disabled:border-neutral-content/30 disabled:bg-transparent disabled:text-neutral-content/70 disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed' : ''}`} disabled={unavailable('radio')} onClick={() => onControl('radio')}><PlayerIcon name="radio" /> Start radio</button>
         <button type="button" className={subtleButton} aria-expanded={showMore} aria-controls={moreId} onClick={() => setShowMore((open) => !open)}>{showMore ? 'Less' : 'More'}</button>
         <div id={moreId} className={showMore ? 'flex basis-full flex-wrap items-center gap-1 border-t border-neutral-content/20 pt-2' : 'hidden'}>
             <button type="button" className={`${subtleButton} btn-sm ${disabledButton}`} disabled={unavailable(muteAction)} onClick={() => onControl(muteAction)}><PlayerIcon name={muteAction === 'unmute' ? 'mute' : 'unmute'} /> {controlLabels[muteAction]}</button>
