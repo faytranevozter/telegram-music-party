@@ -13,10 +13,20 @@ export function readAutoplayEnabled(): boolean | undefined {
     }
 }
 
-export function readInfiniteQueue(): boolean | undefined {
+export function readMixQueue(): boolean | undefined {
     try {
         const queue = getStore()?.getState()?.queue;
-        return queue?.items?.length && typeof queue.isInfinite === "boolean" ? queue.isInfinite : undefined;
+        if (!queue?.items?.length) return undefined;
+        if (queue.isInfinite === true) return true;
+
+        // A restored Mix can lose isInfinite while retaining its original queue.
+        // Autoplay also uses RD endpoints, but stores recommendations separately.
+        if (!queue.automixItems?.length) {
+            const current = playerQueueIndex(queue.items, queue.selectedItemIndex);
+            const playlistId = mixPlaylistId(queue.items[current]);
+            if (playlistId && queue.items.some((item, index) => index !== current && mixPlaylistId(item) === playlistId)) return true;
+        }
+        return typeof queue.isInfinite === "boolean" ? queue.isInfinite : undefined;
     } catch {
         return undefined;
     }
@@ -58,6 +68,19 @@ function record(value: unknown): Record<string, unknown> {
         : {};
 }
 
+function queueRenderer(value: unknown) {
+    const item = record(value);
+    const content = record(item.content ?? item);
+    const primary = record(record(content.playlistPanelVideoWrapperRenderer).primaryRenderer);
+    return record(content.playlistPanelVideoRenderer ?? primary.playlistPanelVideoRenderer ?? content);
+}
+
+function mixPlaylistId(value: unknown) {
+    const endpoint = record(record(queueRenderer(value).navigationEndpoint).watchEndpoint);
+    return typeof endpoint.playlistId === "string" && endpoint.playlistId.startsWith("RD")
+        ? endpoint.playlistId : undefined;
+}
+
 function text(value: unknown): string {
     if (typeof value === "string") return value;
     const data = record(value);
@@ -70,11 +93,7 @@ function text(value: unknown): string {
 export function parsePlayerQueue(items: unknown[]): QueueItem[] {
     return items.flatMap((value, index) => {
         const item = record(value);
-        const content = record(item.content ?? item);
-        const wrapper = record(content.playlistPanelVideoWrapperRenderer);
-        const primary = record(wrapper.primaryRenderer);
-        const renderer = record(content.playlistPanelVideoRenderer ??
-            primary.playlistPanelVideoRenderer ?? content);
+        const renderer = queueRenderer(value);
         const endpoint = record(record(renderer.navigationEndpoint).watchEndpoint);
         const length = text(renderer.lengthText).trim();
         const seconds = /^\d{1,6}(?::[0-5]\d){1,2}$/.test(length)

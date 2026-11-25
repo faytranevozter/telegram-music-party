@@ -1,5 +1,5 @@
 import { getPlaybackState, getVideoId } from "./playback";
-import { readInfiniteQueue } from "./player-queue";
+import { readMixQueue } from "./player-queue";
 
 export type PlayerState = {
     state: "playing" | "paused" | "standby";
@@ -16,7 +16,7 @@ const isAdPlaying = () => document.querySelector("#movie_player.ad-showing") !==
 
 function isMix() {
     // Autoplay can also put an RD playlist in the URL when it advances.
-    return readInfiniteQueue() ?? (new URL(window.location.href).searchParams.get("list")?.startsWith("RD") === true);
+    return readMixQueue() ?? (new URL(window.location.href).searchParams.get("list")?.startsWith("RD") === true);
 }
 
 const events = ["play", "pause", "ended", "emptied", "loadedmetadata", "volumechange"];

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPlayerStateChannel, watchPlayerState } from "./player-state";
+import { getVideoId } from "./playback";
 
 const watchers: ReturnType<typeof watchPlayerState>[] = [];
 
@@ -32,6 +33,30 @@ afterEach(() => {
 });
 
 describe("watchPlayerState", () => {
+    it("identifies the loaded song on Home without a watch URL or title link", () => {
+        const player = mountVideo().closest("#movie_player")!;
+        Object.assign(player, { getVideoData: () => ({ video_id: "abcdefghijk" }) });
+        expect(getVideoId()).toBe("abcdefghijk");
+    });
+
+    it("recognizes a restored paused Mix on Home without blocking normal autoplay", () => {
+        vi.useFakeTimers();
+        mountVideo(true);
+        const queue = document.createElement("div");
+        queue.id = "queue";
+        const mixTrack = (videoId: string) => ({ playlistPanelVideoWrapperRenderer: { primaryRenderer: {
+            playlistPanelVideoRenderer: { videoId, navigationEndpoint: { watchEndpoint: { playlistId: "RDAMVMabcdefghijk" } } },
+        } } });
+        const state = { isInfinite: false, selectedItemIndex: 0, items: [mixTrack("abcdefghijk"), mixTrack("lmnopqrstuv")], automixItems: [] as unknown[] };
+        Object.assign(queue, { queue: { store: { store: { getState: () => ({ queue: state }) } } } });
+        document.body.append(queue);
+        const report = observe();
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ state: "paused", mix: true }));
+        state.automixItems = [mixTrack("12345678901")];
+        vi.advanceTimersByTime(1000);
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: false }));
+    });
+
     it("reports an ad starting and ending without a media event", async () => {
         const player = mountVideo().closest("#movie_player")!;
         const report = observe();

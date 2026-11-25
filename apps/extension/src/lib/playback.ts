@@ -40,15 +40,18 @@ export function getVideoId(): string | null {
     } catch {
         // ignore
     }
-    const u = document
-        .querySelector('[class="ytp-title-link yt-uix-sessionlink"]')
-        ?.getAttribute("href");
-    if (!u) return null;
+    // The mini-player can keep playing on Home without a watch URL or title link.
     try {
-        return new URL(u, window.location.origin).searchParams.get("v");
-    } catch {
-        return null;
-    }
+        const player = document.querySelector("#movie_player") as (Element & {
+            getVideoData?: () => { video_id?: unknown } | undefined;
+        }) | null;
+        const videoId = player?.getVideoData?.()?.video_id;
+        if (typeof videoId === "string" && /^[\w-]{11}$/.test(videoId)) return videoId;
+    } catch { /* The player API can be unavailable while it initializes. */ }
+    const href = document.querySelector("#movie_player a.ytp-title-link")?.getAttribute("href");
+    try {
+        return href ? new URL(href, window.location.origin).searchParams.get("v") : null;
+    } catch { return null; }
 }
 
 export function getPlaybackState(): {
