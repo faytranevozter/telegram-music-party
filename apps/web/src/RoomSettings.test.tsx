@@ -59,6 +59,9 @@ it('shows current settings with accessible labels and numeric limits', async () 
     const labels = [...container.querySelectorAll('label')];
     expect(labels.map((label) => label.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Maximum queue size'), expect.stringContaining('Votes needed to skip'), expect.stringContaining('Allow Play Next'), expect.stringContaining('Daily Play Next limit'), expect.stringContaining('Allow video search')]));
     const numbers = [...container.querySelectorAll<HTMLInputElement>('input[type=number]')];
+    expect(numbers.map((input) => input.labels?.[0]?.textContent)).toEqual(['Maximum queue size', 'Votes needed to skip', 'Daily Play Next limit', 'Tracks per guest', 'Limit period (minutes)']);
+    expect(document.getElementById(numbers[2].getAttribute('aria-describedby') ?? '')?.textContent).toBe('Per guest; 0 means unlimited.');
+    expect(document.getElementById(numbers[3].getAttribute('aria-describedby') ?? '')?.textContent).toBe('Queue and Play Next combined. 0 means unlimited.');
     expect(numbers.map((input) => [input.value, input.min, input.max])).toEqual([['10', '1', '2147483647'], ['2', '1', '2147483647'], ['3', '0', '2147483647'], ['0', '0', '100'], ['10', '1', '1440']]);
     expect(numbers[4].disabled).toBe(false);
     expect(container.textContent).toContain('0 means unlimited');
