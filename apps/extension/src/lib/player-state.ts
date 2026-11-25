@@ -15,8 +15,8 @@ export type PlayerState = {
 const isAdPlaying = () => document.querySelector("#movie_player.ad-showing") !== null;
 
 function isMix() {
-    // The same-track Radio navigation can replace the queue without updating the URL.
-    return readInfiniteQueue() || new URL(window.location.href).searchParams.get("list")?.startsWith("RD") === true;
+    // Autoplay can also put an RD playlist in the URL when it advances.
+    return readInfiniteQueue() ?? (new URL(window.location.href).searchParams.get("list")?.startsWith("RD") === true);
 }
 
 const events = ["play", "pause", "ended", "emptied", "loadedmetadata", "volumechange"];

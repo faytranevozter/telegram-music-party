@@ -58,6 +58,7 @@ describe("watchPlayerState", () => {
         vi.advanceTimersByTime(1000);
         expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: true }));
         state.isInfinite = false;
+        history.replaceState(null, "", "/watch?v=abcdefghijk&list=RDAMVMprevious");
         vi.advanceTimersByTime(1000);
         expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: false }));
     });

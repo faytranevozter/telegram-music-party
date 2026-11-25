@@ -13,11 +13,12 @@ export function readAutoplayEnabled(): boolean | undefined {
     }
 }
 
-export function readInfiniteQueue(): boolean {
+export function readInfiniteQueue(): boolean | undefined {
     try {
-        return getStore()?.getState()?.queue?.isInfinite === true;
+        const queue = getStore()?.getState()?.queue;
+        return queue?.items?.length && typeof queue.isInfinite === "boolean" ? queue.isInfinite : undefined;
     } catch {
-        return false;
+        return undefined;
     }
 }
 
