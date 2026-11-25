@@ -6,7 +6,7 @@ import { Room } from './Room';
 import { createWebApi } from './api';
 
 const room = vi.hoisted(() => ({
-    playerState: undefined as { state: 'playing' | 'paused'; volume: number; muted: boolean } | undefined,
+    playerState: undefined as { state: 'playing' | 'paused'; volume: number; muted: boolean; adPlaying?: boolean } | undefined,
 }));
 vi.mock('./use-room', () => ({ useRoom: () => ({
     state: {
@@ -38,10 +38,16 @@ it('reflects live player changes without a local control command', async () => {
         expect(playbackControls()?.textContent).toContain('Volume: 25%');
         expect(container.textContent).not.toContain('Now playing · Volume:');
 
+        room.playerState = { ...room.playerState, adPlaying: true };
+        await render();
+        expect(container.textContent).toContain('Ad playing');
+        expect(container.textContent).toContain('Test track');
+
         room.playerState = { state: 'paused', volume: 70, muted: true };
         await render();
         expect(button('Play')).not.toBeNull();
         expect(container.textContent).toContain('Paused');
+        expect(container.textContent).not.toContain('Ad playing');
         expect(playbackControls()?.textContent).toContain('Volume: 70%');
         expect(container.textContent).toContain('Unmute');
         expect(transport).not.toHaveBeenCalled();

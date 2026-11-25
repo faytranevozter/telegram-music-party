@@ -6,7 +6,7 @@ export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
     voteProgress?: { count: number; required: number; hasVoted: boolean };
     nowPlaying: (Track & { artist: string }) | null;
-    playerState?: { state: 'playing' | 'paused' | 'standby'; volume: number | null; muted: boolean | null; mix?: boolean } | null;
+    playerState?: { state: 'playing' | 'paused' | 'standby'; volume: number | null; muted: boolean | null; mix?: boolean; adPlaying?: boolean } | null;
     capabilities: { controls: Control[]; playNext: boolean; playNextRemaining: number | null; videoSearch: boolean };
 };
 export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};

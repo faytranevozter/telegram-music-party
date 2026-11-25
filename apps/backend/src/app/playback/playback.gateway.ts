@@ -170,8 +170,8 @@ export class PlaybackGateway implements OnGatewayDisconnect {
     currentPlayerState(roomId: string): PlayerState | null {
         const snapshot = this.playerStates.get(roomId)?.snapshot;
         if (!snapshot) return null;
-        const { state, volume, muted, mix } = snapshot;
-        return { state, volume, muted, ...(mix !== undefined ? { mix } : {}) };
+        const { state, volume, muted, mix, adPlaying } = snapshot;
+        return { state, volume, muted, ...(mix !== undefined ? { mix } : {}), ...(adPlaying !== undefined ? { adPlaying } : {}) };
     }
 
     private clearPlayerState(roomId: string, socketId: string) {
@@ -554,7 +554,8 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             previous.state !== next.state ||
             previous.volume !== next.volume ||
             previous.muted !== next.muted ||
-            previous.mix !== next.mix
+            previous.mix !== next.mix ||
+            previous.adPlaying !== next.adPlaying
         ) {
             this.roomChanged(next.roomId);
         }

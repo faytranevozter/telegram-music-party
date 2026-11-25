@@ -109,11 +109,12 @@ export type PlayerState = {
     volume: number | null;
     muted: boolean | null;
     mix?: boolean;
+    adPlaying?: boolean;
 };
 
 export function validatePlayerState(data: unknown) {
     if (!data || typeof data !== 'object') return null;
-    const { roomId, state, videoId, song, artist, volume, muted, mix } =
+    const { roomId, state, videoId, song, artist, volume, muted, mix, adPlaying } =
         data as Record<string, unknown>;
     if (
         typeof roomId !== 'string' ||
@@ -130,7 +131,8 @@ export function validatePlayerState(data: unknown) {
                 volume < 0 ||
                 volume > 100)) ||
         (muted !== null && typeof muted !== 'boolean') ||
-        (mix !== undefined && typeof mix !== 'boolean')
+        (mix !== undefined && typeof mix !== 'boolean') ||
+        (adPlaying !== undefined && typeof adPlaying !== 'boolean')
     ) {
         return null;
     }
@@ -143,5 +145,6 @@ export function validatePlayerState(data: unknown) {
         volume,
         muted,
         ...(mix !== undefined ? { mix } : {}),
+        ...(adPlaying !== undefined ? { adPlaying } : {}),
     } as const;
 }

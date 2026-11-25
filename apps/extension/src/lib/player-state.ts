@@ -9,7 +9,10 @@ export type PlayerState = {
     volume: number | null;
     muted: boolean | null;
     mix: boolean;
+    adPlaying: boolean;
 };
+
+const isAdPlaying = () => document.querySelector("#movie_player.ad-showing") !== null;
 
 function isMix() {
     // The same-track Radio navigation can replace the queue without updating the URL.
@@ -51,6 +54,7 @@ export function watchPlayerState(report: (state: PlayerState) => void) {
             volume: timer !== undefined && previous ? previous.volume : el ? Math.round(el.volume * 100) : null,
             muted: timer !== undefined && previous ? previous.muted : (el?.muted ?? null),
             mix: isMix(),
+            adPlaying: isAdPlaying(),
         };
         if (previous && Object.keys(next).every((key) => {
             const field = key as keyof PlayerState;
@@ -109,8 +113,11 @@ export function watchPlayerState(report: (state: PlayerState) => void) {
     };
 
     for (const event of events) document.addEventListener(event, onMediaEvent, true);
-    const observer = new MutationObserver(() => reconcileVideo(getPlaybackState().el));
-    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+    const observer = new MutationObserver(() => {
+        reconcileVideo(getPlaybackState().el);
+        if (previous && previous.adPlaying !== isAdPlaying()) sample();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "class"] });
     // Same-track SPA navigation can change the playlist without a media event.
     const playlistTimer = setInterval(() => {
         if (previous && previous.mix !== isMix()) sample();

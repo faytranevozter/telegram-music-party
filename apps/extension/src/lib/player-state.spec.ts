@@ -32,6 +32,17 @@ afterEach(() => {
 });
 
 describe("watchPlayerState", () => {
+    it("reports an ad starting and ending without a media event", async () => {
+        const player = mountVideo().closest("#movie_player")!;
+        const report = observe();
+        player.classList.add("ad-showing");
+        await Promise.resolve();
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ adPlaying: true }));
+        player.classList.remove("ad-showing");
+        await Promise.resolve();
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ adPlaying: false }));
+    });
+
     it("detects a same-URL radio queue and clears it for autoplay with added requests", () => {
         vi.useFakeTimers();
         mountVideo();

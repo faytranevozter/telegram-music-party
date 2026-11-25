@@ -76,7 +76,8 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
         }, 'Could not add this track. Try again.');
     }
     const playerState = state?.playerOnline ? state.playerState : null;
-    const playbackStatus = playerState?.state === 'paused' ? 'Paused'
+    const playbackStatus = playerState?.adPlaying ? 'Ad playing'
+        : playerState?.state === 'paused' ? 'Paused'
         : playerState?.state === 'playing' ? 'Now playing'
         : playerState?.state === 'standby' ? 'Standing by'
         : 'Playback status unavailable';
