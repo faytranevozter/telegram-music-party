@@ -59,6 +59,14 @@ applying any changes. Guests cannot read or edit this settings object. A
 successful update publishes fresh room snapshots so connected guests receive
 updated capabilities. Telegram room settings remain managed through `/config`.
 
+Web-room hosts can also set `guestRequestLimit` (0–100 tracks, default 0 for
+unlimited) and `guestRequestPeriodMinutes` (1–1440, default 10). The rolling
+allowance is per authenticated invite session and applies to accepted Queue and
+Play Next requests combined. Hosts are exempt, fresh invite sessions start with
+a fresh allowance, and Play Next's separate daily limit still applies. An
+exhausted guest allowance returns HTTP `429` with
+`{status: 'guest-request-limit', retryAt}` (`retryAt` in epoch milliseconds).
+
 Connect to Socket.IO namespace `/web-room` with `auth.token` and the configured
 Origin. It emits full `room:state` snapshots, including an initial state after
 connection. It does not accept player commands or occupy the existing player

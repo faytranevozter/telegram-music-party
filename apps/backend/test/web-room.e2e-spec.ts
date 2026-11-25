@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { io, type Socket } from 'socket.io-client';
 import Keyv from 'keyv';
 import KeyvRedis from '@keyv/redis';
+import { GuestRequestQuotaService } from 'src/app/playback/core/guest-request-quota.service';
 import { ENV } from 'src/config/env';
 import { PlaybackModule } from 'src/app/playback/playback.module';
 import { PlaybackService } from 'src/app/playback/playback.service';
@@ -332,6 +333,22 @@ suite('shared web room HTTP and observer contract', () => {
         expect((await route('room/autoplay', undefined, token)).status).toBe(401);
     }, 15_000);
 
+    it('reserves guest quota atomically and retains history across policy changes', async () => {
+        const quota = app.get(GuestRequestQuotaService);
+        const id = randomUUID();
+        const results = await Promise.all(Array.from({ length: 4 }, () => quota.reserve(id, 'guest', 3, 10)));
+        const accepted = results.filter((result) => result.allowed);
+        expect(accepted).toHaveLength(3);
+        const denied = results.find((result) => !result.allowed)!;
+        const lowered = await quota.reserve(id, 'guest', 1, 20);
+        expect(lowered).toMatchObject({ allowed: false });
+        if (!lowered.allowed) expect(lowered.retryAt).toBeGreaterThanOrEqual(denied.retryAt + 600_000);
+        expect(await quota.reserve(id, 'fresh-session', 1, 10)).toMatchObject({ allowed: true });
+        expect(await quota.reserve(randomUUID(), 'guest', 1, 10)).toMatchObject({ allowed: true });
+        await quota.release(id, 'guest', accepted[0].reservationId);
+        expect(await quota.reserve(id, 'guest', 3, 10)).toMatchObject({ allowed: true });
+    });
+
     it('publishes host settings changes to guests and enforces video search', async () => {
         const created = await route('rooms', { name: 'Settings room', nickname: 'Host' });
         const { token: owner, roomId: id, shareCode } = (await created.json()) as { token: string; roomId: string; shareCode: string };
@@ -382,6 +399,14 @@ suite('shared web room HTTP and observer contract', () => {
             const quota = await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest);
             expect(quota.status).toBe(409);
             expect(await quota.json()).toMatchObject({ status: 'limit-reached' });
+
+            expect((await route('room/settings', { guestRequestLimit: 1, guestRequestPeriodMinutes: 10, dailyPlayNextLimit: 0 }, owner)).status).toBe(201);
+            const request = (position: 'end' | 'next') => route('room/requests', { selectionId: selection.selectionId, position }, guest);
+            expect((await request('end')).status).toBe(201);
+            await playback.removeQueue(id, song.videoId);
+            const limited = await request('next');
+            expect(limited.status).toBe(429);
+            expect(await limited.json()).toMatchObject({ status: 'guest-request-limit', retryAt: expect.any(Number) });
         } finally { await app.get(PlaybackService).removeRoom(id); }
     }, 15000);
 

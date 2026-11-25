@@ -123,8 +123,14 @@ export class WebRoomService {
         );
         if (!song)
             throw new NotFoundException({ status: 'selection-not-found' });
+        const room = await this.room(roomId);
+        const feature = room.Feature;
+        const webGuestQuota = room.chatId === null && feature && feature.guestRequestLimit > 0 && !(await actor.isAdmin())
+            ? { limit: feature.guestRequestLimit, periodMinutes: feature.guestRequestPeriodMinutes }
+            : undefined;
         const result = await this.queue.request({
-            room: await this.room(roomId),
+            room,
+            webGuestQuota,
             actor,
             videoId: song.videoId,
             position,

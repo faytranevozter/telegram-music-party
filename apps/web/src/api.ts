@@ -10,10 +10,10 @@ export type RoomState = {
 export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};
 type Admission = { token: string; expiresAt: number; room: {name: string} };
 export type Setup = { roomId: string; shareCode: string | null };
-export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean };
+export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean; guestRequestLimit: number; guestRequestPeriodMinutes: number };
 
 export class ApiError extends Error {
-    constructor(readonly http: number, readonly status?: string) { super(`Room request failed (${http})`); }
+    constructor(readonly http: number, readonly status?: string, readonly retryAt?: number) { super(`Room request failed (${http})`); }
 }
 
 export function createWebApi(origin: string, transport: typeof fetch = fetch) {
@@ -28,7 +28,8 @@ export function createWebApi(origin: string, transport: typeof fetch = fetch) {
         if (!response.ok) {
             const detail: unknown = await response.json().catch(() => null);
             const status = detail && typeof detail === 'object' && 'status' in detail && typeof detail.status === 'string' ? detail.status : undefined;
-            throw new ApiError(response.status, status);
+            const retryAt = detail && typeof detail === 'object' && 'retryAt' in detail && typeof detail.retryAt === 'number' && Number.isSafeInteger(detail.retryAt) && detail.retryAt > 0 && detail.retryAt <= 8.64e15 ? detail.retryAt : undefined;
+            throw new ApiError(response.status, status, retryAt);
         }
         return await response.json() as T;
     }
@@ -64,6 +65,9 @@ export function explain(error: unknown, fallback = 'Could not reach the party se
         'skip-pending': 'The player is already moving to the next song.',
     };
     if (error.status && Object.hasOwn(messages, error.status)) return messages[error.status];
+    if (error.http === 429 && error.status === 'guest-request-limit') {
+        return error.retryAt === undefined ? 'Guest request limit reached. Try again later.' : `Guest request limit reached. Try again after ${new Date(error.retryAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}.`;
+    }
     if (error.http === 429) return 'Too many requests. Wait a minute and try again.';
     if (error.http === 401) return 'Your room session ended. Ask for a current invite to rejoin.';
     if (error.http === 403) return 'That action isn’t available in this room.';

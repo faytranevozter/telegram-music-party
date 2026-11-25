@@ -2,10 +2,21 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ApiError, createWebApi } from './api';
+import { ApiError, createWebApi, explain } from './api';
 import { RoomSettings } from './RoomSettings';
 
-const settings = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false };
+const settings = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false, guestRequestLimit: 0, guestRequestPeriodMinutes: 10 };
+
+it('preserves the guest quota retry time without changing other limit messages', async () => {
+    const retryAt = Date.UTC(2026, 10, 25, 12, 30);
+    const transport = vi.fn().mockResolvedValue({ ok: false, status: 429, json: async () => ({ status: 'guest-request-limit', retryAt }) });
+    const api = createWebApi('https://example.test', transport as typeof fetch);
+    const error = await api.queue('token', 'selection', 'end').catch((cause: unknown) => cause);
+    expect(error).toMatchObject({ retryAt });
+    expect(explain(error)).toContain(new Date(retryAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
+    expect(explain(new ApiError(429))).toBe('Too many requests. Wait a minute and try again.');
+    expect(explain(new ApiError(409, 'limit-reached'))).toBe('You’ve used today’s Play Next allowance.');
+});
 const flush = () => act(async () => { await Promise.resolve(); });
 afterEach(() => { document.body.innerHTML = ''; });
 
@@ -48,7 +59,8 @@ it('shows current settings with accessible labels and numeric limits', async () 
     const labels = [...container.querySelectorAll('label')];
     expect(labels.map((label) => label.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Maximum queue size'), expect.stringContaining('Votes needed to skip'), expect.stringContaining('Allow Play Next'), expect.stringContaining('Daily Play Next limit'), expect.stringContaining('Allow video search')]));
     const numbers = [...container.querySelectorAll<HTMLInputElement>('input[type=number]')];
-    expect(numbers.map((input) => [input.value, input.min, input.max])).toEqual([['10', '1', '2147483647'], ['2', '1', '2147483647'], ['3', '0', '2147483647']]);
+    expect(numbers.map((input) => [input.value, input.min, input.max])).toEqual([['10', '1', '2147483647'], ['2', '1', '2147483647'], ['3', '0', '2147483647'], ['0', '0', '100'], ['10', '1', '1440']]);
+    expect(numbers[4].disabled).toBe(false);
     expect(container.textContent).toContain('0 means unlimited');
     await act(async () => root.unmount());
 });

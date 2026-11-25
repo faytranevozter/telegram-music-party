@@ -74,11 +74,13 @@ function build(
         remaining: jest.fn().mockResolvedValue(null),
         record: jest.fn(),
     };
+    const guestQuota = { reserve: jest.fn().mockResolvedValue({ allowed: true, reservationId: 'reservation' }), release: jest.fn().mockResolvedValue(undefined) };
     const service = new QueueRequestService(
         playback as any,
         analytics as any,
         quota as any,
         gateway as any,
+        guestQuota as any,
     );
     const room = { id: 'room', Feature: feature };
     const input = {
@@ -87,8 +89,22 @@ function build(
         actor: makeActor('7', admin),
         loadSong: jest.fn().mockResolvedValue(loaded),
     };
-    return { service, playback, analytics, gateway, quota, room, input };
+    return { service, playback, analytics, gateway, quota, guestQuota, room, input };
 }
+
+it('does not insert when the guest request allowance is exhausted', async () => {
+    const { service, playback, input, guestQuota } = build();
+    guestQuota.reserve.mockResolvedValue({ allowed: false, retryAt: 1234 });
+    await expect(service.request({ ...input, position: 'end', webGuestQuota: { limit: 3, periodMinutes: 10 } })).rejects.toMatchObject({ status: 429, response: { status: 'guest-request-limit', retryAt: 1234 } });
+    expect(playback.addToQueue).not.toHaveBeenCalled();
+});
+
+it('releases a guest reservation if inserting the track fails', async () => {
+    const { service, playback, input, guestQuota } = build();
+    playback.addToQueue.mockRejectedValueOnce(new Error('insert failed'));
+    await expect(service.request({ ...input, position: 'end', webGuestQuota: { limit: 3, periodMinutes: 10 } })).rejects.toThrow('insert failed');
+    expect(guestQuota.release).toHaveBeenCalledWith('room', input.actor.userRef, 'reservation');
+});
 
 describe('describeSongPlain', () => {
     it('formats the plain label used by the player and the chat', () => {

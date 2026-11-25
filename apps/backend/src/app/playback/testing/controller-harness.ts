@@ -89,6 +89,7 @@ export function buildController(overrides: Partial<Deps> = {}) {
             analytics as any,
             playNextQuota as any,
             gateway as any,
+            null!,
         );
 
     const controller = new PlaybackTelegramController(

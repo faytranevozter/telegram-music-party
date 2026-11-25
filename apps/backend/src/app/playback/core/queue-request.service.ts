@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, ServiceUnavailableException } from '@nestjs/common';
 import { PlaybackService } from '../playback.service';
 import { PlaybackGateway } from '../playback.gateway';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
@@ -9,6 +9,7 @@ import { PlayNextQuotaService } from './play-next-quota.service';
 import { describeSongPlain } from './song-label';
 import type { Feature } from '@prisma/client';
 import { RoomLock } from './room-lock';
+import { GuestRequestQuotaService } from './guest-request-quota.service';
 
 export type RequestSongResult =
     | { status: 'play-next-disabled' }
@@ -30,6 +31,7 @@ export type RequestSongInput = {
     position: 'end' | 'next';
     actor: Actor;
     loadSong: () => Promise<Song | null | undefined>;
+    webGuestQuota?: { limit: number; periodMinutes: number };
 };
 
 /**
@@ -45,6 +47,7 @@ export class QueueRequestService {
         private readonly analyticsService: AnalyticsService,
         private readonly playNextQuota: PlayNextQuotaService,
         private readonly gateway: PlaybackGateway,
+        private readonly guestQuota: GuestRequestQuotaService,
     ) {}
 
     request(input: RequestSongInput): Promise<RequestSongResult> {
@@ -105,6 +108,15 @@ export class QueueRequestService {
         }
 
         const label = describeSongPlain(song).plain;
+        let reservationId: string | undefined;
+        if (input.webGuestQuota && input.webGuestQuota.limit > 0) {
+            const { limit, periodMinutes } = input.webGuestQuota;
+            const reservation = await this.guestQuota.reserve(room.id, actor.userRef, limit, periodMinutes).catch(() => {
+                throw new ServiceUnavailableException('Guest request quota is temporarily unavailable');
+            });
+            if (!reservation.allowed) throw new HttpException({ status: 'guest-request-limit', retryAt: reservation.retryAt }, HttpStatus.TOO_MANY_REQUESTS);
+            reservationId = reservation.reservationId;
+        }
 
         // Analytics is best-effort: a tracking failure must never block a
         // song request. The request ID becomes the queue row ID.
@@ -140,6 +152,9 @@ export class QueueRequestService {
                 );
             }
         } catch (error) {
+            if (reservationId) {
+                await this.guestQuota.release(room.id, actor.userRef, reservationId).catch((cause: unknown) => console.error('Guest quota release failed', cause));
+            }
             if (requestId) {
                 await this.analyticsService
                     .markRequestFailed(requestId)

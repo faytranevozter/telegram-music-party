@@ -1,0 +1,2 @@
+ALTER TABLE "Feature" ADD COLUMN "guestRequestLimit" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Feature" ADD COLUMN "guestRequestPeriodMinutes" INTEGER NOT NULL DEFAULT 10;

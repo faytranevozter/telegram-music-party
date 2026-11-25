@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from 'src/platform/prisma.service';
 import { PlaybackGateway } from '../playback.gateway';
 
-const select = { maxQueueSize: true, minimumVotes: true, playNextCommand: true, dailyPlayNextLimit: true, allowVideoSearch: true } as const;
-export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean };
+const select = { maxQueueSize: true, minimumVotes: true, playNextCommand: true, dailyPlayNextLimit: true, allowVideoSearch: true, guestRequestLimit: true, guestRequestPeriodMinutes: true } as const;
+export type RoomSettings = Pick<import('@prisma/client').Feature, keyof typeof select>;
 
 @Injectable()
 export class WebRoomSettingsService {
@@ -21,7 +21,11 @@ export class WebRoomSettingsService {
             if (!Object.hasOwn(select, key)) throw new BadRequestException();
             if (key === 'playNextCommand' || key === 'allowVideoSearch') {
                 if (typeof field !== 'boolean') throw new BadRequestException();
-            } else if (typeof field !== 'number' || !Number.isInteger(field) || field < (key === 'dailyPlayNextLimit' ? 0 : 1) || field > 2147483647) throw new BadRequestException();
+            } else {
+                const min = key === 'dailyPlayNextLimit' || key === 'guestRequestLimit' ? 0 : 1;
+                const max = key === 'guestRequestLimit' ? 100 : key === 'guestRequestPeriodMinutes' ? 1440 : 2147483647;
+                if (typeof field !== 'number' || !Number.isInteger(field) || field < min || field > max) throw new BadRequestException();
+            }
         }
         await this.get(roomId);
         const settings = await this.prisma.feature.update({ where: { roomId }, data: value as Partial<RoomSettings>, select });

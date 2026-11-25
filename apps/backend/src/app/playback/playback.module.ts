@@ -8,6 +8,7 @@ import { YTMusicService } from 'src/platform/yt-music.service';
 import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { QueueRequestService } from './core/queue-request.service';
+import { GuestRequestQuotaService } from './core/guest-request-quota.service';
 import { TelegramNotifier } from './telegram-notifier';
 import { ENV } from 'src/config/env';
 import { WebSession } from './web/web-session';
@@ -32,6 +33,7 @@ import { webHttpBoundary } from './web/web-http.middleware';
         VoteService,
         PlayNextQuotaService,
         QueueRequestService,
+        GuestRequestQuotaService,
         TelegramNotifier,
         ...(ENV.WEB_ROOMS.enabled
             ? [

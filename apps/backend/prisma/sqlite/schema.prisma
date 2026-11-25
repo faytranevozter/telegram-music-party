@@ -83,6 +83,8 @@ model Feature {
     maxQueueSize       Int      @default(25)
     playNextCommand    Boolean  @default(false)
     dailyPlayNextLimit Int      @default(3)
+    guestRequestLimit Int      @default(0)
+    guestRequestPeriodMinutes Int @default(10)
     allowVideoSearch   Boolean  @default(false)
     createdAt          DateTime @default(now())
     updatedAt          DateTime @updatedAt

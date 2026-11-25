@@ -8,7 +8,7 @@ import { WebRoomSettingsService } from './web-room-settings.service';
 import { PrismaService } from 'src/platform/prisma.service';
 import { PlaybackGateway } from '../playback.gateway';
 
-const initial = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false };
+const initial = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false, guestRequestLimit: 0, guestRequestPeriodMinutes: 10 };
 
 describe('web room settings', () => {
     const update = jest.fn();
@@ -70,5 +70,12 @@ describe('web room settings', () => {
             expect((await request('owner', { maxQueueSize: 3 })).status).toBe(201);
             expect(update).toHaveBeenCalledWith(expect.objectContaining({ where: { roomId: 'own-room' } }));
         } finally { await app.close(); }
+    });
+    it('saves valid guest request settings and rejects out-of-range values', async () => {
+        await expect(service.update('room', { guestRequestLimit: 3, guestRequestPeriodMinutes: 10 })).resolves.toMatchObject({ guestRequestLimit: 3, guestRequestPeriodMinutes: 10 });
+        for (const patch of [{ guestRequestLimit: 101 }, { guestRequestPeriodMinutes: 0 }, { guestRequestPeriodMinutes: 1441 }, { guestRequestLimit: 1.5 }, { guestRequestPeriodMinutes: '10' }]) {
+            await expect(service.update('room', patch)).rejects.toMatchObject({ status: 400 });
+        }
+        expect(update).toHaveBeenCalledTimes(1);
     });
 });
