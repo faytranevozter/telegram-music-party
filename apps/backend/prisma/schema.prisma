@@ -51,6 +51,7 @@ model Queue {
     room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
     title     String
     url       String
+    requesterDisplayName String?
     createdAt DateTime? @default(now())
     updatedAt DateTime  @updatedAt
 }
@@ -85,6 +86,7 @@ model Feature {
     dailyPlayNextLimit Int      @default(3)
     guestRequestLimit Int      @default(0)
     guestRequestPeriodMinutes Int @default(10)
+    requesterDisplay String @default("hidden")
     allowVideoSearch   Boolean  @default(false)
     createdAt          DateTime @default(now())
     updatedAt          DateTime @updatedAt

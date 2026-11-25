@@ -1,5 +1,6 @@
 export type Control = 'play' | 'pause' | 'next' | 'previous' | 'radio' | 'refresh' | 'mute' | 'unmute' | 'volume-up' | 'volume-down';
-export type Track = { title: string; videoId: string };
+export type Track = { title: string; videoId: string; requesterLabel?: string };
+export type RequesterDisplay = 'hidden' | 'anonymous' | 'name';
 export type AutoplayPreviewResult = { status: 'ok'; tracks: (Track & { artist: string; durationSeconds?: number })[] } | { status: 'offline' | 'unavailable' | 'timeout' };
 export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
@@ -10,7 +11,7 @@ export type RoomState = {
 export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};
 type Admission = { token: string; expiresAt: number; room: {name: string} };
 export type Setup = { roomId: string; shareCode: string | null };
-export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean; guestRequestLimit: number; guestRequestPeriodMinutes: number };
+export type RoomSettings = { maxQueueSize: number; minimumVotes: number; playNextCommand: boolean; dailyPlayNextLimit: number; allowVideoSearch: boolean; guestRequestLimit: number; guestRequestPeriodMinutes: number; requesterDisplay?: RequesterDisplay };
 
 export class ApiError extends Error {
     constructor(readonly http: number, readonly status?: string, readonly retryAt?: number) { super(`Room request failed (${http})`); }

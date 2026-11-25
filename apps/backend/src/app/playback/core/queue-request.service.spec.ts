@@ -267,6 +267,7 @@ describe('QueueRequestService.request', () => {
             'vid',
             'Title - Artist [3:33]',
             'request-id',
+            'Ana',
         );
         expect(analytics.recordRequest).toHaveBeenCalledWith({
             roomId: 'room',
@@ -296,7 +297,7 @@ describe('QueueRequestService.request', () => {
         const result = await service.request({ ...input, position: 'next' });
 
         expect(result.status).toBe('added');
-        expect(playback.addPlayNext).toHaveBeenCalled();
+        expect(playback.addPlayNext).toHaveBeenCalledWith('room', 'vid', expect.any(String), 'request-id', 'Ana');
         expect(analytics.recordRequest).toHaveBeenCalledWith(
             expect.objectContaining({ source: 'play_next', requesterId: '7' }),
         );
@@ -321,6 +322,7 @@ describe('QueueRequestService.request', () => {
             'vid',
             expect.any(String),
             undefined,
+            'Ana',
         );
     });
 

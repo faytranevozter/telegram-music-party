@@ -5,6 +5,7 @@ import { io, type Socket } from 'socket.io-client';
 import Keyv from 'keyv';
 import KeyvRedis from '@keyv/redis';
 import { GuestRequestQuotaService } from 'src/app/playback/core/guest-request-quota.service';
+import { PlaybackGateway } from 'src/app/playback/playback.gateway';
 import { ENV } from 'src/config/env';
 import { PlaybackModule } from 'src/app/playback/playback.module';
 import { PlaybackService } from 'src/app/playback/playback.service';
@@ -246,6 +247,10 @@ suite('shared web room HTTP and observer contract', () => {
         await queued;
         expect(playerOnly).not.toHaveBeenCalled();
         const playback = app.get(PlaybackService);
+        const named = event<{ queue: { requesterLabel?: string }[] }>(observer, 'room:state', (state) => state.queue[0]?.requesterLabel === 'Guest');
+        await playback.setFeature(roomId, 'requesterDisplay', 'name');
+        app.get(PlaybackGateway).roomChanged(roomId);
+        expect((await named).queue).toEqual([{ videoId: song.videoId, title: expect.any(String), requesterLabel: 'Guest' }]);
         const telegramRoom = await playback.getRoomByChatId(
             `test-${roomId}`,
             42,
@@ -451,6 +456,18 @@ suite('shared web room HTTP and observer contract', () => {
             await playback.removeQueue(id, 'existing');
             expect((await route('room/settings', { dailyPlayNextLimit: 1 }, owner)).status).toBe(201);
             expect((await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest)).status).toBe(201);
+            expect((await route('room/settings', { requesterDisplay: 'name' }, guest)).status).toBe(403);
+            expect(await (await route('room/settings', undefined, owner)).json()).toMatchObject({ requesterDisplay: 'hidden' });
+            for (const [requesterDisplay, label] of [['name', 'Guest'], ['anonymous', 'Anonymous'], ['hidden', undefined]] as const) {
+                type QueueState = { queue: { videoId: string; requesterLabel?: string }[] };
+                const updated = event<QueueState>(observer, 'room:state', (state) => state.queue.some((track) => track.videoId === song.videoId && track.requesterLabel === label));
+                const saved = await route('room/settings', { requesterDisplay }, owner);
+                expect(saved.status).toBe(201);
+                const expectedQueue = [{ title: expect.any(String), videoId: song.videoId, ...(label ? { requesterLabel: label } : {}) }];
+                expect((await updated).queue).toEqual(expectedQueue);
+                const { queue } = await (await route('room', undefined, guest)).json() as QueueState;
+                expect(queue).toEqual(expectedQueue);
+            }
             await playback.removeQueue(id, song.videoId);
             const quota = await route('room/requests', { selectionId: selection.selectionId, position: 'next' }, guest);
             expect(quota.status).toBe(409);

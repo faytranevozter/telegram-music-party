@@ -6,6 +6,58 @@ import { WebRoomAccessService } from './web/web-room-access.service';
 
 afterEach(() => jest.restoreAllMocks());
 
+it.each([
+    ['name', 'Requested by Alex &lt;3 &amp; friends'],
+    ['anonymous', 'Requested by Anonymous'],
+    ['hidden', undefined],
+] as const)('renders Telegram /queue requester labels in %s mode', async (requesterDisplay, label) => {
+    const { controller, playback } = buildController({ gateway: {
+        getPlayerQueue: jest.fn().mockResolvedValue({ status: 'ok', items: [
+            { url: 'current', title: 'Current', artist: '', current: true },
+            { url: 'request', title: 'Requested song', artist: '', current: false },
+            { url: 'auto', title: 'Autoplay', artist: '', current: false },
+        ] }),
+    } });
+    playback.getRoomByChatId.mockResolvedValue({ id: 'room', Feature: { requesterDisplay } });
+    playback.getQueues.mockResolvedValue([
+        { url: 'request', title: 'Requested song', requesterDisplayName: 'Alex <3 & friends' },
+        { url: 'legacy', title: 'Legacy', requesterDisplayName: null },
+    ]);
+    const { ctx } = groupContext();
+    await controller.getQueues(ctx);
+    const [message] = ctx.reply.mock.calls[0] as [string];
+    const lines = message.split('\n');
+    expect(lines.find((line) => line.includes('Requested song'))).toBe(label ? `1. Requested song — ${label}` : '1. Requested song');
+    expect(lines).toContain(requesterDisplay === 'anonymous' ? '2. Legacy — Requested by Anonymous' : '2. Legacy');
+    expect(lines).toContain('▶ Current');
+    expect(lines).toContain('1. Autoplay');
+    expect(message).not.toContain('Alex <3 & friends');
+});
+
+it.each([
+    ['administrator', 'name', true],
+    ['administrator', 'anonymous', true],
+    ['administrator', 'hidden', true],
+    ['administrator', '__proto__', false],
+    ['member', 'name', false],
+] as const)('applies requester display for %s / %s only when authorized and valid', async (status, mode, allowed) => {
+    const roomChanged = jest.fn();
+    const { controller, playback } = buildController({ gateway: { roomChanged } });
+    playback.setFeature = jest.fn().mockResolvedValue(undefined);
+    const { ctx } = groupContext({ status });
+    ctx.match = ['', `requester-display:${mode}`];
+    ctx.callbackQuery = { message: { chat: { id: -100 }, message_thread_id: 42 } };
+    ctx.editMessageText = jest.fn();
+    await controller.updateConfig(ctx);
+    if (allowed) {
+        expect(playback.setFeature).toHaveBeenCalledWith('room', 'requesterDisplay', mode);
+        expect(roomChanged).toHaveBeenCalledWith('room');
+    } else {
+        expect(playback.setFeature).not.toHaveBeenCalled();
+        expect(roomChanged).not.toHaveBeenCalled();
+    }
+});
+
 it('leaves invites unavailable when web rooms are disabled', async () => {
     jest.replaceProperty(ENV, 'WEB_ROOMS', { enabled: false });
     const setInvite = jest.fn();

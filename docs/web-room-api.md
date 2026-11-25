@@ -67,6 +67,14 @@ a fresh allowance, and Play Next's separate daily limit still applies. An
 exhausted guest allowance returns HTTP `429` with
 `{status: 'guest-request-limit', retryAt}` (`retryAt` in epoch milliseconds).
 
+`requesterDisplay` controls attribution for the room's requested tracks:
+`hidden` (default), `anonymous`, or `name`. Web hosts set it in Room info &
+settings; Telegram-linked room admins use `/config`. The same mode applies to
+Telegram's `/queue`. HTTP and live queue tracks include only an optional
+`requesterLabel`: the saved display name in name mode, `Anonymous` in anonymous
+mode, or omitted in hidden mode. Identity references are never included. Autoplay
+and now-playing responses do not carry requester labels.
+
 Connect to Socket.IO namespace `/web-room` with `auth.token` and the configured
 Origin. It emits full `room:state` snapshots, including an initial state after
 connection. It does not accept player commands or occupy the existing player

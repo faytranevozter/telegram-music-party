@@ -10,6 +10,7 @@ import { describeSongPlain } from './song-label';
 import type { Feature } from '@prisma/client';
 import { RoomLock } from './room-lock';
 import { GuestRequestQuotaService } from './guest-request-quota.service';
+import { snapshotRequesterName } from './requester-display';
 
 export type RequestSongResult =
     | { status: 'play-next-disabled' }
@@ -136,12 +137,14 @@ export class QueueRequestService {
         }
 
         try {
+            const requesterName = snapshotRequesterName(actor.displayName);
             if (playNext) {
                 await this.playbackService.addPlayNext(
                     room.id,
                     videoId,
                     label,
                     requestId,
+                    requesterName,
                 );
             } else {
                 await this.playbackService.addToQueue(
@@ -149,6 +152,7 @@ export class QueueRequestService {
                     videoId,
                     label,
                     requestId,
+                    requesterName,
                 );
             }
         } catch (error) {

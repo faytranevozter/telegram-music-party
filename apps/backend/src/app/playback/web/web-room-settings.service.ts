@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/platform/prisma.service';
 import { PlaybackGateway } from '../playback.gateway';
+import { isRequesterDisplay } from '../core/requester-display';
 
-const select = { maxQueueSize: true, minimumVotes: true, playNextCommand: true, dailyPlayNextLimit: true, allowVideoSearch: true, guestRequestLimit: true, guestRequestPeriodMinutes: true } as const;
+const select = { maxQueueSize: true, minimumVotes: true, playNextCommand: true, dailyPlayNextLimit: true, allowVideoSearch: true, guestRequestLimit: true, guestRequestPeriodMinutes: true, requesterDisplay: true } as const;
 export type RoomSettings = Pick<import('@prisma/client').Feature, keyof typeof select>;
 
 @Injectable()
@@ -19,7 +20,9 @@ export class WebRoomSettingsService {
         if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) throw new BadRequestException();
         for (const [key, field] of Object.entries(value)) {
             if (!Object.hasOwn(select, key)) throw new BadRequestException();
-            if (key === 'playNextCommand' || key === 'allowVideoSearch') {
+            if (key === 'requesterDisplay') {
+                if (!isRequesterDisplay(field)) throw new BadRequestException();
+            } else if (key === 'playNextCommand' || key === 'allowVideoSearch') {
                 if (typeof field !== 'boolean') throw new BadRequestException();
             } else {
                 const min = key === 'dailyPlayNextLimit' || key === 'guestRequestLimit' ? 0 : 1;

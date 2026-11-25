@@ -87,13 +87,13 @@ export function SearchResultsSkeleton() {
     </div>;
 }
 
-type QueueDisplayTrack = { key: string; title: string; detail?: string };
+type QueueDisplayTrack = { key: string; title: string; detail?: string; requesterLabel?: string };
 
 export function QueueTrackList({ tracks, label, markNext = false, start = 1 }: { tracks: readonly QueueDisplayTrack[]; label: string; markNext?: boolean; start?: number }) {
     return <ol className="list -mx-2" aria-label={label} start={start}>
-        {tracks.map(({ key, title, detail }, index) => <li className="list-row grid-cols-[2rem_minmax(0,1fr)] items-center gap-3" key={key}>
+        {tracks.map(({ key, title, detail, requesterLabel }, index) => <li className="list-row grid-cols-[2rem_minmax(0,1fr)] items-center gap-3" key={key}>
             <span aria-hidden="true" className="text-center text-sm tabular-nums text-base-content/65">{String(index + start).padStart(2, '0')}</span>
-            <div className="min-w-0"><p className="break-words font-semibold">{title}</p>{detail && <p className="break-words text-sm text-base-content/70">{detail}</p>}{markNext && index === 0 && <span className="badge badge-primary badge-soft badge-sm mt-1">Next to play</span>}</div>
+            <div className="min-w-0"><p className="break-words font-semibold">{title}</p>{detail && <p className="break-words text-sm text-base-content/70">{detail}</p>}{requesterLabel && <p className="break-words text-sm text-base-content/70">Requested by {requesterLabel}</p>}{markNext && index === 0 && <span className="badge badge-primary badge-soft badge-sm mt-1">Next to play</span>}</div>
         </li>)}
     </ol>;
 }

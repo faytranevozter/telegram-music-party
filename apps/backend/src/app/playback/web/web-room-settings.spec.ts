@@ -8,7 +8,7 @@ import { WebRoomSettingsService } from './web-room-settings.service';
 import { PrismaService } from 'src/platform/prisma.service';
 import { PlaybackGateway } from '../playback.gateway';
 
-const initial = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false, guestRequestLimit: 0, guestRequestPeriodMinutes: 10 };
+const initial = { maxQueueSize: 10, minimumVotes: 2, playNextCommand: true, dailyPlayNextLimit: 3, allowVideoSearch: false, guestRequestLimit: 0, guestRequestPeriodMinutes: 10, requesterDisplay: 'hidden' };
 
 describe('web room settings', () => {
     const update = jest.fn();
@@ -77,5 +77,14 @@ describe('web room settings', () => {
             await expect(service.update('room', patch)).rejects.toMatchObject({ status: 400 });
         }
         expect(update).toHaveBeenCalledTimes(1);
+    });
+    it('accepts the three requester display modes and rejects other values', async () => {
+        for (const requesterDisplay of ['name', 'anonymous', 'hidden']) {
+            await expect(service.update('room', { requesterDisplay })).resolves.toMatchObject({ requesterDisplay });
+        }
+        for (const requesterDisplay of ['__proto__', 'public', true, null]) {
+            await expect(service.update('room', { requesterDisplay })).rejects.toMatchObject({ status: 400 });
+        }
+        expect(update).toHaveBeenCalledTimes(3);
     });
 });

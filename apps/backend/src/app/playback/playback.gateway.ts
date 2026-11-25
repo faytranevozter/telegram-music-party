@@ -303,7 +303,9 @@ export class PlaybackGateway implements OnGatewayDisconnect {
 
             // emit join with queue only to the joining socket
             const queues = await this.playbackService.getQueues(room.id);
-            socket.emit('joined', queues);
+            socket.emit('joined', queues.map(({ id, roomId, url, title, createdAt, updatedAt }) => ({
+                id, roomId, url, title, createdAt, updatedAt,
+            })));
             this.roomChanged(room.id);
 
             console.log('player joined', data.id);

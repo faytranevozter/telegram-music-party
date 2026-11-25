@@ -65,6 +65,23 @@ it('shows current settings with accessible labels and numeric limits', async () 
     await act(async () => root.unmount());
 });
 
+it('saves the selected room-wide requester display mode', async () => {
+    const api = { settings: vi.fn().mockResolvedValue({ ...settings, requesterDisplay: 'name' }), updateSettings: vi.fn().mockResolvedValue({ ...settings, requesterDisplay: 'anonymous' }) };
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<RoomSettings api={api} token="token" onRevoked={vi.fn()} onFlash={vi.fn()} />); });
+    const select = container.querySelector('select')!;
+    expect(select.value).toBe('name');
+    expect([...select.options].map((option) => option.text)).toEqual(['Hidden', 'Anonymous', 'Show names']);
+    await act(async () => {
+        select.value = 'anonymous';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(api.updateSettings).toHaveBeenCalledWith('token', { ...settings, requesterDisplay: 'anonymous' });
+    await act(async () => root.unmount());
+});
+
 it('offers retry after loading fails and restores the form', async () => {
     const api = { settings: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(settings), updateSettings: vi.fn() };
     const flash = vi.fn();

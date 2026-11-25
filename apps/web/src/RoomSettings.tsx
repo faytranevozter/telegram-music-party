@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ApiError, explain, type RoomSettings as Settings, type WebApi } from './api';
+import { ApiError, explain, type RequesterDisplay, type RoomSettings as Settings, type WebApi } from './api';
 import type { FlashMessage } from './RoomChrome';
 
 type NumericField = 'maxQueueSize' | 'minimumVotes' | 'dailyPlayNextLimit' | 'guestRequestLimit' | 'guestRequestPeriodMinutes';
@@ -55,6 +55,16 @@ export function RoomSettings({ api, token, onRevoked, onFlash }: { api: Pick<Web
                     <label className="flex items-center gap-3"><input className="toggle" type="checkbox" checked={draft.allowVideoSearch} onChange={(event) => setDraft({ ...draft, allowVideoSearch: event.target.checked })} /> Allow video search</label>
                     <label className="block">Tracks per guest <input className="input w-full" type="number" min="0" max="100" step="1" required value={draft.guestRequestLimit} onChange={(event) => setDraft({ ...draft, guestRequestLimit: event.target.value })} /><span className="block text-sm text-base-content/75">Queue and Play Next combined. 0 means unlimited.</span></label>
                     <label className="block">Limit period (minutes) <input className="input w-full" type="number" min="1" max="1440" step="1" required value={draft.guestRequestPeriodMinutes} onChange={(event) => setDraft({ ...draft, guestRequestPeriodMinutes: event.target.value })} /></label>
+                    <div>
+                        <label className="block">Requester display
+                            <select className="select w-full" aria-describedby="requester-display-help" value={draft.requesterDisplay ?? 'hidden'} onChange={(event) => setDraft({ ...draft, requesterDisplay: event.target.value as RequesterDisplay })}>
+                                <option value="hidden">Hidden</option>
+                                <option value="anonymous">Anonymous</option>
+                                <option value="name">Show names</option>
+                            </select>
+                        </label>
+                        <p id="requester-display-help" className="text-sm text-base-content/75">Changing this applies to tracks still in the queue. Show names uses the display name saved when each track was requested.</p>
+                    </div>
                     <button className="btn" type="submit">{busy ? 'Saving…' : 'Save changes'}</button>
                 </fieldset>
             </form>}

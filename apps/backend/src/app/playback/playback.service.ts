@@ -16,6 +16,7 @@ export class PlaybackService {
         videoId: string,
         title: string,
         requestId?: string,
+        requesterDisplayName?: string | null,
     ) {
         await this.prisma.queue.create({
             data: {
@@ -23,6 +24,7 @@ export class PlaybackService {
                 roomId,
                 url: videoId,
                 title: title,
+                requesterDisplayName,
             },
         });
     }
@@ -32,6 +34,7 @@ export class PlaybackService {
         videoId: string,
         title: string,
         requestId?: string,
+        requesterDisplayName?: string | null,
     ) {
         const head = await this.getQueue(roomId);
         await this.prisma.queue.create({
@@ -40,6 +43,7 @@ export class PlaybackService {
                 roomId,
                 url: videoId,
                 title: title,
+                requesterDisplayName,
                 ...(head?.createdAt
                     ? { createdAt: new Date(head.createdAt.getTime() - 1) }
                     : {}),
@@ -301,7 +305,7 @@ export class PlaybackService {
         });
     }
 
-    async setFeature(roomId: string, feature: string, value: number | boolean) {
+    async setFeature(roomId: string, feature: string, value: number | boolean | string) {
         await this.prisma.feature.update({
             where: {
                 roomId,

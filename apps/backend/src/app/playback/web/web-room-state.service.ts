@@ -6,6 +6,7 @@ import type { Feature, Room } from '@prisma/client';
 import { authorizeControl } from '../core/control-access';
 import { PlayNextQuotaService } from '../core/play-next-quota.service';
 import { voteProgress } from '../core/vote.service';
+import { requesterLabel } from '../core/requester-display';
 
 export const controls = [
     'play',
@@ -57,7 +58,10 @@ export class WebRoomStateService {
         return {
             name: room.name,
             role: owner ? 'owner' : 'guest',
-            queue: queue.map(({ title, url }) => ({ title, videoId: url })),
+            queue: queue.map(({ title, url, requesterDisplayName }) => {
+                const label = requesterLabel(room.Feature?.requesterDisplay, requesterDisplayName);
+                return { title, videoId: url, ...(label ? { requesterLabel: label } : {}) };
+            }),
             playerOnline,
             voteProgress: voteProgress(room, actor.userRef),
             nowPlaying: playerOnline ? this.player.currentTrack(roomId) : null,

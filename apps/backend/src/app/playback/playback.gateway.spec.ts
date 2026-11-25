@@ -259,6 +259,8 @@ describe('PlaybackGateway room admission', () => {
     });
 
     it('allows the same fingerprint to reconnect', async () => {
+        const queueRow = { id: 'request', roomId: 'room', url: 'video', title: 'Track', createdAt: new Date(), updatedAt: new Date() };
+        service.getQueues.mockResolvedValue([{ ...queueRow, requesterDisplayName: 'Alex' }]);
         service.getRoomDevices.mockResolvedValue([
             { id: 'd1', name: 'Mine', fingerprint: 'mine' },
         ]);
@@ -275,7 +277,7 @@ describe('PlaybackGateway room admission', () => {
             fingerprint: 'mine',
         });
 
-        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+        expect(socket.emit).toHaveBeenCalledWith('joined', [queueRow]);
         expect(socket.join).toHaveBeenCalledWith('room');
         expect(service.addDevice).not.toHaveBeenCalled();
     });

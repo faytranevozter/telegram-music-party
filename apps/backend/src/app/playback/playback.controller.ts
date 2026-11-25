@@ -44,6 +44,7 @@ import { VoteService } from './core/vote.service';
 import { PlayNextQuotaService } from './core/play-next-quota.service';
 import { QueueRequestService } from './core/queue-request.service';
 import { describeSongPlain } from './core/song-label';
+import { isRequesterDisplay, requesterDisplayOptions, requesterLabel } from './core/requester-display';
 import { telegramActor } from './telegram-actor';
 import { telegramUserRef } from './core/user-ref';
 import type { Feature } from '@prisma/client';
@@ -383,6 +384,7 @@ export class PlaybackTelegramController {
             [toggle('muteCommand')],
             [toggle('unmuteCommand')],
             [toggle('volumeCommand')],
+            [this.styledButton(`Requester display: ${isRequesterDisplay(feature.requesterDisplay) ? requesterDisplayOptions[feature.requesterDisplay] : 'Hidden'}`, 'config:requester-display')],
             ...NUMBER_CONFIG_KEYS.map((key) => [
                 this.configNumberButton(feature, key),
             ]),
@@ -1528,6 +1530,27 @@ export class PlaybackTelegramController {
             return;
         }
 
+        if (action === 'requester-display') {
+            if (rawKey === undefined) {
+                await ctx.answerCbQuery('Choose requester display');
+                await this.safeEdit(() => ctx.editMessageText(
+                    'Requester display\n\nApplies to queued requests here and on the web. Show names uses the display name saved when each track was requested.',
+                    Markup.inlineKeyboard([
+                        ...Object.entries(requesterDisplayOptions).map(([mode, label]) => [this.styledButton(label, `config:requester-display:${mode}`)]),
+                        [this.styledButton('Back', 'config:back')],
+                    ]),
+                ));
+            } else if (rawValue !== undefined || !isRequesterDisplay(rawKey)) {
+                await ctx.answerCbQuery('Unknown setting');
+            } else {
+                await this.playbackService.setFeature(room.id, 'requesterDisplay', rawKey);
+                this.gateway.roomChanged?.(room.id);
+                await ctx.answerCbQuery(`Requester display: ${requesterDisplayOptions[rawKey]}`);
+                await this.editConfigMessage(ctx, chatId, threadId);
+            }
+            return;
+        }
+
         if (action === 'close') {
             await ctx.answerCbQuery('Closed');
             await this.safeEdit(() =>
@@ -2548,14 +2571,14 @@ export class PlaybackTelegramController {
         const currentIndex = data.findIndex((item) => item.current);
         const upcoming =
             currentIndex >= 0 ? data.slice(currentIndex + 1) : data;
-        const requestedIds = new Set(requests.map((item) => item.url));
-        const userQueue = upcoming.filter((item) => requestedIds.has(item.url));
+        const requestsByUrl = new Map(requests.map((item) => [item.url, item]));
+        const userQueue = upcoming.filter((item) => requestsByUrl.has(item.url));
         for (const request of requests) {
             if (!data.some((item) => item.url === request.url)) {
                 userQueue.push({ ...request, artist: '', current: false });
             }
         }
-        const autoplay = upcoming.filter((item) => !requestedIds.has(item.url));
+        const autoplay = upcoming.filter((item) => !requestsByUrl.has(item.url));
         const formatTrack = (item: { title: string; artist: string }) =>
             `${escapeHtml(item.title.slice(0, 120) || 'Unknown track')}${item.artist ? ` — ${escapeHtml(item.artist.slice(0, 80))}` : ''}`;
         const lines = [`🎧 ${htmlBold('YouTube Music queue')}`];
@@ -2564,16 +2587,20 @@ export class PlaybackTelegramController {
         // Reserve a separate budget for autoplay so requests cannot hide its preview.
         const appendSection = (
             label: string,
-            items: { title: string; artist: string }[],
+            items: { title: string; artist: string; url: string }[],
             limit: number,
             budget: number,
+            showRequester = false,
         ) => {
             lines.push('', htmlBold(label));
             if (!items.length) lines.push('No upcoming tracks.');
             let shown = 0;
             let length = 0;
             for (const item of items.slice(0, limit)) {
-                const line = `${shown + 1}. ${formatTrack(item)}`;
+                const requester = showRequester
+                    ? requesterLabel(room.Feature?.requesterDisplay, requestsByUrl.get(item.url)?.requesterDisplayName)
+                    : undefined;
+                const line = `${shown + 1}. ${formatTrack(item)}${requester ? ` — Requested by ${escapeHtml(requester)}` : ''}`;
                 if (length + line.length > budget) break;
                 lines.push(line);
                 length += line.length + 1;
@@ -2582,7 +2609,7 @@ export class PlaybackTelegramController {
             if (shown < items.length)
                 lines.push(`… ${items.length - shown} more tracks.`);
         };
-        appendSection('User requests', userQueue, userQueue.length, 1800);
+        appendSection('User requests', userQueue, userQueue.length, 1800, true);
         appendSection('Player / autoplay', autoplay, 5, 1200);
         await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
     }
