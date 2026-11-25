@@ -1,4 +1,5 @@
 import { getPlaybackState, getVideoId } from "./playback";
+import { readInfiniteQueue } from "./player-queue";
 
 export type PlayerState = {
     state: "playing" | "paused" | "standby";
@@ -7,7 +8,13 @@ export type PlayerState = {
     artist: string;
     volume: number | null;
     muted: boolean | null;
+    mix: boolean;
 };
+
+function isMix() {
+    // The same-track Radio navigation can replace the queue without updating the URL.
+    return readInfiniteQueue() || new URL(window.location.href).searchParams.get("list")?.startsWith("RD") === true;
+}
 
 const events = ["play", "pause", "ended", "emptied", "loadedmetadata", "volumechange"];
 const volumeSettleMs = 300;
@@ -43,6 +50,7 @@ export function watchPlayerState(report: (state: PlayerState) => void) {
             artist: active ? (artist ?? "") : "",
             volume: timer !== undefined && previous ? previous.volume : el ? Math.round(el.volume * 100) : null,
             muted: timer !== undefined && previous ? previous.muted : (el?.muted ?? null),
+            mix: isMix(),
         };
         if (previous && Object.keys(next).every((key) => {
             const field = key as keyof PlayerState;
@@ -103,7 +111,12 @@ export function watchPlayerState(report: (state: PlayerState) => void) {
     for (const event of events) document.addEventListener(event, onMediaEvent, true);
     const observer = new MutationObserver(() => reconcileVideo(getPlaybackState().el));
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+    // Same-track SPA navigation can change the playlist without a media event.
+    const playlistTimer = setInterval(() => {
+        if (previous && previous.mix !== isMix()) sample();
+    }, 1000);
     return {
+        update: () => sample(),
         sync() {
             cancelVolume();
             cancelPause();
@@ -113,6 +126,7 @@ export function watchPlayerState(report: (state: PlayerState) => void) {
             sample();
         },
         stop() {
+            clearInterval(playlistTimer);
             cancelVolume();
             cancelPause();
             observer.disconnect();

@@ -290,6 +290,18 @@ describe('PlaybackGateway room admission', () => {
         expect(changed).toHaveBeenCalledTimes(3);
     });
 
+    it('publishes playlist mode changes even if playback stays the same', async () => {
+        const player = await admitPlayer();
+        await gateway.onPlayerState(player as never, { ...playing, mix: false });
+        const changed = jest.fn();
+        gateway.watchRoomChanges(changed);
+        await gateway.onPlayerState(player as never, { ...playing, mix: true });
+        expect(gateway.currentPlayerState('room')?.mix).toBe(true);
+        await gateway.onPlayerState(player as never, { ...playing, mix: false });
+        expect(gateway.currentPlayerState('room')?.mix).toBe(false);
+        expect(changed).toHaveBeenCalledTimes(2);
+    });
+
     it('does not announce pause or resume for track changes or standby', async () => {
         const player = await admitPlayer();
         await gateway.onPlayerState(player as never, playing);

@@ -125,6 +125,8 @@ export class WebRoomService {
             throw new NotFoundException({ status: 'selection-not-found' });
         const room = await this.room(roomId);
         const feature = room.Feature;
+        if (this.player.currentPlayerState(roomId)?.mix)
+            throw new ConflictException({ status: 'player-in-mix' });
         const webGuestQuota = room.chatId === null && feature && feature.guestRequestLimit > 0 && !(await actor.isAdmin())
             ? { limit: feature.guestRequestLimit, periodMinutes: feature.guestRequestPeriodMinutes }
             : undefined;

@@ -27,10 +27,41 @@ function observe() {
 afterEach(() => {
     watchers.splice(0).forEach(({ stop }) => stop());
     document.body.replaceChildren();
+    history.replaceState(null, "", "/");
     vi.useRealTimers();
 });
 
 describe("watchPlayerState", () => {
+    it("detects a same-URL radio queue and clears it for autoplay with added requests", () => {
+        vi.useFakeTimers();
+        mountVideo();
+        history.replaceState(null, "", "/watch?v=abcdefghijk");
+        const queue = document.createElement("div");
+        queue.id = "queue";
+        const state = { isInfinite: false, autoplay: true, items: [{}, {}], automixItems: [{}] };
+        Object.assign(queue, { queue: { store: { store: { getState: () => ({ queue: state }) } } } });
+        document.body.append(queue);
+        const report = observe();
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: false }));
+        state.isInfinite = true;
+        vi.advanceTimersByTime(1000);
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: true }));
+        state.isInfinite = false;
+        vi.advanceTimersByTime(1000);
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: false }));
+    });
+
+    it("reports entering and leaving a mix without needing a media event", () => {
+        vi.useFakeTimers();
+        mountVideo();
+        history.replaceState(null, "", "/watch?v=abcdefghijk&list=RDAMVMabcdefghijk");
+        const report = observe();
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: true }));
+        history.replaceState(null, "", "/watch?v=abcdefghijk");
+        vi.advanceTimersByTime(1000);
+        expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ mix: false }));
+    });
+
     it("reports native play and pause once each, and treats end as standby", () => {
         vi.useFakeTimers();
         const video = mountVideo();

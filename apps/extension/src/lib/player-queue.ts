@@ -13,11 +13,20 @@ export function readAutoplayEnabled(): boolean | undefined {
     }
 }
 
+export function readInfiniteQueue(): boolean {
+    try {
+        return getStore()?.getState()?.queue?.isInfinite === true;
+    } catch {
+        return false;
+    }
+}
+
 type QueueStore = {
     getState: () => { queue?: {
         items?: unknown[];
         automixItems?: unknown[];
         autoplay?: boolean;
+        isInfinite?: boolean;
         selectedItemIndex?: number;
     } };
     subscribe?: (listener: () => void) => () => void;

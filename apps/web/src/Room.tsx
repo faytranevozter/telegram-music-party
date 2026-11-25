@@ -39,6 +39,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
     const pending = useRef<AbortController | undefined>(undefined);
     const pendingSelection = useRef<AbortController | undefined>(undefined);
     const mounted = useRef(true);
+    const inMix = state?.playerOnline && state.playerState?.mix === true;
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; pending.current?.abort(); pendingSelection.current?.abort(); }; }, []);
     function resetSearch() { pending.current?.abort(); setSearching(false); setResults(null); }
     async function search(event: FormEvent) {
@@ -66,7 +67,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
         finally { if (mounted.current) setBusy(false); }
     }
     function addTrack(song: Selection, position: 'end' | 'next') {
-        if (!selectionSearch || busy) return;
+        if (!selectionSearch || busy || inMix) return;
         const request = new AbortController();
         pendingSelection.current = request;
         void act(async () => {
@@ -106,6 +107,13 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
                         })}
                 />}
             />
+            {inMix && <div className="alert alert-warning alert-soft" role="status">
+                <svg aria-hidden="true" className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v5m0 3h.01" /></svg>
+                <div>
+                    <p className="font-semibold">Queue requests are paused during Mix or Radio</p>
+                    <p className="text-sm">The host can use <strong>More → Refresh queue</strong> to switch to autoplay and take requests again.</p>
+                </div>
+            </div>}
             {!live && !error && <div className="flex flex-wrap items-center gap-2 text-sm"><span role="status">Live updates disconnected</span><button className="btn btn-outline btn-sm" onClick={refresh}>Reconnect live updates</button></div>}
             <RoomPanelTabs panel={panel} count={state.queue.length} onChange={setPanel} />
             <div className="room-columns">
@@ -118,7 +126,7 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
                     {searching ? <SearchResultsSkeleton /> : <ul className="list -mx-2" aria-label="Search results">{results?.map((song) => {
                         const duration = formatTrackDuration(song.durationSeconds);
                         const queued = state.queue.some((track) => track.videoId === song.videoId);
-                        return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<QueueActions title={song.title} queued={queued} busy={busy} playNext={state.capabilities.playNext} remaining={state.capabilities.playNextRemaining} onAdd={(position) => addTrack(song, position)} />} />; })}</ul>}
+                        return <SearchTrackRow key={song.selectionId} cover={<TrackCover videoId={song.videoId} thumbnailUrl={song.thumbnailUrl} />} title={song.title} detail={`${song.artistName ?? song.channelName ?? 'Unknown artist'}${duration ? ` · ${duration}` : ''}`} actions={<QueueActions title={song.title} queued={queued} busy={busy || !!inMix} playNext={state.capabilities.playNext} remaining={state.capabilities.playNextRemaining} onAdd={(position) => addTrack(song, position)} />} />; })}</ul>}
                     {state.capabilities.playNext && state.capabilities.playNextRemaining !== null && <p>Play Next uses left today: {state.capabilities.playNextRemaining}</p>}
                 </div></section>
                 <UpNextPanel hiddenOnMobile={panel !== 'queue'} tracks={state.queue.map((track, index) => ({ key: `${track.videoId}:${index}`, ...queueTrackDisplay(track.title), requesterLabel: track.requesterLabel }))}

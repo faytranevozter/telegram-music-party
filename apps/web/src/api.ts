@@ -6,7 +6,7 @@ export type RoomState = {
     name: string; role: 'owner' | 'guest'; queue: Track[]; playerOnline: boolean;
     voteProgress?: { count: number; required: number; hasVoted: boolean };
     nowPlaying: (Track & { artist: string }) | null;
-    playerState?: { state: 'playing' | 'paused' | 'standby'; volume: number | null; muted: boolean | null } | null;
+    playerState?: { state: 'playing' | 'paused' | 'standby'; volume: number | null; muted: boolean | null; mix?: boolean } | null;
     capabilities: { controls: Control[]; playNext: boolean; playNextRemaining: number | null; videoSearch: boolean };
 };
 export type Selection = Track & {selectionId: string; artistName: string | null; channelName: string | null; thumbnailUrl: string | null; durationSeconds: number | null};
@@ -63,6 +63,7 @@ export function explain(error: unknown, fallback = 'Could not reach the party se
         duplicate: 'That song is already in the queue.',
         'limit-reached': 'You’ve used today’s Play Next allowance.',
         'player-offline': 'The player went offline. Try again when it reconnects.',
+        'player-in-mix': 'Queue requests are unavailable during a Mix or Radio. Use Refresh queue to switch to autoplay.',
         'no-current-song': 'Start a song on the host’s player and try again.',
         'already-voted': 'You’ve already voted to skip this song.',
         'skip-pending': 'The player is already moving to the next song.',

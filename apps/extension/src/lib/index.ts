@@ -421,6 +421,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             app.handleNavigationEndpoint(endpoint);
             if (!(await ready(previousQueue))) return { status: "unavailable" };
+            // Send the new queue mode before acknowledging the command to the room.
+            playerState.update();
             await restoreRequestedSongs();
             publishStatus();
         } catch (error) {
