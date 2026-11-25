@@ -1,9 +1,11 @@
 <div align="center">
-  <h1>Telegram Music Party</h1>
-  <p>Control YouTube Music from Telegram.</p>
+  <h1>YouTube Music Party</h1>
+  <p>One player. Everyone picks the music.</p>
 </div>
 
-Telegram Music Party connects a Telegram group to a YouTube Music tab. The bot manages rooms, queues, votes, and commands. The browser extension joins the room on `music.youtube.com` and drives playback over Socket.IO.
+Create a shared queue in the **web room** or run the party from a **Telegram group**. The host connects the browser extension to a YouTube Music tab. Guests can request songs, see what’s playing, and vote to skip without installing the extension or signing into Telegram. Audio plays only in the host’s tab; the room does not stream it to guests.
+
+**[Open web room](https://room.ytparty.my.id/)** · [Install the extension](https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk) · [Screenshot gallery](https://ytparty.my.id/gallery)
 
 <p align="center">
   <img src="docs/images/screenshot/header.jpg" alt="Telegram Music Party" width="100%">
@@ -29,7 +31,16 @@ Firefox -> about:debugging -> This Firefox -> Load Temporary Add-on
 
 Use the extracted extension folder, or load `apps/extension/dist` after a local build.
 
-## Quickstart
+## Quickstart: Web room
+
+1. **Host:** Open [the web room](https://room.ytparty.my.id/), enter a room name and nickname, and choose **Create room**.
+2. In **Room info & settings**, copy the **Room ID**. Open [YouTube Music](https://music.youtube.com/) on the host’s desktop, open the extension popup, paste the ID, and choose **Join Room**. Wait for **Connected**.
+3. Copy the **Guest invite link** from **Room info & settings** and share it. Guests open the invite on a phone or computer and pick a nickname. Share the invite link, not the player’s Room ID.
+4. Use **Find a song** to add a request, **Up next** to see the queue, and **Play** to start playback. Available controls depend on the room settings.
+
+Keep the host’s web tab open: leaving the room clears that tab’s session, and lost owner access can’t be recovered. If YouTube Music is playing a Mix or Radio, web requests are paused. Use **More → Refresh queue** to return to single-track autoplay and reopen requests. The room shows **Ad playing** while the host’s player reports an ad.
+
+## Quickstart: Telegram
 
 Self-hosting: the backend supports PostgreSQL (default) and SQLite. See
 [database setup and deployment](docs/database.md) for SQLite configuration,
@@ -88,6 +99,8 @@ see [setup and support](https://ytparty.my.id/support).
 
 ## Screenshots
 
+[![Web room showing Now Playing, song search, and Up next](apps/web-landing/public/web-room.webp)](https://ytparty.my.id/gallery#web-room)
+
 <p align="center">
   <img src="docs/images/app-icon.png" alt="Telegram Music Party icon" width="96" height="96">
 </p>
@@ -107,7 +120,9 @@ see [setup and support](https://ytparty.my.id/support).
 
 ## Features
 
-- Telegram-first YouTube Music control
+- Browser-based rooms with guest invites, live playback status, song search, and a shared queue
+- Host settings for queue size, Play Next, guest request limits, and requester display
+- Telegram bot for group commands, inline requests, and room analytics
 - Inline search and queue management
 - Play, pause, next, previous, volume, mute, and lyrics commands
 - Start a song radio with `/radio`
@@ -118,7 +133,7 @@ see [setup and support](https://ytparty.my.id/support).
 - Extension popup for joining, status, now playing, queue, controls, and leave
 - One active player device per room
 
-## Commands
+## Telegram commands
 
 | Command | Description |
 |---------|-------------|
@@ -183,6 +198,8 @@ pnpm --filter=extension build
 
 Load `apps/extension/dist` as an unpacked extension.
 
+To run the web room against a local backend, set `WEB_ROOMS_ENABLED=true`, configure `WEB_PUBLIC_ORIGIN` and `WEB_SESSION_SECRET`, and set `VITE_PARTY_API_ORIGIN` when starting `apps/web`. See the [web room API and local setup guide](docs/web-room-api.md) for exact origins and commands.
+
 ## Scripts
 
 ```bash
@@ -202,7 +219,8 @@ pnpm --filter=extension build
 ```txt
 apps/backend      NestJS, Telegraf, Socket.IO, Prisma, PostgreSQL, Redis
 apps/extension    React, Vite, Tailwind, HeroUI, MV3 content scripts
-apps/web-landing  Cloudflare Worker serving ytparty.my.id (landing, /privacy, /terms, /support)
+apps/web          React, Vite, daisyUI browser room at room.ytparty.my.id
+apps/web-landing  Cloudflare Worker serving ytparty.my.id (landing, gallery, legal, support)
 packages          Shared packages placeholder
 ```
 

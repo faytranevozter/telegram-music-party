@@ -1,6 +1,10 @@
-# Web room API (Stage 3)
+# Web room API
 
-## Browser client (Stage 4)
+## Browser client and local setup
+
+The public client is at [room.ytparty.my.id](https://room.ytparty.my.id/) and uses
+`https://music.ytparty.my.id` as its API. For host and guest instructions, see the
+[web room quickstart](../README.md#quickstart-web-room).
 
 Use a disposable backend for local testing. Set `WEB_PUBLIC_ORIGIN=http://127.0.0.1:8787` on that backend (for example running at `http://127.0.0.1:3033`) and configure its web feature flag and secret. From the repository root:
 
@@ -9,13 +13,13 @@ VITE_PARTY_API_ORIGIN=http://127.0.0.1:3033 pnpm --filter=web build
 pnpm --filter=web exec vite preview --host 127.0.0.1 --port 8787 --strictPort
 ```
 
-Open `http://127.0.0.1:8787/` or use a local invite link from the bot (`/#<code>`). The client does not default to the production API. For production, build with `VITE_PARTY_API_ORIGIN=https://music.ytparty.my.id` and serve `apps/web/dist` at `/` on a dedicated HTTPS origin. Set the backend's `WEB_PUBLIC_ORIGIN` to that exact origin for invites, CORS and observer connections. Publish the updated legal pages separately and enable web rooms only after launch approval. Previously issued `/room#…` URLs need to be replaced with fresh links; existing invite codes still work at the new root.
+Open `http://127.0.0.1:8787/` to create a room or use a local invite (`/#<code>`). The client does not default to the production API. For a public deployment, build with `VITE_PARTY_API_ORIGIN` set to your backend and serve `apps/web/dist` at `/` on a dedicated HTTPS origin. Set the backend’s `WEB_PUBLIC_ORIGIN` to that exact client origin for invites, CORS, and live updates.
 
 Web rooms are disabled by default. Enable with `WEB_ROOMS_ENABLED=true`, set
 `WEB_PUBLIC_ORIGIN` to the exact client origin, and supply a random base64url
 `WEB_SESSION_SECRET` of at least 32 bytes. Use one backend instance for player
 admission, live observations, queue serialization, and vote decisions. Redis
-is required. Enable publicly only after the Stage 4 client is available.
+is required.
 
 Telegram room admins can enable, resend, rotate or disable an invite in
 `/config`. The bot delivers the link privately. Keep the invite in the URL
@@ -83,13 +87,21 @@ track rather than restoring historical playback. Revoked observer sessions
 are disconnected.
 
 The HTTP and live room snapshots include `playerState` from the connected
-extension: `{ state: 'playing' | 'paused' | 'standby', volume, muted }`.
+extension: `{ state: 'playing' | 'paused' | 'standby', volume, muted, mix?, adPlaying? }`.
 `volume` is a percentage (0–100) and `muted` is a boolean; either can be `null`
 before the media element is available. `playerState` is `null` when the player
 is offline or has not reported state yet (including older extensions).
 Older backends still receive the legacy Telegram command feedback from the
 extension. The web client accepts their snapshots, but cannot show confirmed
 playback state without this field.
+
+`mix` indicates a YouTube Music Mix or Radio, not single-track autoplay. When
+it is `true`, web Queue and Play Next requests are disabled and the requests
+endpoint responds with HTTP `409` and `{status: 'player-in-mix'}`. **Refresh
+queue** switches a loaded song back to single-track autoplay without reloading
+the host’s tab. `adPlaying` is a display flag: it shows the **Ad playing** notice
+without skipping ads or changing queue controls. Both flags may be omitted by
+older extensions.
 
 For automated verification, generate the matching Prisma client, apply
 migrations to a disposable PostgreSQL or SQLite database, and run
