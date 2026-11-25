@@ -140,6 +140,8 @@ suite('shared web room HTTP and observer contract', () => {
             (await route('room/control', { action: 'next' }, token)).status,
         ).toBe(403);
         expect((await route('room/setup', undefined, token)).status).toBe(403);
+        expect((await route('room/control', { action: 'volume-up' }, token)).status).toBe(403);
+        expect((await route('room/control', { action: 'volume-down' }, token)).status).toBe(403);
         const invalid = io(`${base}/web-room`, {
             auth: { token: 'invalid' },
             extraHeaders: { Origin: origin },
@@ -347,6 +349,60 @@ suite('shared web room HTTP and observer contract', () => {
         expect(await quota.reserve(randomUUID(), 'guest', 1, 10)).toMatchObject({ allowed: true });
         await quota.release(id, 'guest', accepted[0].reservationId);
         expect(await quota.reserve(id, 'guest', 3, 10)).toMatchObject({ allowed: true });
+    });
+
+    it('enables both volume controls for a web host without changing guest permissions', async () => {
+        const created = await route('rooms', { name: 'Volume room', nickname: 'Host' });
+        expect(created.status).toBe(201);
+        const { token: owner, roomId: id, shareCode } = (await created.json()) as { token: string; roomId: string; shareCode: string };
+        const playback = app.get(PlaybackService);
+        const player = io(base, { transports: ['websocket'], autoConnect: false, reconnection: false });
+        const actions = [['volume-up', 'volumeUp'], ['volume-down', 'volumeDown']] as const;
+        const capabilities = async (token: string) => {
+            const response = await route('room', undefined, token);
+            expect(response.status).toBe(200);
+            return ((await response.json()) as { capabilities: { controls: string[] } }).capabilities.controls;
+        };
+        try {
+            await playback.setFeature(id, 'volumeCommand', false);
+            const joined = await route('rooms/join', { shareCode, nickname: 'Guest' });
+            expect(joined.status).toBe(201);
+            const { token: guest } = (await joined.json()) as { token: string };
+            const ownerControls = await capabilities(owner);
+            const guestControls = await capabilities(guest);
+            for (const [action] of actions) {
+                expect(ownerControls).toContain(action);
+                expect(guestControls).not.toContain(action);
+                expect((await route('room/control', { action }, guest)).status).toBe(403);
+                const offline = await route('room/control', { action }, owner);
+                expect(offline.status).toBe(409);
+                expect(await offline.json()).toMatchObject({ status: 'player-offline' });
+            }
+
+            const admitted = event(player, 'joined');
+            player.connect().emit('join', { id, fingerprint: 'volume-player', browser: 'Test' });
+            await admitted;
+            for (const [action, socketEvent] of actions) {
+                const [response] = await Promise.all([
+                    route('room/control', { action }, owner),
+                    event(player, socketEvent),
+                ]);
+                expect(response.status).toBe(201);
+            }
+
+            await playback.setFeature(id, 'volumeCommand', true);
+            expect(await capabilities(guest)).toEqual(expect.arrayContaining(['volume-up', 'volume-down']));
+            for (const [action, socketEvent] of actions) {
+                const [response] = await Promise.all([
+                    route('room/control', { action }, guest),
+                    event(player, socketEvent),
+                ]);
+                expect(response.status).toBe(201);
+            }
+        } finally {
+            player.disconnect();
+            await playback.removeRoom(id);
+        }
     });
 
     it('publishes host settings changes to guests and enforces video search', async () => {

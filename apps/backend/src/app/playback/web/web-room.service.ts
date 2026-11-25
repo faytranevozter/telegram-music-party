@@ -161,7 +161,7 @@ export class WebRoomService {
 
     async control(roomId: string, actor: Actor, action: WebControl) {
         const room = await this.room(roomId);
-        if ((await controlAccess(room.Feature, action, actor)) !== 'ok')
+        if ((await controlAccess(room, action, actor)) !== 'ok')
             throw new ForbiddenException();
         if (!(await this.player.playerOnline(roomId)))
             throw new ConflictException({ status: 'player-offline' });

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PlaybackService } from '../playback.service';
 import { PlaybackGateway } from '../playback.gateway';
 import type { Actor } from '../core/actor';
-import type { Feature } from '@prisma/client';
+import type { Feature, Room } from '@prisma/client';
 import { authorizeControl } from '../core/control-access';
 import { PlayNextQuotaService } from '../core/play-next-quota.service';
 import { voteProgress } from '../core/vote.service';
@@ -22,16 +22,15 @@ export const controls = [
 export type WebControl = (typeof controls)[number];
 
 export function controlAccess(
-    feature: Feature | null,
+    room: Pick<Room, 'chatId' | 'ownerUserRef'> & { Feature: Feature | null },
     action: WebControl,
     actor: Actor,
 ) {
     if (action === 'play' || action === 'pause') return Promise.resolve('ok');
-    return authorizeControl(
-        feature,
-        action === 'volume-up' || action === 'volume-down' ? 'volume' : action,
-        actor,
-    );
+    const volume = action === 'volume-up' || action === 'volume-down';
+    if (volume && room.chatId === null && actor.source === 'web' && room.ownerUserRef === actor.userRef)
+        return Promise.resolve('ok');
+    return authorizeControl(room.Feature, volume ? 'volume' : action, actor);
 }
 
 @Injectable()
@@ -52,7 +51,7 @@ export class WebRoomStateService {
         const owner = await actor.isAdmin();
         const allowed = await Promise.all(
             controls.map((action) =>
-                controlAccess(room.Feature, action, actor),
+                controlAccess(room, action, actor),
             ),
         );
         return {
