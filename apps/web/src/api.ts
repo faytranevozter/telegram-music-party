@@ -63,10 +63,13 @@ export function explain(error: unknown, fallback = 'Could not reach the party se
         duplicate: 'That song is already in the queue.',
         'limit-reached': 'You’ve used today’s Play Next allowance.',
         'player-offline': 'The player went offline. Try again when it reconnects.',
+        'no-current-song': 'Start a song on the host’s player and try again.',
         'already-voted': 'You’ve already voted to skip this song.',
         'skip-pending': 'The player is already moving to the next song.',
     };
     if (error.status && Object.hasOwn(messages, error.status)) return messages[error.status];
+    if (error.http === 409 && error.status === 'unavailable') return 'The host’s player could not update its queue. Try again.';
+    if (error.http === 409 && error.status === 'timeout') return 'The host’s player did not respond in time. Try again.';
     if (error.http === 429 && error.status === 'guest-request-limit') {
         return error.retryAt === undefined ? 'Guest request limit reached. Try again later.' : `Guest request limit reached. Try again after ${new Date(error.retryAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}.`;
     }

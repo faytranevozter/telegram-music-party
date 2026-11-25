@@ -5,6 +5,14 @@ export type PlayerQueueSnapshot = {
     items: QueueItem[];
 };
 
+export function readAutoplayEnabled(): boolean | undefined {
+    try {
+        return getStore()?.getState()?.queue?.autoplay;
+    } catch {
+        return undefined;
+    }
+}
+
 type QueueStore = {
     getState: () => { queue?: {
         items?: unknown[];

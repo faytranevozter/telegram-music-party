@@ -2,6 +2,7 @@
 import { io } from "socket.io-client";
 import {
     queueInsertIndex,
+    readAutoplayEnabled,
     readPlayerQueue,
     upcomingVideoIds,
     waitForQueueItem,
@@ -37,6 +38,7 @@ import {
     startPlaybackAnalytics,
 } from "./playback-analytics";
 import { createPlayerStateChannel, watchPlayerState } from "./player-state";
+import { confirmSingleTrackAutoplay, restoreRefreshPosition } from "./refresh-queue";
 
 Object.defineProperty(window, "onbeforeunload", {
     get: () => null,
@@ -118,10 +120,12 @@ function getMissingQueueIds(serverQueues: Queue[]): string[] {
 const RADIO_PLAYLIST_PREFIX = "RDAMVM";
 const AUTOPLAY_TIMEOUT_MS = 5000;
 
+type WatchEndpoint = {
+    watchEndpoint: { videoId: string; playlistId?: string };
+};
+
 type YtMusicApp = Element & {
-    handleNavigationEndpoint: (endpoint: {
-        watchEndpoint: { videoId: string; playlistId?: string };
-    }) => void;
+    handleNavigationEndpoint: (endpoint: WatchEndpoint) => void;
 };
 
 type YtMusicAppCandidate = Element & {
@@ -179,20 +183,22 @@ async function waitForRadioQueue(
  */
 async function waitForRefreshedQueue(
     videoId: string,
-    previousSignature: string,
+    position: number,
 ): Promise<boolean> {
     const deadline = Date.now() + AUTOPLAY_TIMEOUT_MS;
+    let toggled = false;
+    const enableAutoplay = () => {
+        if (toggled) return;
+        const toggle = document.querySelector<HTMLElement>('tp-yt-paper-toggle-button#automix[aria-pressed="false"]');
+        if (!toggle || toggle.getAttribute("aria-disabled") === "true") return;
+        toggled = true;
+        toggle.click();
+    };
     while (Date.now() < deadline) {
-        const snapshot = readPlayerQueue();
-        const items = realQueueItems(snapshot);
-        const current = items[0];
-        const refreshed =
-            current?.url === videoId &&
-            current.current === true &&
-            items.length === 1 &&
-            (currentPlaylistId() === null ||
-                playerQueueSignature(snapshot) !== previousSignature);
-        if (snapshot.available && refreshed) {
+        if (getVideoId() === videoId && confirmSingleTrackAutoplay(
+            readPlayerQueue(), videoId, currentPlaylistId(), readAutoplayEnabled(), enableAutoplay,
+        ) &&
+            restoreRefreshPosition(position, getPlaybackState().el)) {
             return true;
         }
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -404,7 +410,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const applyAutoplay = async (
         track: NonNullable<ReturnType<typeof currentTrack>>,
-        endpoint: { watchEndpoint: { videoId: string; playlistId?: string } },
+        endpoint: WatchEndpoint,
         ready: (previousSignature: string) => Promise<boolean>,
         label: string,
     ): Promise<AutoplayResponse> => {
@@ -414,17 +420,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const previousQueue = playerQueueSignature();
         try {
             app.handleNavigationEndpoint(endpoint);
+            if (!(await ready(previousQueue))) return { status: "unavailable" };
+            await restoreRequestedSongs();
+            publishStatus();
         } catch (error) {
             console.error(`${label} failed`, error);
             return { status: "unavailable" };
         }
-
-        if (!(await ready(previousQueue))) {
-            return { status: "unavailable" };
-        }
-
-        await restoreRequestedSongs();
-        publishStatus();
 
         return {
             status: "ok",
@@ -463,12 +465,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const refreshAutoplay = async (): Promise<AutoplayResponse> => {
         const track = currentTrack();
         if (!track) return { status: "no-current-song" };
+        const position = track.playback.el.currentTime;
 
         return applyAutoplay(
             track,
             { watchEndpoint: { videoId: track.videoId } },
-            (previousSignature) =>
-                waitForRefreshedQueue(track.videoId, previousSignature),
+            () => waitForRefreshedQueue(track.videoId, position),
             "refresh queue",
         );
     };
