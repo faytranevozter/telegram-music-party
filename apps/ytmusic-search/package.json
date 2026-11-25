@@ -1,7 +1,7 @@
 {
     "name": "ytmusic-search-function",
     "private": true,
-    "version": "1.14.0",
+    "version": "1.15.0",
     "type": "commonjs",
     "scripts": {
         "build": "tsc",
