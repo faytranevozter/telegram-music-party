@@ -14,7 +14,7 @@ test('the web room and popup expose appearance outside their session UI', () => 
         script(read(`apps/${app}/index.html`), key);
         const source = read(`apps/${app}/src/App.tsx`);
         picker(source);
-        assert.ok(source.indexOf('data-appearance-swap') < source.indexOf(app === 'web' ? '{api && session ?' : '{showJoinForm &&'));
+        if (app === 'web') assert.ok(source.indexOf('data-appearance-swap') < source.indexOf('{api && session ?'));
     }
 });
 

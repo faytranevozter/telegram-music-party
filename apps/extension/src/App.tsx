@@ -404,7 +404,6 @@ function App() {
     return (
         <div className="party-popup">
             <div className="popup-layout">
-                <button type="button" className="popup-appearance" data-appearance-swap />
                 <header className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                         <h1 className="popup-brand">
@@ -831,6 +830,10 @@ function App() {
                     <img src="/saweria-qr.png" alt="QR code linking to saweria.co/faytranevozter" width="185" height="185" />
                     <p>Scan to open Saweria on your phone.<br />saweria.co/faytranevozter</p>
                 </details>
+                <footer className="popup-appearance-row">
+                    <span>Appearance</span>
+                    <button type="button" className="popup-appearance" data-appearance-swap />
+                </footer>
             </div>
         </div>
     );

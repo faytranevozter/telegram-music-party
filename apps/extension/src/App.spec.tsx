@@ -84,6 +84,20 @@ describe("popup room joining", () => {
         vi.unstubAllGlobals();
     });
 
+    it("places the theme switch after the support and donation controls", async () => {
+        await mount();
+        const appearance = container.querySelector("button[data-appearance-swap]")!;
+        const donation = container.querySelector("summary")!;
+        expect(donation.compareDocumentPosition(appearance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("shows the theme switch in a labeled Appearance footer row", async () => {
+        await mount();
+        const footer = container.querySelector("footer");
+        expect(footer?.textContent ?? "").toContain("Appearance");
+        expect(footer?.querySelector("button[data-appearance-swap]")).toBeTruthy();
+    });
+
     it("joins fresh from the popup, keeps acknowledgement separate from admission, and filters tabs", async () => {
         await mount();
         expect(button("Join Room").disabled).toBe(true);
