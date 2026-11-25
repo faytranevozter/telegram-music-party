@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screenshot gallery — YouTube Music Party</title>
-<meta name="description" content="Real YouTube Music Party actions in the extension and full mobile-window Telegram screenshots.">
+<meta name="description" content="See YouTube Music Party in the browser, the Chrome extension, and Telegram. Open any screenshot at full size.">
 <link rel="canonical" href="https://ytparty.my.id/gallery">
 <link rel="icon" href="/icon-128x128.png">
 <script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
+<script src="/gallery-viewer.js" defer></script>
 <link rel="stylesheet" href="/site-ui.css">
 <link rel="stylesheet" href="/appearance.css">
 <link rel="stylesheet" href="/style.css">
@@ -16,41 +17,51 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header"><a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a><nav aria-label="Main navigation"><a class="btn btn-ghost" href="/#setup">Set up your room</a><a class="btn btn-ghost" href="/gallery" aria-current="page">Gallery</a><a class="btn btn-ghost" href="/support">Support</a></nav><button type="button" class="btn btn-ghost min-h-11 min-w-24" data-appearance-swap></button></header>
 <main id="main">
-    <section class="gallery-section gallery-telegram" aria-labelledby="fresh-start"><div class="gallery-copy"><h2 id="fresh-start">Start with a clean chat</h2><p>This walkthrough begins with an empty bot conversation, then <code>/start</code> and <code>/register</code>. Only this authorized bot chat was cleared. Room registration and stored analytics were preserved.</p></div><div class="gallery-pair"><figure class="gallery-shot"><div class="image-stage"><a href="/telegram-empty.webp"><img src="/telegram-empty.webp" alt="Full Telegram mobile window with an empty Music Party conversation" width="430" height="932" loading="lazy"></a></div><figcaption>Empty conversation.</figcaption></figure><figure class="gallery-shot"><div class="image-stage"><a href="/telegram-start.webp"><img src="/telegram-start.webp" alt="Full Telegram mobile window showing /start and the bot welcome instructions" width="430" height="932" loading="lazy"></a></div><figcaption>Start the bot, then register your room.</figcaption></figure></div></section>
-    <header class="gallery-heading"><h1>A closer look at<br>your music party.</h1><p>Real screens and real actions on <code>https://music.ytparty.my.id/</code>, featuring Justin Bieber. Telegram screenshots show the entire mobile app window, including the header and composer—not cropped message bubbles. These are screenshots, not live status.</p><nav aria-label="Gallery sections"><a href="#playback">Player</a><a href="#telegram">Telegram</a><a href="#joining">Joining</a><a href="#requests">Requests</a></nav></header>
-    <section class="gallery-section" id="playback" aria-labelledby="player-title">
-        <div class="gallery-copy"><h2 id="player-title">The host’s player</h2><p>The current track, Play/Pause controls, and upcoming queue in one place. This capture shows actual playback of Justin Bieber’s “Baby”.</p><p>One active player per room; audio plays in the host’s YouTube Music tab.</p></div>
-        <figure class="gallery-shot"><div class="image-stage"><a href="/popup-connected.webp"><img src="/popup-connected.webp" alt="Extension playing Baby by Justin Bieber with Pause and upcoming queue" width="400" height="1018" fetchpriority="high"></a></div><figcaption>Connected and playing. Select any image to open the original.</figcaption></figure>
+    <header class="gallery-heading">
+        <h1>Music Party in action</h1>
+        <p>See how guests request songs, how the host controls playback, and what the Telegram bot looks like. Select a screenshot for a closer look.</p>
+        <nav aria-label="Gallery sections"><a class="btn btn-outline" href="#web-room">Web room</a><a class="btn btn-outline" href="#playback">Extension player</a><a class="btn btn-outline" href="#joining">Connect a player</a><a class="btn btn-outline" href="#telegram">Telegram</a></nav>
+    </header>
+    <section class="gallery-section" id="web-room" aria-labelledby="web-room-title">
+        <div class="gallery-copy"><h2 id="web-room-title">The web room</h2><p>Guests can find songs, see what’s playing, and vote to skip without installing anything. The music plays in the host’s YouTube Music tab.</p><a class="btn btn-primary" href="https://room.ytparty.my.id/">Open web room</a></div>
+        <figure class="gallery-shot web-room-figure">
+            <div class="web-room-image">
+                <a class="web-room-light" href="/web-room.webp" aria-label="Open the light web room screenshot at full size"><img src="/web-room.webp" alt="Light web room with the current track, song search, and the shared queue" width="1120" height="840"></a>
+                <a class="web-room-dark" href="/web-room-dark.webp" aria-label="Open the dark web room screenshot at full size"><img src="/web-room-dark.webp" alt="Dark web room with the current track, song search, and the shared queue" width="1120" height="840"></a>
+            </div>
+            <figcaption>Now Playing, Find a song, and Up next. The preview follows the site’s appearance setting.</figcaption>
+        </figure>
     </section>
-    <section class="gallery-section gallery-telegram" id="telegram" aria-labelledby="telegram-title">
-        <div class="gallery-copy"><h2 id="telegram-title">The queue in Telegram</h2><p>A real <code>/queue</code> reply in the full mobile window. Both themes retain the surrounding conversation, app header, and message composer. Only the authorized bot chat is shown; the chat-list sidebar is hidden by Telegram’s mobile layout.</p></div>
-        <div class="gallery-pair">
-            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-action-light.webp"><img src="/telegram-action-light.webp" alt="Full Telegram mobile light window showing the queue for Baby by Justin Bieber" width="430" height="932" loading="lazy"></a></div><figcaption>Light mode, full window.</figcaption></figure>
-            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-action-dark.webp"><img src="/telegram-action-dark.webp" alt="Full Telegram mobile dark window showing the same queue" width="430" height="932" loading="lazy"></a></div><figcaption>Dark mode, full window.</figcaption></figure>
-        </div>
+    <section class="gallery-section" id="playback" aria-labelledby="player-title">
+         <div class="gallery-copy"><h2 id="player-title">The host’s extension</h2><p>See the current track and upcoming requests, control playback, or change player settings without opening the room.</p></div>
+         <div class="gallery-shots">
+            <figure class="gallery-shot"><div class="image-stage"><a href="/popup-connected.webp"><img src="/popup-connected.webp" alt="Extension playing Baby by Justin Bieber with playback controls and the upcoming queue" width="400" height="1018" loading="lazy"></a></div><figcaption>Connected and playing</figcaption></figure>
+            <figure class="gallery-shot"><div class="image-stage"><a href="/popup-paused.webp"><img src="/popup-paused.webp" alt="Popup paused on Baby with Play available" width="400" height="1075" loading="lazy"></a></div><figcaption>Paused playback</figcaption></figure>
+            <figure class="gallery-shot"><div class="image-stage"><a href="/popup-settings.webp"><img src="/popup-settings.webp" alt="Extension with Player settings expanded" width="800" height="2150" loading="lazy"></a></div><figcaption>Player settings</figcaption></figure>
+         </div>
     </section>
     <section class="gallery-section" id="joining" aria-labelledby="joining-title">
-        <div class="gallery-copy"><h2 id="joining-title">From Room ID to Join Room</h2><p>Get your own ID with <code>/register</code>, then paste it into the extension popup. The current bot room is <code>melodic-name-island</code>; the earlier setup example uses <code>tangy-gear-leading</code>.</p><a class="text-action" href="/#setup">Read the complete setup guide</a></div>
+        <div class="gallery-copy"><h2 id="joining-title">Connect a player</h2><p>Copy the Room ID from the web room’s settings or from Telegram’s <code>/register</code> reply, then paste it into the extension.</p><a class="text-action" href="/#setup">Read the setup guide</a></div>
         <div class="gallery-setup">
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-room.webp"><img src="/telegram-room.webp" alt="Full Telegram mobile window with the registered room melodic-name-island" width="430" height="932" loading="lazy"></a></div><figcaption>Room confirmation in its full chat window.</figcaption></figure>
             <figure class="gallery-shot"><div class="image-stage"><a href="/popup-join.webp"><img src="/popup-join.webp" alt="Extension join form with example Room ID, public host, and Join Room" width="400" height="511" loading="lazy"></a></div><figcaption>The extension setup form at native width on desktop.</figcaption></figure>
         </div>
     </section>
-    <section class="gallery-section" aria-labelledby="action-title">
-        <div class="gallery-copy"><h2 id="action-title">Pause and player settings</h2><p>Actual popup states while using the public server. Play/Pause, volume down/up, and mute were exercised. The newer action captures use room <code>melodic-name-island</code>.</p></div>
-        <div class="gallery-setup">
-            <figure class="gallery-shot"><div class="image-stage"><a href="/popup-paused.webp"><img src="/popup-paused.webp" alt="Popup paused on Baby with Play available" width="400" height="1075" loading="lazy"></a></div><figcaption>Paused: the main control changes to Play.</figcaption></figure>
-            <figure class="gallery-shot"><div class="image-stage"><a href="/popup-settings.webp"><img src="/popup-settings.webp" alt="Popup Player settings expanded with Continue watching bypass preference" width="800" height="2150" loading="lazy"></a></div><figcaption>Player settings.</figcaption></figure>
-            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-stats.webp"><img src="/telegram-stats.webp" alt="Full Telegram mobile window showing room stats and observed playback" width="430" height="932" loading="lazy"></a></div><figcaption>Actual room stats; requests and plays are separate.</figcaption></figure>
+    <section class="gallery-section" id="telegram" aria-labelledby="telegram-title">
+        <div class="gallery-copy"><h2 id="telegram-title">The queue in Telegram</h2><p>Use <code>/queue</code> to check what’s coming up without leaving the chat.</p></div>
+        <div class="gallery-pair">
+            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-action-light.webp"><img src="/telegram-action-light.webp" alt="Telegram in light mode showing the song queue" width="430" height="932" loading="lazy"></a></div><figcaption>Queue in light mode</figcaption></figure>
+            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-action-dark.webp"><img src="/telegram-action-dark.webp" alt="Telegram in dark mode showing the song queue" width="430" height="932" loading="lazy"></a></div><figcaption>Queue in dark mode</figcaption></figure>
         </div>
     </section>
     <section class="gallery-section gallery-telegram" aria-labelledby="room-actions">
-        <div class="gallery-copy"><h2 id="room-actions">Votes, history, and room controls</h2><p>Full mobile app windows, with the relevant bot response scrolled into view. The configuration capture uses a taller window to fit the long controls.</p></div>
+        <div class="gallery-copy"><h2 id="room-actions">Votes, history, and room controls</h2><p>Vote to skip, look back at recent plays, or review the room’s settings and stats.</p></div>
         <div class="gallery-pair">
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-vote.webp"><img src="/telegram-vote.webp" alt="Full Telegram window showing vote-to-skip response" width="430" height="932" loading="lazy"></a></div><figcaption>Vote to skip with <code>/vote_next</code>.</figcaption></figure>
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-top.webp"><img src="/telegram-top.webp" alt="Full Telegram window showing top played songs" width="430" height="932" loading="lazy"></a></div><figcaption>Rankings with <code>/top</code>.</figcaption></figure>
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-history.webp"><img src="/telegram-history.webp" alt="Full Telegram window showing recent playback history" width="430" height="932" loading="lazy"></a></div><figcaption>Recent plays with <code>/history</code>.</figcaption></figure>
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-config.webp"><img src="/telegram-config.webp" alt="Full tall Telegram window with room configuration and control buttons" width="430" height="1500" loading="lazy"></a></div><figcaption>Room settings with <code>/config</code>.</figcaption></figure>
+            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-stats.webp"><img src="/telegram-stats.webp" alt="Telegram showing room stats and observed playback" width="430" height="932" loading="lazy"></a></div><figcaption>Room statistics with <code>/stats</code>.</figcaption></figure>
         </div>
     </section>
     <section class="gallery-section gallery-telegram" aria-labelledby="search-title">
@@ -61,7 +72,7 @@
         </div>
     </section>
     <section class="gallery-section gallery-telegram" id="requests" aria-labelledby="request-title">
-        <div class="gallery-copy"><h2 id="request-title">Your request joins the queue</h2><p>In the clean walkthrough, “Baby” is added to the queue and “Sorry” is requested with optional Play Next. That control appears only when enabled; remaining uses follow the room’s daily limit. The extension image below is the earlier verified request example.</p></div>
+        <div class="gallery-copy"><h2 id="request-title">Your request joins the queue</h2><p>Queue a song for later, or use Play Next if the host has enabled it. Your requests show up in the player too.</p></div>
         <div class="gallery-pair">
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-added.webp"><img src="/telegram-added.webp" alt="Full Telegram window confirming Baby was added to the queue" width="430" height="932" loading="lazy"></a></div><figcaption>Add to Queue succeeded.</figcaption></figure>
             <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-playnext-button.webp"><img src="/telegram-playnext-button.webp" alt="Full Telegram window with optional Play Next and Add to Queue controls for Sorry" width="430" height="932" loading="lazy"></a></div><figcaption>Optional Play Next before the action.</figcaption></figure>
@@ -69,7 +80,29 @@
             <figure class="gallery-shot"><div class="image-stage"><a href="/popup-request-queue.webp"><img src="/popup-request-queue.webp" alt="Popup playing Sorry with Baby listed under User requests" width="400" height="1043" loading="lazy"></a></div><figcaption>The same request in the actual player queue.</figcaption></figure>
         </div>
     </section>
+    <section class="gallery-section" aria-labelledby="fresh-start">
+        <div class="gallery-copy"><h2 id="fresh-start">Start the Telegram bot</h2><p>Open <a href="https://t.me/xmsc_bot">@xmsc_bot</a> and send <code>/start</code> to see the setup instructions.</p></div>
+        <div class="gallery-pair">
+            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-empty.webp"><img src="/telegram-empty.webp" alt="Telegram before starting the Music Party bot" width="430" height="932" loading="lazy"></a></div><figcaption>Before starting the bot</figcaption></figure>
+            <figure class="gallery-shot"><div class="image-stage"><a href="/telegram-start.webp"><img src="/telegram-start.webp" alt="The Music Party bot’s welcome instructions" width="430" height="932" loading="lazy"></a></div><figcaption>Welcome and setup instructions</figcaption></figure>
+        </div>
+    </section>
 </main>
+<dialog class="modal gallery-viewer" id="gallery-viewer" aria-labelledby="gallery-viewer-title">
+    <div class="modal-box gallery-viewer-box">
+        <div class="gallery-viewer-bar">
+            <h2 id="gallery-viewer-title">Gallery screenshot</h2>
+        </div>
+        <div class="gallery-viewer-image"><img alt=""></div>
+        <div class="gallery-viewer-navigation">
+            <button type="button" class="btn btn-ghost" data-gallery-step="-1" aria-label="Previous screenshot">←</button>
+            <span class="gallery-viewer-count" aria-live="polite"></span>
+            <button type="button" class="btn btn-ghost" data-gallery-step="1" aria-label="Next screenshot" autofocus>→</button>
+        </div>
+        <a class="gallery-viewer-original" href="/web-room.webp" target="_blank" rel="noopener noreferrer">Open original in a new tab</a>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button tabindex="-1" aria-label="Close screenshot viewer"></button></form>
+</dialog>
 <footer><a href="/">Home</a><a href="/support">Support</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="https://github.com/faytranevozter/telegram-music-party">Source</a></footer>
 </body>
 </html>

@@ -423,6 +423,11 @@ function App() {
                         {conn.label}
                     </Chip>
                 </header>
+                <Button size="sm" variant="flat" onPress={() => {
+                    void chrome.tabs.create({ url: "https://room.ytparty.my.id/" });
+                }}>
+                    Open web room
+                </Button>
 
                 {error && (
                     <Card className="bg-danger-50/10 border border-danger-400/30 shadow-none">

@@ -84,6 +84,13 @@ describe("popup room joining", () => {
         vi.unstubAllGlobals();
     });
 
+    it("opens the public web room even when connected to a custom server", async () => {
+        pageStatus = { ...baseStatus, connected: true, socketConnected: true, hasRoom: true, roomId: "local-room", partyUrl: "http://localhost:3000" };
+        await mount();
+        await click("Open web room");
+        expect(createTab).toHaveBeenCalledWith({ url: "https://room.ytparty.my.id/" });
+    });
+
     it("places the theme switch after the support and donation controls", async () => {
         await mount();
         const appearance = container.querySelector("button[data-appearance-swap]")!;

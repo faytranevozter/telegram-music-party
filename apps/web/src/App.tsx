@@ -77,18 +77,28 @@ export function App({ origin }: { origin?: string }) {
         </header>
         <main>
             {api && session ? <Room key={session.token} api={api} token={session.token} onLeave={() => close(session.token)} onRevoked={() => close(session.token, true)} /> :
-                <div className="mx-auto max-w-lg">
-                    <section className="card border border-base-300 bg-base-100"><div className="card-body gap-4">
-                        <h1>{invite ? 'Join the room' : 'Start a room'}</h1>
-                        <p>{invite ? 'Pick a nickname and add a song to the shared queue. No Telegram account needed.' : 'Create a shared queue for your friends. One person connects the YouTube Music extension to play it.'}</p>
+                <div className={`room-entry${hash ? ' room-entry-invite' : ''}`}>
+                    {!hash && <section className="room-entry-intro" aria-labelledby="room-entry-title">
+                        <div className="room-entry-record" aria-hidden="true"><span>♫</span></div>
+                        <h1 id="room-entry-title">One player.<br />Everyone picks the music.</h1>
+                        <p>Start a room, share the invite, and build the queue together. The host plays it on YouTube Music.</p>
+                        <ol className="room-entry-steps">
+                            <li><span aria-hidden="true">01</span> Create a room</li>
+                            <li><span aria-hidden="true">02</span> Connect the host’s player</li>
+                            <li><span aria-hidden="true">03</span> Share the guest invite</li>
+                        </ol>
+                    </section>}
+                    <section className="card border border-base-300 bg-base-100" aria-labelledby="entry-form-title"><div className="card-body gap-4">
+                        {hash ? <h1 id="entry-form-title">{invite ? 'Join the room' : 'Invite unavailable'}</h1> : <h2 id="entry-form-title">Start a room</h2>}
+                        <p className="text-base-content/75">{invite ? 'Pick a nickname to join the shared queue. No Telegram account needed.' : hash ? 'You’ll need a current invite from the host.' : 'Give your room a name and choose how friends will see you.'}</p>
                         {!api ? <p role="alert">This build doesn’t have a party server configured.</p> : <>
                             {!hash && saved && saved.expiresAt > Date.now() && <button type="button" className="btn btn-outline" onClick={() => setActive({ session: saved, hash })}>Resume room</button>}
                             {hash && !invite ? <p role="alert">This invite link is invalid. Ask the host for a new one.</p> :
                                 <form onSubmit={enter}>
                                     {!invite && <label>Room name<input className="input input-bordered w-full" id="room-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label>}
                                     <label>Nickname<input className="input input-bordered w-full" id="nickname" required maxLength={64} value={nickname} onChange={(event) => setNickname(event.target.value)} /></label>
-                                    {!invite && <small>Keep this tab open to retain owner access. Leaving the room clears it.</small>}
-                                    <button className="btn btn-primary" disabled={busy || !nickname.trim() || [...nickname.trim()].length > 32 || (!invite && !name.trim())}>{busy ? 'Opening room…' : invite ? 'Join room' : 'Create room'}</button>
+                                    <button className="btn btn-primary mt-1" disabled={busy || !nickname.trim() || [...nickname.trim()].length > 32 || (!invite && !name.trim())}>{busy ? 'Opening room…' : invite ? 'Join room' : 'Create room'}</button>
+                                    {!invite && <small className="text-base-content/70">Keep this tab open to retain owner access. Leaving the room clears it.</small>}
                                 </form>}
                         </>}
                         {error && <p role="alert" className="alert alert-warning">{error}</p>}

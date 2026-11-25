@@ -8,5 +8,5 @@
 
 @plugin "daisyui" {
     themes: light --default, dark;
-    include: button, card, alert, swap, properties;
+    include: button, card, alert, modal, swap, properties;
 }

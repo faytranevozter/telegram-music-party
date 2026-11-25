@@ -25,6 +25,14 @@ test('the Room busy advisory keeps its prose in one alert grid item', () => {
     assert.match(read('../public/support.html'), /class="alert[^"\n]* note">\s*<p>\s*One device plays per room\.[\s\S]*?<strong>Retry join<\/strong>\.<\/p>\s*<\/div>/);
 });
 
+test('the gallery viewer uses the locally built daisyUI modal', () => {
+    const gallery = read('../public/gallery.html');
+    assert.match(gallery, /<dialog class="modal gallery-viewer"/);
+    assert.match(gallery, /class="modal-box[^\"]*"/);
+    assert.match(gallery, /method="dialog" class="modal-backdrop"/);
+    assert.match(read('../public/site-ui.css'), /\.modal-box/);
+});
+
 test('worker routes every public page, including the generated legal pages', () => {
     const worker = read('../src/worker.ts');
     const routes = {
