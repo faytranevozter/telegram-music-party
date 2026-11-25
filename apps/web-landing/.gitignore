@@ -5,6 +5,7 @@
 # Generated from the root PRIVACY.md and TERMS.md
 public/privacy.html
 public/terms.html
+public/site-ui.css
 
 # Build artifact — download from the GitHub Release instead
 public/extension.zip

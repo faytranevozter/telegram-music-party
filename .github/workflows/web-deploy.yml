@@ -44,8 +44,8 @@ jobs:
 
       # PRIVACY.md and TERMS.md are the source of truth for /privacy and
       # /terms. Regenerate so the deployed pages always match the repository.
-      - name: Generate legal pages
-        run: pnpm --filter=web-landing build:legal
+      - name: Build styles and legal pages
+        run: pnpm --filter=web-landing build
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

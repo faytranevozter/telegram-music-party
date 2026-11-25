@@ -13,3 +13,4 @@ client_secret_*.json
 *.db-shm
 *.db-wal
 /apps/web-landing/public/room-app/
+apps/backend/public/server-ui.css

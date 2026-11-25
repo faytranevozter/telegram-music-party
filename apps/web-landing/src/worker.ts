@@ -31,15 +31,22 @@ const NOT_FOUND = `<!DOCTYPE html>
 <title>Not found — YouTube Music Party</title>
 <link rel="icon" href="/icon-128x128.png">
 <script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
+<link rel="stylesheet" href="/site-ui.css">
+<link rel="stylesheet" href="/appearance.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<main>
-<h1>Page not found</h1>
-<p>The page you requested does not exist.</p>
-<p><a href="/">Back to home</a></p>
+<header class="site-header">
+    <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
+    <nav aria-label="Main navigation"><a class="btn btn-ghost" href="/#setup">Set up your room</a><a class="btn btn-ghost" href="/gallery">Gallery</a><a class="btn btn-ghost" href="/support">Support</a></nav>
+    <button type="button" class="btn btn-ghost min-h-11 min-w-24" data-appearance-swap></button>
+</header>
+<main class="not-found">
+    <section class="card card-border bg-base-200">
+        <div class="card-body"><h1>Page not found</h1><p>The page you requested does not exist.</p><div class="card-actions"><a class="btn btn-primary min-h-11" href="/">Back to home</a></div></div>
+    </section>
 </main>
-<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
+<footer><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></footer>
 </body>
 </html>`;
 

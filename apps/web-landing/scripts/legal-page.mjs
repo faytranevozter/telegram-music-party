@@ -153,19 +153,21 @@ export function buildLegalPage({ source, slug, title, description }) {
 <meta name="description" content="${escapeHtml(description)}">
 <link rel="icon" href="/icon-128x128.png">
 <script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
+<link rel="stylesheet" href="/site-ui.css">
+<link rel="stylesheet" href="/appearance.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
     <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
-    <nav aria-label="Main navigation"><a href="/#setup">Set up your room</a><a href="/support">Support</a></nav>
+    <nav aria-label="Main navigation"><a class="btn btn-ghost" href="/#setup">Set up your room</a><a class="btn btn-ghost" href="/gallery">Gallery</a><a class="btn btn-ghost" href="/support">Support</a></nav>
+    <button type="button" class="btn btn-ghost min-h-11 min-w-24" data-appearance-swap></button>
 </header>
 <main id="main">
 ${updated ? `<p class="updated">Last updated: ${escapeHtml(updated)}</p>` : ""}
 ${body}
 </main>
-<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 <footer>
 <a href="/">Home</a>
 <a href="/support">Support</a>

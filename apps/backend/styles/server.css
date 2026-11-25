@@ -1,0 +1,66 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../public/index.html";
+@source "../public/appearance.js";
+
+@plugin "daisyui" {
+    themes: light --default, dark;
+    include: button, card, input, swap, properties;
+}
+
+@font-face {
+    font-family: "Bricolage Grotesque";
+    src: url("./server-heading.woff2") format("woff2");
+    font-weight: 700;
+    font-display: swap;
+}
+
+:root, :root[data-theme="light"] {
+    color-scheme: light;
+    --color-base-100: #fff;
+    --color-base-200: #eef2f7;
+    --color-base-300: #cfd6e0;
+    --color-base-content: #20242c;
+    --color-primary: #2845c7;
+    --color-primary-content: #fff;
+    --muted: #536174;
+    --radius-field: .6rem;
+    --radius-box: 1rem;
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-base-100: #151922;
+    --color-base-200: #232d43;
+    --color-base-300: #66748f;
+    --color-base-content: #f5f7fc;
+    --color-primary: #adc2ff;
+    --color-primary-content: #182544;
+    --muted: #bdcae3;
+    --radius-field: .6rem;
+    --radius-box: 1rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--color-base-100); color: var(--color-base-content); font: 1rem/1.6 system-ui, sans-serif; }
+.server-shell { width: min(100% - 2rem, 47rem); margin-inline: auto; }
+.page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1rem 0; border-bottom: 1px solid var(--color-base-300); }
+.brand { display: inline-flex; gap: .55rem; align-items: center; min-height: 44px; color: inherit; text-decoration: none; font-weight: 700; }
+.brand img { border-radius: .45rem; }
+main { padding: clamp(2rem, 6vw, 4.5rem) 0 2.5rem; }
+h1 { margin: 0 0 .8rem; font: 700 clamp(2.25rem, 7vw, 4rem)/1.04 "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: -.04em; }
+h2 { margin: 0; font: 700 1.35rem/1.25 "Bricolage Grotesque", system-ui, sans-serif; }
+p { margin: 0; max-width: 62ch; }
+.intro, .guidance, .note { color: var(--muted); }
+.address-panel { margin: 1.75rem 0 2rem; }
+.address-panel .card-body { gap: .8rem; padding: clamp(1rem, 4vw, 2rem); }
+.address-panel label { font-weight: 700; }
+.address-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; }
+.address-actions .input { font: 500 .9rem ui-monospace, monospace; }
+#copy-status { font-size: .9rem; min-height: 1.4em; }
+.links { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.15rem 0; }
+.note { font-size: .9rem; padding-top: 1rem; border-top: 1px solid var(--color-base-300); }
+footer { padding-top: 1rem; }
+footer a { color: var(--color-primary); text-underline-offset: .2em; }
+:is(a, button, input):focus-visible { outline: 3px solid var(--color-primary); outline-offset: 3px; }
+@media (max-width: 480px) { .address-actions { grid-template-columns: minmax(0, 1fr); } }

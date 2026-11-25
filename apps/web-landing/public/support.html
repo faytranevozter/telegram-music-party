@@ -7,13 +7,16 @@
 <meta name="description" content="Setup help and support for YouTube Music Party.">
 <link rel="icon" href="/icon-128x128.png">
 <script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
+<link rel="stylesheet" href="/site-ui.css">
+<link rel="stylesheet" href="/appearance.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
     <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
-    <nav aria-label="Main navigation"><a href="/#setup">Set up your room</a><a href="/privacy">Privacy Policy</a></nav>
+    <nav aria-label="Main navigation"><a class="btn btn-ghost" href="/#setup">Set up your room</a><a class="btn btn-ghost" href="/gallery">Gallery</a><a class="btn btn-ghost" href="/support" aria-current="page">Support</a></nav>
+    <button type="button" class="btn btn-ghost min-h-11 min-w-24" data-appearance-swap></button>
 </header>
 
 <main id="main">
@@ -30,10 +33,10 @@
         </ol>
     </div>
 
-    <div class="note">
-        One device plays per room. If another device owns the room, joining shows
+    <div class="alert alert-vertical note">
+        <p>One device plays per room. If another device owns the room, joining shows
         <strong>Room busy</strong> rather than replacing the current player. Leave the room
-        on that device before clicking <strong>Retry join</strong>.
+        on that device before clicking <strong>Retry join</strong>.</p>
     </div>
 
     <p>You can close the popup while joining; joining continues in the music tab. Reopen the popup to see the result. The YouTube Music sidebar's <strong>Join Room</strong> prompts are still available as an alternative.</p>
@@ -61,12 +64,12 @@
         <h2 id="community-title">Help shape YT Party</h2>
         <p>Have an idea or still need help? Check the <a href="https://github.com/faytranevozter/telegram-music-party/issues">existing issues</a> or open a GitHub form below. A GitHub account is required to submit.</p>
         <div class="community-actions">
-            <a class="community-button" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Request a feature</a>
-            <a class="community-button" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a>
+            <a class="btn btn-outline min-h-11" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Request a feature</a>
+            <a class="btn btn-outline min-h-11" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a>
         </div>
         <p>For bugs, include your browser version, the extension version shown in the popup, steps to reproduce, and what you expected to happen. Issues are public: remove bot tokens, credentials, private room details, and other sensitive information from screenshots and logs.</p>
         <div class="community-donation">
-            <a class="community-button" href="https://saweria.co/faytranevozter" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+            <a class="btn btn-outline min-h-11" href="https://saweria.co/faytranevozter" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
             <p>Support faytranevozter on Saweria. Donations are optional, don’t unlock features, and don’t guarantee requests.</p>
             <figure class="saweria-qr">
                 <img src="/saweria-qr.png" alt="QR code linking to saweria.co/faytranevozter" width="185" height="185" loading="lazy">
@@ -75,7 +78,6 @@
         </div>
     </section>
 </main>
-<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 
 <footer>
     <a href="/">Home</a>

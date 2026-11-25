@@ -1,8 +1,29 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+
+test('the landing build cache includes both legal source documents', () => {
+    const root = fileURLToPath(new URL('../../../', import.meta.url));
+    const { tasks } = JSON.parse(execFileSync('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=web-landing', '--dry=json'], { cwd: root, encoding: 'utf8' }));
+    const { inputs } = tasks.find(({ taskId }) => taskId === 'web-landing#build');
+    for (const source of ['PRIVACY.md', 'TERMS.md']) assert.ok(inputs[`../../${source}`], source);
+});
+
+test('all documents load the locally built daisyUI stylesheet', () => {
+    for (const path of ['../public/index.html', '../public/gallery.html', '../public/support.html', '../public/privacy.html', '../public/terms.html', '../src/worker.ts']) {
+        assert.ok(read(path).includes('href="/site-ui.css"'), path);
+        assert.ok(read(path).includes('href="/appearance.css"'), path);
+    }
+    assert.match(read('../public/site-ui.css'), /\.swap-active/);
+});
+
+test('the Room busy advisory keeps its prose in one alert grid item', () => {
+    assert.match(read('../public/support.html'), /class="alert[^"\n]* note">\s*<p>\s*One device plays per room\.[\s\S]*?<strong>Retry join<\/strong>\.<\/p>\s*<\/div>/);
+});
 
 test('worker routes every public page, including the generated legal pages', () => {
     const worker = read('../src/worker.ts');

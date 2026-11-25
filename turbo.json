@@ -1,8 +1,15 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "tasks": {
-      "build": {
-        "outputs": ["dist/**"]
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "backend#build": {
+      "outputs": ["dist/**", "public/server-ui.css"]
+    },
+    "web-landing#build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/PRIVACY.md", "$TURBO_ROOT$/TERMS.md"],
+      "outputs": ["public/site-ui.css", "public/privacy.html", "public/terms.html"]
       },
       "check-types": {
         "dependsOn": ["^check-types"]

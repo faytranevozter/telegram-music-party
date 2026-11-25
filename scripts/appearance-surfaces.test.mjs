@@ -5,9 +5,8 @@ import { test } from 'node:test';
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const script = (html, key) => assert.match(html, new RegExp(`<script src="(?:/|\\./)appearance\\.js" data-appearance-key="${key}"`));
 const picker = (html) => {
-    assert.equal([...html.matchAll(/<select\b[^>]*\bdata-appearance-select\b/g)].length, 1);
-    assert.match(html, /<label[^>]*>\s*(?:<span[^>]*>)?Appearance/);
-    assert.match(html, /<option value="system">System<\/option>\s*<option value="light">Light<\/option>\s*<option value="dark">Dark<\/option>/);
+    assert.equal([...html.matchAll(/<button\b[^>]*\bdata-appearance-swap\b/g)].length, 1);
+    assert.match(html, /<button\b(?=[^>]*\btype="button")(?=[^>]*\bdata-appearance-swap\b)[^>]*>/);
 };
 
 test('the web room and popup expose appearance outside their session UI', () => {
@@ -15,7 +14,7 @@ test('the web room and popup expose appearance outside their session UI', () => 
         script(read(`apps/${app}/index.html`), key);
         const source = read(`apps/${app}/src/App.tsx`);
         picker(source);
-        assert.ok(source.indexOf('data-appearance-select') < source.indexOf(app === 'web' ? '{api && session ?' : '{showJoinForm &&'));
+        assert.ok(source.indexOf('data-appearance-swap') < source.indexOf(app === 'web' ? '{api && session ?' : '{showJoinForm &&'));
     }
 });
 

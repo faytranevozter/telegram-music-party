@@ -39,7 +39,7 @@ jobs:
       - name: Build extension
         run: pnpm --filter=extension build
 
-      - name: Verify browser room and landing routes
+      - name: Verify browser room, public pages, and appearance assets
         env:
           VITE_PARTY_API_ORIGIN: http://127.0.0.1:3033
         run: |
@@ -47,3 +47,6 @@ jobs:
           pnpm --filter=web test
           pnpm --filter=web build
           pnpm --filter=web-landing test
+          pnpm --filter=backend test:homepage
+          node scripts/sync-appearance.mjs --check
+          node --test scripts/appearance*.test.mjs

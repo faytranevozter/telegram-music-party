@@ -4,14 +4,19 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "test": "node scripts/build-privacy.mjs && node scripts/build-terms.mjs && node --test scripts/test-*.mjs",
-        "dev": "wrangler dev",
-        "deploy": "wrangler deploy",
+        "test": "pnpm build && node --test scripts/test-*.mjs",
+        "build": "pnpm build:legal && pnpm build:styles",
+        "build:styles": "tailwindcss -i styles/site.css -o public/site-ui.css --minify",
+        "dev": "pnpm build && wrangler dev",
+        "deploy": "pnpm build && wrangler deploy",
         "build:privacy": "node scripts/build-privacy.mjs",
         "build:terms": "node scripts/build-terms.mjs",
         "build:legal": "node scripts/build-privacy.mjs && node scripts/build-terms.mjs"
     },
     "devDependencies": {
+        "@tailwindcss/cli": "4.0.17",
+        "daisyui": "5.8.2",
+        "tailwindcss": "4.0.17",
         "wrangler": "^4.0.0"
     }
 }

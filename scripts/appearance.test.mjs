@@ -6,13 +6,16 @@ import { runInNewContext } from 'node:vm';
 function page({ storage = new Map(), dark = true, blocked = false, themeClasses = false } = {}) {
     const classes = new Set();
     const root = { dataset: {}, classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) } };
-    const picker = { value: 'system', matches: () => true };
+    const node = () => ({ dataset: {}, classList: { toggle() {} }, append() {}, setAttribute(name, value) { this[name] = value; } });
+    const picker = node();
     const listeners = {};
     const media = { matches: dark, addEventListener: (name, fn) => { listeners.media = fn; } };
     const document = {
         currentScript: { dataset: { appearanceKey: 'appearance', darkTheme: 'night', ...(themeClasses ? { appearanceThemeClasses: '' } : {}) } },
         documentElement: root,
         querySelectorAll: () => [picker],
+        createElement: node,
+        createElementNS: node,
         addEventListener: (name, fn) => { listeners[name] = fn; },
     };
     const localStorage = {
@@ -25,9 +28,10 @@ function page({ storage = new Map(), dark = true, blocked = false, themeClasses 
     });
     return {
         theme: () => root.dataset.theme,
-        choice: () => picker.value,
+        choice: () => picker.dataset.appearanceMode,
+        label: () => picker['aria-label'],
         classes,
-        choose: (value) => { picker.value = value; listeners.change({ target: picker }); },
+        cycle: () => listeners.click?.({ target: { closest: (selector) => selector === '[data-appearance-swap]' ? picker : null } }),
         system: (value) => { media.matches = value; listeners.media(); },
     };
 }
@@ -42,19 +46,23 @@ test('follows the system initially and when the system changes', () => {
 test('supports class-based theme variants without leaving stale classes behind', () => {
     const view = page({ themeClasses: true });
     assert.deepEqual([...view.classes], ['dark']);
-    view.choose('light');
+    view.cycle();
     assert.deepEqual([...view.classes], ['light']);
 });
 
 test('remembers an override and applies the current device theme on reset', () => {
     const storage = new Map();
-    page({ storage }).choose('light');
+    page({ storage }).cycle();
     const reopened = page({ storage, dark: false });
     assert.equal(reopened.choice(), 'light');
     reopened.system(true);
     assert.equal(reopened.theme(), 'light');
-    reopened.choose('system');
+    reopened.cycle();
+    reopened.cycle();
     assert.equal(reopened.theme(), 'night');
+    assert.equal(reopened.choice(), 'system');
+    reopened.system(false);
+    assert.equal(reopened.theme(), 'light');
 });
 
 test('ignores invalid saved preferences', () => {
@@ -63,6 +71,16 @@ test('ignores invalid saved preferences', () => {
 
 test('still switches locally when storage is blocked', () => {
     const view = page({ blocked: true });
-    view.choose('light');
+    view.cycle();
     assert.equal(view.theme(), 'light');
+});
+
+test('an icon click advances exactly one mode and wraps back to System', () => {
+    const view = page();
+    assert.equal(view.choice(), 'system');
+    assert.match(view.label(), /System.*Light/);
+    for (const mode of ['light', 'dark', 'system']) {
+        view.cycle();
+        assert.equal(view.choice(), mode);
+    }
 });

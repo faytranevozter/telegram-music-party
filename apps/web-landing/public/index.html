@@ -13,24 +13,27 @@
 <meta property="og:url" content="https://ytparty.my.id/">
 <link rel="icon" href="/icon-128x128.png">
 <link rel="preload" href="/fonts/bricolage-grotesque-latin-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site-ui.css">
+<link rel="stylesheet" href="/appearance.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="landing">
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
     <a class="brand" href="/" aria-label="YouTube Music Party home"><img src="/icon-128x128.png" alt="" width="40" height="40"><span>YouTube<br>Music Party</span></a>
-    <nav aria-label="Main navigation"><a href="#setup">Set up your room</a><a href="/gallery">Gallery</a><a href="/support">Support</a></nav>
+    <nav aria-label="Main navigation"><a class="btn btn-ghost" href="#setup">Set up your room</a><a class="btn btn-ghost" href="/gallery">Gallery</a><a class="btn btn-ghost" href="/support">Support</a></nav>
+    <button type="button" class="btn btn-ghost min-h-11 min-w-24" data-appearance-swap></button>
 </header>
 <main id="main">
     <section class="invitation" aria-labelledby="invitation-title">
         <div class="invitation-copy">
             <h1 id="invitation-title">Your group chat picks the next song.</h1>
             <p class="intro">Connect one YouTube Music tab to your Telegram group. Search for songs, build the queue, and control playback together.</p>
-            <div class="actions"><a class="button" href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Add to Chrome</a><a class="text-action" href="#setup">Set up your room</a></div>
+            <div class="actions"><a class="btn btn-primary min-h-12" href="https://chromewebstore.google.com/detail/youtube-music-party/pdibhcofofkfblpajpjcpopbbbbbncbk">Add to Chrome</a><a class="btn btn-outline min-h-12" href="#setup">Set up your room</a></div>
             <p class="desktop-note">For the host’s desktop browser. Your group joins in from Telegram.</p>
-            <p class="one-player"><strong>One active player per room.</strong><br>Everyone controls the queue from Telegram. Audio plays in the host’s YouTube Music tab, not in Telegram or on every member’s device.</p>
+            <aside class="alert one-player"><p><strong>One active player per room.</strong><br>Everyone controls the queue from Telegram. Audio plays in the host’s YouTube Music tab, not in Telegram or on every member’s device.</p></aside>
         </div>
-        <figure class="connected-figure"><div class="party-backdrop"><a href="/gallery#playback" aria-label="See the player and more actions in the gallery"><img src="/popup-connected.webp" alt="YouTube Music Party playing Baby by Justin Bieber, with playback controls and upcoming songs" width="400" height="1018" fetchpriority="high"></a></div><figcaption>The host’s player, connected and playing. <a href="/gallery">See more actions in the gallery</a>.</figcaption></figure>
+        <figure class="connected-figure"><div class="card card-border party-backdrop"><a href="/gallery#playback" aria-label="See the player and more actions in the gallery"><img src="/popup-connected.webp" alt="YouTube Music Party playing Baby by Justin Bieber, with playback controls and upcoming songs" width="400" height="1018" fetchpriority="high"></a></div><figcaption>The host’s player, connected and playing. <a href="/gallery">See more actions in the gallery</a>.</figcaption></figure>
     </section>
     <section class="group-section" aria-labelledby="group-title">
         <div class="section-heading"><h2 id="group-title">Good music.<br>Everyone gets a say.</h2><p>No passing the host’s laptop around. Keep the song requests and controls in the group chat.</p></div>
@@ -63,11 +66,11 @@
         <h2 id="community-title">Help shape YT Party</h2>
         <p>Have an idea or found something that doesn’t work? Tell us on GitHub.</p>
         <div class="community-actions">
-            <a class="community-button" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Request a feature</a>
-            <a class="community-button" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a>
+            <a class="btn btn-outline min-h-11" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Request a feature</a>
+            <a class="btn btn-outline min-h-11" href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a>
         </div>
         <div class="community-donation">
-            <a class="community-button" href="https://saweria.co/faytranevozter" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+            <a class="btn btn-outline min-h-11" href="https://saweria.co/faytranevozter" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
             <p>Support faytranevozter on Saweria. Donations are optional, don’t unlock features, and don’t guarantee requests.</p>
             <figure class="saweria-qr">
                 <img src="/saweria-qr.png" alt="QR code linking to saweria.co/faytranevozter" width="185" height="185" loading="lazy">
@@ -76,7 +79,6 @@
         </div>
     </section>
 </main>
-<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 <footer class="site-footer"><p>YouTube Music Party</p><nav aria-label="Footer navigation"><a href="/support">Support</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="https://github.com/faytranevozter/telegram-music-party">Source</a><a href="https://github.com/faytranevozter/telegram-music-party/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report an issue</a></nav></footer>
 </body>
 </html>

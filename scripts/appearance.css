@@ -1,0 +1,6 @@
+/* Sun/moon transitions are provided by daisyUI Swap. */
+[data-appearance-swap]:not([data-appearance-mode]) { visibility: hidden; }
+[data-appearance-swap] { white-space: nowrap; }
+[data-appearance-swap] .appearance-system-icon { display: none; }
+[data-appearance-mode="system"] .appearance-system-icon { display: block; }
+[data-appearance-mode="system"] :is(.swap-on, .swap-off) { opacity: 0; }

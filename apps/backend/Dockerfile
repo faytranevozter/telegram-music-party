@@ -24,7 +24,7 @@ COPY apps/backend ./apps/backend
 
 WORKDIR /app/apps/backend
 RUN pnpm db:check && pnpm db:generate \
-    && pnpm exec nest build \
+    && pnpm build \
     && find dist -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.tsbuildinfo' \) -delete
 
 # Portable production tree (prod deps only)
@@ -75,7 +75,7 @@ ENV NODE_ENV=production
 COPY --from=build --chown=nodejs:nodejs /app/pruned ./
 COPY --from=build --chown=nodejs:nodejs /app/apps/backend/dist ./dist
 COPY --from=build --chown=nodejs:nodejs /app/apps/backend/prisma ./prisma
-COPY --chown=nodejs:nodejs apps/backend/public/index.html ./public/index.html
+COPY --from=build --chown=nodejs:nodejs /app/apps/backend/public ./public
 COPY --chown=nodejs:nodejs apps/backend/docker ./docker
 
 RUN chmod +x ./docker/run.sh \

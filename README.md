@@ -213,7 +213,8 @@ assets. The privacy policy and terms are generated from the root `PRIVACY.md` an
 `TERMS.md`.
 
 ```bash
-pnpm --filter=web-landing build:legal     # regenerate /privacy + /terms
+pnpm --filter=web-landing build           # compile daisyUI CSS and regenerate /privacy + /terms
+pnpm --filter=web-landing build:legal     # regenerate /privacy + /terms only
 pnpm --filter=web-landing build:privacy   # regenerate /privacy from PRIVACY.md
 pnpm --filter=web-landing build:terms     # regenerate /terms from TERMS.md
 pnpm --filter=web-landing dev             # run locally

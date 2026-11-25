@@ -1,0 +1,12 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../public/*.html";
+@source "../public/appearance.js";
+@source "../scripts/legal-page.mjs";
+@source "../src/worker.ts";
+
+@plugin "daisyui" {
+    themes: light --default, dark;
+    include: button, card, alert, swap, properties;
+}
