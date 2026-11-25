@@ -118,9 +118,8 @@ h1 .accent { color:#60a5fa; }
 <div class="glow"></div>
 <div class="wrap">
   <div class="brand"><img src="ICON_SRC" alt=""><div class="btxt">YouTube Music Party</div></div>
-  <h1>One tab. One room.<br><span class="accent">Shared listening.</span></h1>
-  <div class="sub">Let a Telegram group control the YouTube Music queue.</div>
-  <div class="foot"><span class="pill"><span class="g"></span>Connected</span></div>
+  <h1>One player.<br><span class="accent">Everyone picks.</span></h1>
+  <div class="sub">Share a YouTube Music queue from a web room or Telegram.</div>
 </div>
 </body></html>'
 

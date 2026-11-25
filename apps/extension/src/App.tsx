@@ -533,7 +533,7 @@ function App() {
                                             <span>Room ID</span>
                                         <input
                                             aria-label="Room ID"
-                                            placeholder="From Telegram /register"
+                                            placeholder="From the web room or Telegram"
                                             required
                                             value={roomIdInput}
                                             disabled={busy || connecting}

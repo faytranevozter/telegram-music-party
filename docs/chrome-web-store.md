@@ -29,26 +29,11 @@ The Web Store build should not include a manual ZIP downloader or release checke
 ### Description
 
 ```text
-YouTube Music Party connects one browser tab to a room controlled from a Telegram group, so participants can manage a shared listening session.
+YouTube Music Party connects one host’s YouTube Music tab to a shared queue. Create a web room and share an invite so friends can search for songs, add requests, see what’s playing, and vote to skip from their browsers. Guests don’t need the extension or a Telegram account to join a web room.
 
-Open music.youtube.com and join a room from the extension popup or the music page sidebar. Connect to your backend and let group members add tracks, use playback controls, vote, and manage the queue.
+To connect the player, copy the Room ID from Room info & settings in the web room. Open music.youtube.com, paste the ID into the extension popup, and select Join Room. Wait for Connected, then share the guest invite from the web room. If your group already uses Telegram, you can also use the companion bot and get a Room ID with /register.
 
-Features:
-- Join or leave a room from the popup or the music page sidebar
-- Connect to a configurable party backend
-- Control play, pause, next, previous, mute, and volume
-- View current room, connection status, now playing, and queue from the popup
-- Keep YouTube Music active during long shared sessions
-- Works with the companion bot/backend in this project
-
-How it works:
-1. Add the companion bot to your Telegram group and run /register to get a room ID
-2. Open music.youtube.com, then open the extension popup
-3. Enter your room ID; expand Advanced / custom server to change the default https://music.ytparty.my.id server if needed
-4. Click Join Room; the music tab refreshes and may briefly interrupt playback
-5. Wait for Connected, then use the Telegram bot in your group to control playback
-
-Joining continues if you close the popup. Only one device can own a room; if the room is busy, leave on the current device before retrying. The music page sidebar remains an alternative way to join.
+The host can use the popup to see the current song and upcoming requests, control playback, or leave the room. Only one player can connect at a time. Music plays only in the host’s YouTube Music tab; the extension does not stream audio to guests.
 
 This extension only runs on music.youtube.com. It does not collect account credentials, passwords, or personal browsing history.
 
@@ -57,14 +42,10 @@ Not affiliated with YouTube, Google, Chrome, or Telegram.
 
 ### Summary
 
-```text
-Connect a music tab to a group-controlled listening room.
-```
-
-Alternative if a longer summary is preferred:
+The short description is read from `apps/extension/public/manifest.json`. To change it for an existing listing, upload a package with a higher version number.
 
 ```text
-Join a room, view status, and control a shared listening queue from the extension popup.
+Host a shared YouTube Music queue. Friends request songs from a web room or Telegram while music plays in your tab.
 ```
 
 ### Category
@@ -124,11 +105,13 @@ Ready-to-upload assets live in `docs/images/store/`:
 | File | Size | Upload field |
 |------|------|--------------|
 | `icon-128x128.png` | 128x128 | Store icon |
-| `screenshot-01-queue.png` | 1280x800 | Screenshot (popup + queue) |
-| `screenshot-02-playing.png` | 1280x800 | Screenshot (popup, now playing) |
+| `v1.16.1-01-connected-player.png` | 1280x800 | Screenshot 1: connected extension |
+| `v1.16.1-02-web-room.png` | 1280x800 | Screenshot 2: browser room |
+| `v1.16.1-03-connect-player.png` | 1280x800 | Screenshot 3: extension setup |
 | `small-promo-440x280.png` | 440x280 | Small promo tile |
+| `marquee-promo-1400x560.png` | 1400x560 | Optional marquee promo tile |
 
-Regenerate them with the render script described in `docs/images/store/README.md`.
+The v1.16.1 screenshots are captures of the running UI. The render script described in `docs/images/store/README.md` produces the older templates and promo tile.
 
 ### Store Icon
 
@@ -146,24 +129,18 @@ Accepted sizes:
 - `1280x800`
 - `640x400`
 
-Recommended screenshots:
-
-- Popup connected state.
-- YouTube Music page with the Join/Leave entry point.
-- Telegram bot commands controlling playback or queue.
-- Popup showing now playing and queue.
-- Room configuration/settings if visually useful.
+Start with the connected popup, then show the web room and the Join Room form. Keep room IDs, invite codes, and account details out of listing screenshots.
 
 ### Small Promo Tile
 
 Optional but recommended.
 
 - Size: `440x280`.
-- Text idea: `YouTube Music Party` and `Control shared music from Telegram`.
+- Text idea: `YouTube Music Party` and `One player. Everyone picks the music.`
 
 ### Marquee Promo Tile
 
-Optional. Skip unless polished artwork is available.
+Optional. Upload `marquee-promo-1400x560.png` to match the small promo tile and show the web room.
 
 ## Privacy Page Fields
 
@@ -180,7 +157,7 @@ If the Privacy page asks for any permission justification other than the host pe
 ### Single Purpose Description
 
 ```text
-YouTube Music Party lets a user connect a YouTube Music tab to a Telegram-controlled party room so group members can manage shared playback and queue actions.
+YouTube Music Party connects the host’s YouTube Music tab to a party room so participants can manage a shared queue and playback from a web browser or Telegram.
 ```
 
 ### Host Permission Justification
@@ -188,7 +165,7 @@ YouTube Music Party lets a user connect a YouTube Music tab to a Telegram-contro
 Use this for the current manifest:
 
 ```text
-The extension needs access to music.youtube.com to add the party room controls, read the current playback state, update the queue, and execute playback commands requested by the user or their connected Telegram party room.
+The extension needs access to music.youtube.com to add the room controls, read playback state, update the queue, and apply commands from the connected party room, whether participants use the web room or Telegram.
 ```
 
 ### Remote Code
@@ -400,5 +377,5 @@ If the draft is rejected with `Spam and Placement in the Store`, review these it
 Suggested reviewer note:
 
 ```text
-This extension has one purpose: connecting a user's YouTube Music tab to a Telegram-controlled party room for shared playback and queue control. The listing has been updated to avoid promotional repetition, clarify that the project is not affiliated with YouTube, Google, Chrome, or Telegram, and accurately describe the extension's functionality and data usage.
+This extension has one purpose: connecting the host's YouTube Music tab to a party room for shared playback and queue control from the browser or Telegram. The listing describes that workflow and clarifies that the project is not affiliated with YouTube, Google, Chrome, or Telegram.
 ```

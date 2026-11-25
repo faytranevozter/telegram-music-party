@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "YouTube Music Party",
-    "version": "1.16.1",
-    "description": "Connect a YouTube Music tab to a Telegram-controlled room for shared playback.",
+    "version": "1.16.2",
+    "description": "Host a shared YouTube Music queue. Friends request songs from a web room or Telegram while music plays in your tab.",
     "host_permissions": ["https://music.youtube.com/*"],
     "icons": {
         "16": "app-icon.png",

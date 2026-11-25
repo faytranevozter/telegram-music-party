@@ -4,7 +4,7 @@ export const DEFAULT_PARTY_URL = "https://music.ytparty.my.id";
 
 export function validateRoomConfig(roomId: string, partyUrl: string) {
     if (typeof roomId !== "string" || !roomId.trim()) {
-        throw new Error("Enter a room ID from Telegram /register.");
+        throw new Error("Enter a room ID from the web room settings or Telegram /register.");
     }
     if (typeof partyUrl !== "string") {
         throw new Error("Enter a valid HTTP(S) party server URL.");

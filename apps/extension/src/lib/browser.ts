@@ -401,7 +401,7 @@ export function openJoinDialog() {
 
     const hint = document.createElement("p");
     hint.className = "ytmp-join-hint";
-    hint.textContent = "Paste the room ID from Telegram /register.";
+    hint.textContent = "Paste the room ID from the web room settings or Telegram /register.";
 
     const room = createJoinField({
         id: JOIN_ROOM_INPUT_ID,
