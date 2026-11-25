@@ -33,6 +33,39 @@
     --noise: 1;
 }
 
+@plugin "daisyui/theme" {
+    name: "doubleforever-dark";
+    color-scheme: dark;
+    --color-base-100: #202630;
+    --color-base-200: #151922;
+    --color-base-300: #394456;
+    --color-base-content: #f3f5fa;
+    --color-primary: #ff9b96;
+    --color-primary-content: #3d1415;
+    --color-secondary: #b9c7df;
+    --color-secondary-content: #1c273a;
+    --color-accent: #82ddd0;
+    --color-accent-content: #0e302a;
+    --color-neutral: #313b4b;
+    --color-neutral-content: #f3f5fa;
+    --color-info: #acc4ff;
+    --color-info-content: #17274e;
+    --color-success: #91deb0;
+    --color-success-content: #113321;
+    --color-warning: #ffcc80;
+    --color-warning-content: #3f280c;
+    --color-error: #ffaaa9;
+    --color-error-content: #441418;
+    --radius-selector: 0rem;
+    --radius-field: 0.5rem;
+    --radius-box: 1rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 1;
+}
+
 @layer base {
     body { @apply min-h-screen bg-base-200 text-base-content antialiased; }
     h1 { @apply break-words text-2xl font-bold tracking-tight sm:text-3xl; }

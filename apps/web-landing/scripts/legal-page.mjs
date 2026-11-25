@@ -152,6 +152,7 @@ export function buildLegalPage({ source, slug, title, description }) {
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
 <link rel="icon" href="/icon-128x128.png">
+<script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -164,6 +165,7 @@ export function buildLegalPage({ source, slug, title, description }) {
 ${updated ? `<p class="updated">Last updated: ${escapeHtml(updated)}</p>` : ""}
 ${body}
 </main>
+<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 <footer>
 <a href="/">Home</a>
 <a href="/support">Support</a>

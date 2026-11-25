@@ -41,15 +41,13 @@ const CONTROL_EDGE_PX = 16;
 // the new control no longer lives there, so they would read as leftovers.
 const LEGACY_SIDEBAR_LABELS = new Set(["Leave Room", "Join Room"]);
 
-// Extension popup palette (src/index.css), so the in-page control reads as the
-// same product while sitting on YouTube Music's near-black theme.
 const BRAND = {
-    surface: "rgba(21, 25, 34, 0.92)",
-    surfaceHover: "#232D43",
-    border: "#394253",
-    borderHover: "#47536A",
-    text: "#F5F7FC",
-    accent: "#ADC2FF",
+    surface: "var(--ytmp-overlay-surface)",
+    surfaceHover: "var(--ytmp-hover)",
+    border: "var(--ytmp-border)",
+    borderHover: "var(--ytmp-field-border)",
+    text: "var(--ytmp-text)",
+    accent: "var(--ytmp-accent)",
 };
 
 const CONTROL_STYLE_ID = "ytmp-party-control-style";
@@ -61,6 +59,36 @@ const JOIN_SERVER_INPUT_ID = "ytmp-join-server";
 const JOIN_ERROR_ID = "ytmp-join-error";
 const JOIN_SUBMIT_ID = "ytmp-join-submit";
 const JOIN_CANCEL_ID = "ytmp-join-cancel";
+
+function hostTheme() {
+    for (const root of [document.documentElement, document.querySelector("ytmusic-app")]) {
+        if (!root) continue;
+        const explicit = root.getAttribute("data-theme") ?? root.getAttribute("theme");
+        if (explicit === "light" || explicit === "dark") return explicit;
+        if (root.hasAttribute("dark")) return "dark";
+        if (root.hasAttribute("light")) return "light";
+    }
+    return "dark";
+}
+
+let hostThemeObserver: MutationObserver | undefined;
+
+function syncHostTheme() {
+    const theme = hostTheme();
+    for (const id of [CONTROL_ID, JOIN_DIALOG_ID]) {
+        const element = document.getElementById(id);
+        if (element) element.dataset.ytmpTheme = theme;
+    }
+}
+
+function followHostTheme() {
+    syncHostTheme();
+    hostThemeObserver ??= new MutationObserver(syncHostTheme);
+    hostThemeObserver.disconnect();
+    for (const root of [document.documentElement, document.querySelector("ytmusic-app")]) {
+        if (root) hostThemeObserver.observe(root, { attributeFilter: ["data-theme", "theme", "dark", "light"] });
+    }
+}
 
 const CONTROL_STYLES: Partial<CSSStyleDeclaration> = {
     position: "fixed",
@@ -90,6 +118,36 @@ function ensureControlStyles() {
     const style = document.createElement("style");
     style.id = CONTROL_STYLE_ID;
     style.textContent = `
+#${CONTROL_ID}, #${JOIN_DIALOG_ID} {
+    color-scheme: dark;
+    --ytmp-overlay-surface: rgba(21, 25, 34, 0.92);
+    --ytmp-panel: #151922;
+    --ytmp-hover: #232d43;
+    --ytmp-field: #202734;
+    --ytmp-border: #394253;
+    --ytmp-field-border: #66748f;
+    --ytmp-text: #f5f7fc;
+    --ytmp-hint: #bdcae3;
+    --ytmp-error: #ffb4ab;
+    --ytmp-accent: #adc2ff;
+    --ytmp-accent-hover: #c3d2ff;
+    --ytmp-accent-content: #182544;
+}
+#${CONTROL_ID}[data-ytmp-theme="light"], #${JOIN_DIALOG_ID}[data-ytmp-theme="light"] {
+    color-scheme: light;
+    --ytmp-overlay-surface: rgba(247, 249, 252, 0.96);
+    --ytmp-panel: #f7f9fc;
+    --ytmp-hover: #e5ecfa;
+    --ytmp-field: #fff;
+    --ytmp-border: #cad3e2;
+    --ytmp-field-border: #74829b;
+    --ytmp-text: #20242c;
+    --ytmp-hint: #526079;
+    --ytmp-error: #9d251e;
+    --ytmp-accent: #2845a8;
+    --ytmp-accent-hover: #20388a;
+    --ytmp-accent-content: #fff;
+}
 #${CONTROL_ID} { transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease; }
 #${CONTROL_ID}:hover { background: ${BRAND.surfaceHover}; border-color: ${BRAND.borderHover}; }
 #${CONTROL_ID}:active { transform: translateY(1px); }
@@ -113,14 +171,14 @@ function ensureControlStyles() {
     padding: 24px;
     border-radius: 16px;
     border: 1px solid ${BRAND.border};
-    background: #151922;
+    background: var(--ytmp-panel);
     color: ${BRAND.text};
     box-shadow: 0 24px 60px rgba(3, 3, 3, 0.6);
 }
 .${JOIN_PANEL_CLASS} h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
-.${JOIN_PANEL_CLASS} .ytmp-join-hint { margin: 6px 0 0; font-size: 12px; color: #AAB6CA; }
+.${JOIN_PANEL_CLASS} .ytmp-join-hint { margin: 6px 0 0; font-size: 12px; color: var(--ytmp-hint); }
 .ytmp-join-field { display: grid; gap: 8px; margin-top: 16px; }
-.ytmp-join-field span { font-size: 12px; font-weight: 600; color: #BDCAE3; }
+.ytmp-join-field span { font-size: 12px; font-weight: 600; color: var(--ytmp-hint); }
 .ytmp-join-field input {
     width: 100%;
     box-sizing: border-box;
@@ -128,13 +186,13 @@ function ensureControlStyles() {
     padding: 10px 12px;
     border-radius: 8px;
     border: 1px solid ${BRAND.borderHover};
-    background: #202734;
+    background: var(--ytmp-field);
     color: ${BRAND.text};
     font: inherit;
     font-size: 14px;
 }
 .ytmp-join-field input:focus { outline: 2px solid ${BRAND.accent}; outline-offset: 2px; }
-.ytmp-join-error { min-height: 18px; margin: 12px 0 0; font-size: 12px; color: #FFB4AB; }
+.ytmp-join-error { min-height: 18px; margin: 12px 0 0; font-size: 12px; color: var(--ytmp-error); }
 .ytmp-join-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .ytmp-join-actions button {
     min-height: 40px;
@@ -147,8 +205,8 @@ function ensureControlStyles() {
 }
 #${JOIN_CANCEL_ID} { background: transparent; border: 1px solid ${BRAND.borderHover}; color: ${BRAND.text}; }
 #${JOIN_CANCEL_ID}:hover { border-color: ${BRAND.accent}; }
-#${JOIN_SUBMIT_ID} { background: ${BRAND.accent}; border: 1px solid transparent; color: #182544; }
-#${JOIN_SUBMIT_ID}:hover { background: #C3D2FF; }
+#${JOIN_SUBMIT_ID} { background: ${BRAND.accent}; border: 1px solid transparent; color: var(--ytmp-accent-content); }
+#${JOIN_SUBMIT_ID}:hover { background: var(--ytmp-accent-hover); }
 #${JOIN_SUBMIT_ID}:focus-visible, #${JOIN_CANCEL_ID}:focus-visible { outline: 2px solid ${BRAND.accent}; outline-offset: 3px; }
 `;
     document.head.append(style);
@@ -279,6 +337,7 @@ export function mountPartyControl({
     control.addEventListener("click", onClick);
 
     document.body.append(control);
+    followHostTheme();
     trackPlayerBarPosition(control);
     return control;
 }
@@ -398,6 +457,7 @@ export function openJoinDialog() {
     });
 
     document.body.append(overlay);
+    followHostTheme();
     document.addEventListener("keydown", onJoinDialogKeydown);
     room.input.focus();
     return overlay;

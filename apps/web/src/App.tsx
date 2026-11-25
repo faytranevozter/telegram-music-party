@@ -70,7 +70,15 @@ export function App({ origin }: { origin?: string }) {
     }
 
     return <div className="frame">
-        <header className="navbar min-h-0 border-b border-base-300 px-0 py-3"><a href="/" className="flex flex-1 items-center gap-2 font-bold"><img src="/music-party-mark.jpg" alt="" width="32" height="32" className="rounded-lg" /> Music Party</a><a href="https://ytparty.my.id/support" className="btn btn-ghost btn-sm">Help</a></header>
+        <header className="navbar min-h-0 flex-wrap gap-2 border-b border-base-300 px-0 py-3">
+            <a href="/" className="flex flex-1 items-center gap-2 font-bold"><img src="/music-party-mark.jpg" alt="" width="32" height="32" className="rounded-lg" /> Music Party</a>
+            <label className="flex items-center gap-2"> <span className="sr-only sm:not-sr-only">Appearance</span>
+                <select className="select select-sm w-auto" data-appearance-select>
+                    <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+                </select>
+            </label>
+            <a href="https://ytparty.my.id/support" className="btn btn-ghost btn-sm">Help</a>
+        </header>
         <main>
             {api && session ? <Room key={session.token} api={api} token={session.token} onLeave={() => close(session.token)} onRevoked={() => close(session.token, true)} /> :
                 <div className="mx-auto max-w-lg">

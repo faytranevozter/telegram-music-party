@@ -402,8 +402,13 @@ function App() {
         !connecting;
 
     return (
-        <div className="dark party-popup">
+        <div className="party-popup">
             <div className="popup-layout">
+                <label className="popup-appearance">Appearance
+                    <select data-appearance-select>
+                        <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+                    </select>
+                </label>
                 <header className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                         <h1 className="popup-brand">

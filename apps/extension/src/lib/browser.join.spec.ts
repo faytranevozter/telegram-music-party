@@ -11,6 +11,7 @@ describe("sidebar join", () => {
         vi.stubGlobal("window", { location: { reload } });
     });
     afterEach(() => {
+        document.documentElement.removeAttribute("data-theme");
         vi.clearAllTimers();
         vi.useRealTimers();
         vi.unstubAllGlobals();
@@ -35,10 +36,25 @@ describe("sidebar join", () => {
         await openDialog();
 
         expect(document.getElementById("ytmp-join-dialog")).not.toBeNull();
+        expect(document.getElementById("ytmp-join-dialog")?.dataset.ytmpTheme).toBe("dark");
         expect(
             document.querySelector<HTMLInputElement>("#ytmp-join-server")!
                 .value,
         ).toBe(DEFAULT_PARTY_URL);
+    });
+
+    it("matches live host theme changes in both the control and the open dialog", async () => {
+        document.documentElement.setAttribute("data-theme", "light");
+        await openDialog();
+        const control = document.getElementById("ytmp-party-control")!;
+        const dialog = document.getElementById("ytmp-join-dialog")!;
+        expect(control.dataset.ytmpTheme).toBe("light");
+        expect(dialog.dataset.ytmpTheme).toBe("light");
+        document.documentElement.setAttribute("data-theme", "dark");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(control.dataset.ytmpTheme).toBe("dark");
+        expect(dialog.dataset.ytmpTheme).toBe("dark");
+        expect(document.documentElement.dataset.ytmpTheme).toBeUndefined();
     });
 
     it("saves the trimmed configuration, closes, and reloads", async () => {

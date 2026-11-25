@@ -76,13 +76,13 @@ describe("party control", () => {
 
         const sheets = document.querySelectorAll("#ytmp-party-control-style");
         expect(sheets).toHaveLength(1);
-        expect(sheets[0].textContent).toContain("#ADC2FF");
-
         const control = document.querySelector<HTMLElement>(
             "#ytmp-party-control",
         )!;
-        expect(control.style.backgroundColor).toBe("rgba(21, 25, 34, 0.92)");
-        expect(control.style.color).toBe("rgb(245, 247, 252)");
+        const palette = getComputedStyle(control);
+        expect(palette.getPropertyValue("--ytmp-accent").trim()).toBe("#adc2ff");
+        expect(palette.getPropertyValue("--ytmp-overlay-surface").replace(/\s/g, "")).toBe("rgba(21,25,34,0.92)");
+        expect(palette.getPropertyValue("--ytmp-text").trim()).toBe("#f5f7fc");
     });
 
     it("sits at the viewport edge when there is no player bar", () => {

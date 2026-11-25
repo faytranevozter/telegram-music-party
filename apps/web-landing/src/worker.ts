@@ -30,6 +30,7 @@ const NOT_FOUND = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Not found — YouTube Music Party</title>
 <link rel="icon" href="/icon-128x128.png">
+<script src="/appearance.js" data-appearance-key="ytmp-site-appearance"></script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -38,6 +39,7 @@ const NOT_FOUND = `<!DOCTYPE html>
 <p>The page you requested does not exist.</p>
 <p><a href="/">Back to home</a></p>
 </main>
+<div class="appearance-bar"><label>Appearance <select data-appearance-select><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 </body>
 </html>`;
 
@@ -59,9 +61,9 @@ export default {
 
         const response = await env.ASSETS.fetch(target);
 
-        // ASSETS rejects unknown paths as 500; a static site should say 404.
-        if (!response.ok && response.status >= 500) {
-            return new Response(NOT_FOUND, {
+        // Asset bindings can return a bare 404 (or a 500 for an unknown path).
+        if (response.status === 404 || response.status >= 500) {
+            return new Response(request.method === "HEAD" ? null : NOT_FOUND, {
                 status: 404,
                 headers: { "content-type": "text/html; charset=utf-8" },
             });

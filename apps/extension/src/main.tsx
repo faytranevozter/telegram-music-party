@@ -6,7 +6,7 @@ import { HeroUIProvider, ToastProvider } from "@heroui/react";
 
 createRoot(document.getElementById("root")!).render(
     <HeroUIProvider>
-        <div className="dark text-foreground bg-background">
+        <div className="text-foreground bg-background">
             <ToastProvider placement="top-center" />
             <StrictMode>
                 <App />
@@ -14,4 +14,3 @@ createRoot(document.getElementById("root")!).render(
         </div>
     </HeroUIProvider>
 );
-
