@@ -79,7 +79,6 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
         : playerState?.state === 'playing' ? 'Now playing'
         : playerState?.state === 'standby' ? 'Standing by'
         : 'Playback status unavailable';
-    const volumeStatus = playerState?.volume != null ? ` · Volume: ${playerState.volume}%` : '';
     const muteStatus = playerState?.muted ? ' · Muted' : '';
     return <section className="room">
         <RoomHeader name={state?.name ?? 'Listening room'} role={state ? state.role === 'owner' ? 'Host' : 'Guest' : undefined} connection={state ? { label: state.playerOnline ? 'Player connected' : 'Player offline', online: state.playerOnline } : undefined}>
@@ -92,12 +91,13 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
             <NowPlayingPanel
                 cover={state.nowPlaying && <TrackCover key={state.nowPlaying.videoId} videoId={state.nowPlaying.videoId} large />}
                 artworkSource={state.playerOnline ? coverSources(state.nowPlaying?.videoId)[0] : undefined}
-                status={`${playbackStatus}${volumeStatus}${muteStatus}`}
+                status={`${playbackStatus}${muteStatus}`}
                 title={state.nowPlaying?.title ?? (state.playerOnline ? 'Nothing playing yet' : 'Player offline')}
                 description={state.nowPlaying?.artist || (state.playerOnline ? 'Songs play through the host’s extension.' : 'You can still add songs to the queue.')}
                 controls={<PlayerBar
                         paused={playerState ? playerState.state !== 'playing' : state.playerOnline ? null : true}
                         muted={playerState?.muted ?? false}
+                        volume={playerState?.volume}
                         disabled={busy || !state.playerOnline}
                         disabledControls={playbackActions.filter((action) => !state.capabilities.controls.includes(action))}
                         onControl={(action) => void act(async () => {

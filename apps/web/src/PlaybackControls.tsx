@@ -18,16 +18,17 @@ const iconPaths = {
     refresh: 'M20 7v5h-5m5 0a8 8 0 1 0-2 5',
 };
 
-function PlayerIcon({ name }: { name: keyof typeof iconPaths }) {
-    return <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d={iconPaths[name]} /></svg>;
+function PlayerIcon({ name, className = 'size-5' }: { name: keyof typeof iconPaths; className?: string }) {
+    return <svg aria-hidden="true" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d={iconPaths[name]} /></svg>;
 }
 
 const subtleButton = 'btn btn-ghost text-neutral-content hover:bg-neutral-content/10';
 const disabledButton = 'disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed';
 
-export function PlayerBar({ paused, muted = false, onControl, disabledControls = [], disabled = false }: {
+export function PlayerBar({ paused, muted = false, volume, onControl, disabledControls = [], disabled = false }: {
     paused: boolean | null;
     muted?: boolean;
+    volume?: number | null;
     onControl: (action: Control) => void;
     disabledControls?: readonly Control[];
     disabled?: boolean;
@@ -51,6 +52,10 @@ export function PlayerBar({ paused, muted = false, onControl, disabledControls =
         </div>
         <button type="button" className={`btn ${unavailable('radio') ? 'btn-outline disabled:border-neutral-content/30 disabled:bg-transparent disabled:text-neutral-content/70 disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed' : ''}`} disabled={unavailable('radio')} onClick={() => onControl('radio')}><PlayerIcon name="radio" /> Start radio</button>
         <button type="button" className={subtleButton} aria-expanded={showMore} aria-controls={moreId} onClick={() => setShowMore((open) => !open)}>{showMore ? 'Less' : 'More'}</button>
+        {volume != null && <span className="badge badge-outline ms-auto h-8 shrink-0 gap-1.5 self-center rounded-full border-neutral-content/25 bg-neutral-content/5 px-2.5 text-neutral-content tabular-nums">
+            <PlayerIcon name={muted ? 'mute' : 'unmute'} className="size-4" />
+            <span className="sr-only">Volume: </span>{volume}%
+        </span>}
         <div id={moreId} className={showMore ? 'flex basis-full flex-wrap items-center gap-1 border-t border-neutral-content/20 pt-2' : 'hidden'}>
             <button type="button" className={`${subtleButton} btn-sm ${disabledButton}`} disabled={unavailable(muteAction)} onClick={() => onControl(muteAction)}><PlayerIcon name={muteAction === 'unmute' ? 'mute' : 'unmute'} /> {controlLabels[muteAction]}</button>
             {extraControls.map((action) => <button type="button" className={`${subtleButton} btn-sm ${disabledButton}`} disabled={unavailable(action)} aria-label={`${extraLabels[action]} (${controlLabels[action]})`} title={controlLabels[action]} key={action} onClick={() => onControl(action)}><PlayerIcon name={action} /> {extraLabels[action]}</button>)}

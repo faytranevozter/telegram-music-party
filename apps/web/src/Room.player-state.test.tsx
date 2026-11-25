@@ -25,6 +25,7 @@ it('reflects live player changes without a local control command', async () => {
     const api = createWebApi('https://example.test', transport as typeof fetch);
     const render = () => act(async () => root.render(<Room api={api} token="token" onLeave={() => undefined} onRevoked={() => undefined} />));
     const button = (label: string) => container.querySelector(`button[aria-label="${label}"]`);
+    const playbackControls = () => container.querySelector('[role="group"][aria-label="Playback controls"]');
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     try {
         await render();
@@ -34,13 +35,14 @@ it('reflects live player changes without a local control command', async () => {
         room.playerState = { state: 'playing', volume: 25, muted: false };
         await render();
         expect(button('Pause')).not.toBeNull();
-        expect(container.textContent).toContain('Volume: 25%');
+        expect(playbackControls()?.textContent).toContain('Volume: 25%');
+        expect(container.textContent).not.toContain('Now playing · Volume:');
 
         room.playerState = { state: 'paused', volume: 70, muted: true };
         await render();
         expect(button('Play')).not.toBeNull();
         expect(container.textContent).toContain('Paused');
-        expect(container.textContent).toContain('Volume: 70%');
+        expect(playbackControls()?.textContent).toContain('Volume: 70%');
         expect(container.textContent).toContain('Unmute');
         expect(transport).not.toHaveBeenCalled();
     } finally {
