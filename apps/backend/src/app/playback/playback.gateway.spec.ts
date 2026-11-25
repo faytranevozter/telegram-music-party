@@ -239,6 +239,115 @@ describe('PlaybackGateway room admission', () => {
         } as unknown as Server;
     });
 
+    const playing = {
+        roomId: 'room',
+        state: 'playing',
+        videoId: 'dQw4w9WgXcQ',
+        song: 'Title',
+        artist: 'Artist',
+        volume: 25,
+        muted: false,
+    };
+
+    async function admitPlayer() {
+        const socket = Object.assign(makeSocket(), {
+            connected: true,
+            rooms: new Set(['room']),
+        });
+        await gateway.onJoin(socket as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+        return socket;
+    }
+
+    it('publishes the initial state silently and notifies only on observed changes', async () => {
+        const player = await admitPlayer();
+        const changed = jest.fn();
+        gateway.watchRoomChanges(changed);
+        await gateway.onPlayerState(player as never, playing);
+        expect(gateway.currentPlayerState('room')).toEqual({
+            state: 'playing',
+            volume: 25,
+            muted: false,
+        });
+        expect(changed).toHaveBeenCalledWith('room');
+        expect(notifier.sendPlaybackNotification).not.toHaveBeenCalled();
+
+        const paused = { ...playing, state: 'paused' };
+        await gateway.onPlayerState(player as never, paused);
+        await gateway.onPlayerState(player as never, paused);
+        await gateway.onPlayerState(player as never, {
+            ...playing, volume: 70, muted: true,
+        });
+        expect(notifier.sendPlaybackNotification.mock.calls).toEqual([
+            ['chat', null, { type: 'paused', song: 'Title', artist: 'Artist' }],
+            ['chat', null, { type: 'resumed', song: 'Title', artist: 'Artist' }],
+            ['chat', null, { type: 'volume-changed', direction: 'increased', volume: 70 }],
+            ['chat', null, { type: 'mute-changed', muted: true }],
+        ]);
+        expect(changed).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not announce pause or resume for track changes or standby', async () => {
+        const player = await admitPlayer();
+        await gateway.onPlayerState(player as never, playing);
+        await gateway.onPlayerState(player as never, {
+            ...playing, state: 'paused', videoId: 'abcdefghijk',
+        });
+        await gateway.onPlayerState(player as never, {
+            ...playing, state: 'standby', videoId: null,
+        });
+        await gateway.onPlayerState(player as never, playing);
+        expect(notifier.sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('ignores invalid reports and reports from other or disconnected sockets', async () => {
+        const player = await admitPlayer();
+        await gateway.onPlayerState(player as never, { ...playing, volume: 101 });
+        await gateway.onPlayerState(player as never, { ...playing, roomId: 'other' });
+        await gateway.onPlayerState({ ...player, id: 'other' } as never, playing);
+        expect(gateway.currentPlayerState('room')).toBeNull();
+
+        await gateway.onPlayerState(player as never, playing);
+        player.connected = false;
+        await gateway.handleDisconnect(player as never);
+        await gateway.onPlayerState(player as never, playing);
+        expect(gateway.currentPlayerState('room')).toBeNull();
+    });
+
+    it('keeps a replacement player baseline when the old socket disconnects', async () => {
+        const first = await admitPlayer();
+        await gateway.onPlayerState(first as never, playing);
+        const replacement = { ...first, id: 'replacement', data: {} };
+        await gateway.onJoin(replacement as never, {
+            id: 'room',
+            browser: 'Chrome',
+            fingerprint: 'mine',
+        });
+        await gateway.onPlayerState(replacement as never, {
+            ...playing, state: 'paused',
+        });
+        await gateway.handleDisconnect(first as never);
+        expect(gateway.currentPlayerState('room')?.state).toBe('paused');
+        expect(notifier.sendPlaybackNotification).not.toHaveBeenCalled();
+    });
+
+    it('removes the old socket before admitting a same-device replacement', async () => {
+        const first = await admitPlayer();
+        const sockets = new Map([[first.id, first]]);
+        first.leave.mockImplementation(() => { sockets.delete(first.id); });
+        gateway.wss = { in: () => ({ fetchSockets: () => Promise.resolve([...sockets.values()]) }) } as unknown as Server;
+        const replacement = Object.assign(makeSocket('replacement'), { connected: true, rooms: new Set(['room']) });
+        replacement.join.mockImplementation(() => { sockets.set(replacement.id, replacement); });
+        await gateway.onJoin(replacement as never, { id: 'room', browser: 'Chrome', fingerprint: 'mine' });
+        service.getRoomDevice.mockResolvedValue({ fingerprint: 'mine', name: 'Chrome' });
+        expect(first.leave).toHaveBeenCalledWith('room');
+        expect(await gateway.playerOnline('room')).toBe(true);
+        expect(replacement.emit).toHaveBeenCalledWith('joined', [], { playerState: true });
+    });
+
     it('rejects a join when a different device already occupies the room', async () => {
         service.getRoomDevices.mockResolvedValue([
             { id: 'd1', name: 'Other', fingerprint: 'other' },
@@ -277,7 +386,7 @@ describe('PlaybackGateway room admission', () => {
             fingerprint: 'mine',
         });
 
-        expect(socket.emit).toHaveBeenCalledWith('joined', [queueRow]);
+        expect(socket.emit).toHaveBeenCalledWith('joined', [queueRow], { playerState: true });
         expect(socket.join).toHaveBeenCalledWith('room');
         expect(service.addDevice).not.toHaveBeenCalled();
     });
@@ -297,7 +406,7 @@ describe('PlaybackGateway room admission', () => {
             'Chrome',
         );
         expect(socket.join).toHaveBeenCalledWith('room');
-        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+        expect(socket.emit).toHaveBeenCalledWith('joined', [], { playerState: true });
         expect(socket.data.session).toEqual({
             roomId: 'room',
             fingerprint: 'mine',
@@ -335,7 +444,7 @@ describe('PlaybackGateway room admission', () => {
         });
 
         expect(notifier.sendMessage).not.toHaveBeenCalled();
-        expect(socket.emit).toHaveBeenCalledWith('joined', []);
+        expect(socket.emit).toHaveBeenCalledWith('joined', [], { playerState: true });
     });
 
     it('frees the room when the owning socket disconnects', async () => {

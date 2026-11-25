@@ -89,6 +89,7 @@ export type PlaybackNotification =
     | { type: 'queue-empty' }
     | { type: 'now-playing'; song: string; artist: string }
     | { type: 'paused'; song: string; artist: string }
+    | { type: 'resumed'; song: string; artist: string }
     | {
           type: 'volume-changed';
           direction: 'increased' | 'decreased';
@@ -102,3 +103,42 @@ export type PlaybackNotification =
 export type PlaybackNotificationPayload = PlaybackNotification & {
     roomId: string;
 };
+
+export type PlayerState = {
+    state: 'playing' | 'paused' | 'standby';
+    volume: number | null;
+    muted: boolean | null;
+};
+
+export function validatePlayerState(data: unknown) {
+    if (!data || typeof data !== 'object') return null;
+    const { roomId, state, videoId, song, artist, volume, muted } =
+        data as Record<string, unknown>;
+    if (
+        typeof roomId !== 'string' ||
+        !roomId ||
+        (state !== 'playing' && state !== 'paused' && state !== 'standby') ||
+        (videoId !== null &&
+            (typeof videoId !== 'string' || !/^[\w-]{11}$/.test(videoId))) ||
+        (state === 'standby' && videoId !== null) ||
+        typeof song !== 'string' ||
+        typeof artist !== 'string' ||
+        (volume !== null &&
+            (typeof volume !== 'number' ||
+                !Number.isFinite(volume) ||
+                volume < 0 ||
+                volume > 100)) ||
+        (muted !== null && typeof muted !== 'boolean')
+    ) {
+        return null;
+    }
+    return {
+        roomId,
+        state,
+        videoId,
+        song: song.slice(0, 300),
+        artist: artist.slice(0, 300),
+        volume,
+        muted,
+    } as const;
+}

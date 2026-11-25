@@ -30,8 +30,6 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
     const [selectionSearch, setSelectionSearch] = useState<SelectionSearch | null>(null);
     const [searching, setSearching] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [lastPlaybackCommand, setLastPlaybackCommand] = useState<'play' | 'pause'>();
-    const [muted, setMuted] = useState(false);
     const [feedback, setFeedback] = useState<FlashMessage | null>(null);
     const dismissFeedback = useCallback(() => setFeedback(null), []);
     const [confirmLeave, setConfirmLeave] = useState(false);
@@ -76,6 +74,13 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
             return position === 'next' ? 'Added to Play Next.' : 'Added to the shared queue.';
         }, 'Could not add this track. Try again.');
     }
+    const playerState = state?.playerOnline ? state.playerState : null;
+    const playbackStatus = playerState?.state === 'paused' ? 'Paused'
+        : playerState?.state === 'playing' ? 'Now playing'
+        : playerState?.state === 'standby' ? 'Standing by'
+        : 'Playback status unavailable';
+    const volumeStatus = playerState?.volume != null ? ` · Volume: ${playerState.volume}%` : '';
+    const muteStatus = playerState?.muted ? ' · Muted' : '';
     return <section className="room">
         <RoomHeader name={state?.name ?? 'Listening room'} role={state ? state.role === 'owner' ? 'Host' : 'Guest' : undefined} connection={state ? { label: state.playerOnline ? 'Player connected' : 'Player offline', online: state.playerOnline } : undefined}>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => state?.role === 'owner' || !state ? setConfirmLeave(true) : onLeave()}>Leave room</button>
@@ -87,20 +92,16 @@ export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: st
             <NowPlayingPanel
                 cover={state.nowPlaying && <TrackCover key={state.nowPlaying.videoId} videoId={state.nowPlaying.videoId} large />}
                 artworkSource={state.playerOnline ? coverSources(state.nowPlaying?.videoId)[0] : undefined}
-                status={lastPlaybackCommand === 'pause' ? 'Paused' : 'Now playing'}
+                status={`${playbackStatus}${volumeStatus}${muteStatus}`}
                 title={state.nowPlaying?.title ?? (state.playerOnline ? 'Nothing playing yet' : 'Player offline')}
                 description={state.nowPlaying?.artist || (state.playerOnline ? 'Songs play through the host’s extension.' : 'You can still add songs to the queue.')}
                 controls={<PlayerBar
-                        paused={lastPlaybackCommand ? lastPlaybackCommand === 'pause' : !state.nowPlaying}
-                        muted={muted}
+                        paused={playerState ? playerState.state !== 'playing' : state.playerOnline ? null : true}
+                        muted={playerState?.muted ?? false}
                         disabled={busy || !state.playerOnline}
                         disabledControls={playbackActions.filter((action) => !state.capabilities.controls.includes(action))}
                         onControl={(action) => void act(async () => {
                             await api.control(token, action);
-                            if (mounted.current) {
-                                if (action === 'play' || action === 'pause') setLastPlaybackCommand(action);
-                                if (action === 'mute' || action === 'unmute') setMuted(action === 'mute');
-                            }
                             return `${controlLabels[action]} sent to player.`;
                         })}
                 />}

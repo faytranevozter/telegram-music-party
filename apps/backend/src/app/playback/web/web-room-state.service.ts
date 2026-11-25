@@ -63,6 +63,9 @@ export class WebRoomStateService {
                 return { title, videoId: url, ...(label ? { requesterLabel: label } : {}) };
             }),
             playerOnline,
+            playerState: playerOnline
+                ? this.player.currentPlayerState(roomId)
+                : null,
             voteProgress: voteProgress(room, actor.userRef),
             nowPlaying: playerOnline ? this.player.currentTrack(roomId) : null,
             capabilities: {

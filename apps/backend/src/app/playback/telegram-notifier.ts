@@ -41,6 +41,9 @@ export class TelegramNotifier {
             case 'paused':
                 message = `⏸️ <i>${escapeHtml(notification.song)}</i> - ${escapeHtml(notification.artist)} is now paused`;
                 break;
+            case 'resumed':
+                message = `▶️ <i>${escapeHtml(notification.song)}</i> - ${escapeHtml(notification.artist)} resumed`;
+                break;
             case 'volume-changed':
                 message = `🔊 Volume ${notification.direction}. Current volume: ${escapeHtml(notification.volume)}`;
                 break;

@@ -14,7 +14,8 @@ describe("MAIN room join boundary", () => {
     let listener: (event: unknown) => void;
     const request = (data: BridgeRequest | object) => {
         listener({ source: window, data: { source: YTMP_BRIDGE, id: "request-1", ...data } });
-        return postMessage.mock.calls.at(-1)?.[0];
+        const calls = postMessage.mock.calls;
+        return calls[calls.length - 1]?.[0];
     };
 
     beforeEach(() => {

@@ -38,6 +38,7 @@ suite('shared web room HTTP and observer contract', () => {
     let base: string;
     const roomId = randomUUID();
     const clients: Socket[] = [];
+    const telegramNotifications = jest.fn();
 
     beforeAll(async () => {
         if (!process.env.DATABASE_URL || !process.env.REDIS_URL)
@@ -54,7 +55,7 @@ suite('shared web room HTTP and observer contract', () => {
             .overrideProvider(YTMusicService)
             .useValue({ searchSongs: () => Promise.resolve([song]) })
             .overrideProvider(TelegramNotifier)
-            .useValue({ sendMessage: jest.fn() })
+            .useValue({ sendMessage: jest.fn(), sendPlaybackNotification: telegramNotifications })
             .compile();
         app = module.createNestApplication();
         await app.listen(0, '127.0.0.1');
@@ -168,6 +169,7 @@ suite('shared web room HTTP and observer contract', () => {
             playerOnline: boolean;
             queue: unknown[];
             nowPlaying: { title: string } | null;
+            playerState: { state: string; volume: number; muted: boolean } | null;
         };
         const starting = event<State>(observer, 'room:state');
         observer.connect();
@@ -326,13 +328,26 @@ suite('shared web room HTTP and observer contract', () => {
             listenedMs: 0,
         });
         await observedTrack;
+        const baseline = event<State>(observer, 'room:state', (state) => state.playerState?.state === 'playing');
+        const stateReport = { roomId, videoId: song.videoId, song: song.title, artist: 'Artist', muted: false };
+        player.emit('player-state', { ...stateReport, state: 'playing', volume: 25 });
+        expect(await baseline).toMatchObject({ playerState: { state: 'playing', volume: 25, muted: false } });
+        expect(telegramNotifications).not.toHaveBeenCalled();
+
+        const paused = event<State>(observer, 'room:state', (state) => state.playerState?.state === 'paused');
+        player.emit('player-state', { ...stateReport, state: 'paused', volume: 70 });
+        expect(await paused).toMatchObject({ playerState: { state: 'paused', volume: 70, muted: false } });
+        expect(telegramNotifications.mock.calls.map((call) => call[2])).toEqual([
+            { type: 'paused', song: song.title, artist: 'Artist' },
+            { type: 'volume-changed', direction: 'increased', volume: 70 },
+        ]);
         const offline = event<State>(
             observer,
             'room:state',
             (state) => !state.playerOnline,
         );
         player.disconnect();
-        expect(await offline).toMatchObject({ nowPlaying: null });
+        expect(await offline).toMatchObject({ nowPlaying: null, playerState: null });
         const disconnected = event(observer, 'disconnect');
         await access.setInvite(roomId, 'rotate');
         await disconnected;

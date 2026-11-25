@@ -12,10 +12,13 @@ import { TelegramNotifier } from './telegram-notifier';
 import {
     AutoplayResult,
     Join,
+    PlaybackNotification,
     PlaybackNotificationPayload,
     PlayerQueueResult,
+    PlayerState,
     validateAutoplayResult,
     validatePlayerQueue,
+    validatePlayerState,
 } from 'src/types/playback.type';
 import { validatePlaybackReport } from 'src/types/analytics.type';
 import { AnalyticsService } from 'src/app/analytics/analytics.service';
@@ -156,6 +159,26 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         { playbackId: string; videoId: string; title: string; artist: string }
     >();
     private readonly webChanges = new Set<(roomId: string) => void>();
+    private readonly playerStates = new Map<
+        string,
+        {
+            socketId: string;
+            snapshot: NonNullable<ReturnType<typeof validatePlayerState>> | null;
+        }
+    >();
+
+    currentPlayerState(roomId: string): PlayerState | null {
+        const snapshot = this.playerStates.get(roomId)?.snapshot;
+        if (!snapshot) return null;
+        const { state, volume, muted } = snapshot;
+        return { state, volume, muted };
+    }
+
+    private clearPlayerState(roomId: string, socketId: string) {
+        if (this.playerStates.get(roomId)?.socketId !== socketId) return;
+        this.playerStates.delete(roomId);
+        this.roomChanged(roomId);
+    }
 
     currentTrack(roomId: string) {
         const track = this.webTracks.get(roomId);
@@ -293,19 +316,30 @@ export class PlaybackGateway implements OnGatewayDisconnect {
                 }
             }
 
-            void socket.join(room.id);
+            const existing = await this.wss.in(room.id).fetchSockets();
+            for (const other of existing) {
+                const session = this.getSession(other);
+                if (other.id !== socket.id && session?.fingerprint === data.fingerprint) {
+                    await other.leave(room.id);
+                }
+            }
+            await socket.join(room.id);
 
             // remember what this socket owns, for disconnect cleanup
             this.setSession(socket, {
                 roomId: room.id,
                 fingerprint: data.fingerprint,
             });
+            this.playerStates.set(room.id, {
+                socketId: socket.id,
+                snapshot: null,
+            });
 
             // emit join with queue only to the joining socket
             const queues = await this.playbackService.getQueues(room.id);
             socket.emit('joined', queues.map(({ id, roomId, url, title, createdAt, updatedAt }) => ({
                 id, roomId, url, title, createdAt, updatedAt,
-            })));
+            })), { playerState: true });
             this.roomChanged(room.id);
 
             console.log('player joined', data.id);
@@ -350,6 +384,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         // actually leave the Socket.IO room so it stops receiving playback events
         void socket.leave(data.roomId);
         this.setSession(socket, null);
+        this.clearPlayerState(data.roomId, socket.id);
         this.webTracks.delete(data.roomId);
         this.trackEpochs.delete(data.roomId);
         this.roomChanged(data.roomId);
@@ -361,6 +396,7 @@ export class PlaybackGateway implements OnGatewayDisconnect {
 
         const { roomId, fingerprint } = session;
         this.setSession(socket, null);
+        this.clearPlayerState(roomId, socket.id);
 
         const room = await this.playbackService.getRoom(roomId);
         if (!room) return;
@@ -491,6 +527,77 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         } catch (error) {
             // Analytics must never break playback or the socket session.
             console.error('playback-report failed', error);
+        }
+    }
+
+    @SubscribeMessage('player-state')
+    async onPlayerState(
+        @ConnectedSocket() socket: Socket,
+        @MessageBody() data: unknown,
+    ) {
+        const next = validatePlayerState(data);
+        if (
+            !next ||
+            !socket.connected ||
+            this.getSession(socket)?.roomId !== next.roomId ||
+            !socket.rooms.has(next.roomId)
+        ) {
+            return;
+        }
+        const current = this.playerStates.get(next.roomId);
+        if (!current || current.socketId !== socket.id) return;
+
+        const previous = current.snapshot;
+        current.snapshot = next;
+        if (
+            !previous ||
+            previous.state !== next.state ||
+            previous.volume !== next.volume ||
+            previous.muted !== next.muted
+        ) {
+            this.roomChanged(next.roomId);
+        }
+        if (!previous) return;
+
+        const messages: PlaybackNotification[] = [];
+        if (
+            next.videoId &&
+            previous.videoId === next.videoId &&
+            previous.state !== 'standby' &&
+            next.state !== 'standby' &&
+            previous.state !== next.state
+        ) {
+            messages.push({
+                type: next.state === 'paused' ? 'paused' : 'resumed',
+                song: next.song || previous.song || next.videoId,
+                artist: next.artist || previous.artist,
+            });
+        }
+        if (
+            previous.volume !== null &&
+            next.volume !== null &&
+            previous.volume !== next.volume
+        ) {
+            messages.push({
+                type: 'volume-changed',
+                direction:
+                    next.volume > previous.volume ? 'increased' : 'decreased',
+                volume: next.volume,
+            });
+        }
+        if (previous.muted !== null && next.muted !== null && previous.muted !== next.muted) {
+            messages.push({ type: 'mute-changed', muted: next.muted });
+        }
+        if (!messages.length) return;
+
+        const room = await this.playbackService.getRoom(next.roomId);
+        if (!room?.chatId || this.playerStates.get(next.roomId) !== current) return;
+        for (const message of messages) {
+            await this.telegramNotifier.sendPlaybackNotification(
+                room.chatId,
+                room.threadId,
+                message,
+            );
         }
     }
 

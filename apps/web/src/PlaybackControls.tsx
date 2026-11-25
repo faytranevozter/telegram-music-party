@@ -26,13 +26,13 @@ const subtleButton = 'btn btn-ghost text-neutral-content hover:bg-neutral-conten
 const disabledButton = 'disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed';
 
 export function PlayerBar({ paused, muted = false, onControl, disabledControls = [], disabled = false }: {
-    paused: boolean;
+    paused: boolean | null;
     muted?: boolean;
     onControl: (action: Control) => void;
     disabledControls?: readonly Control[];
     disabled?: boolean;
 }) {
-    const toggle = paused ? 'play' : 'pause';
+    const transportActions = paused === null ? ['play', 'pause'] as const : [paused ? 'play' : 'pause'] as const;
     const [showMore, setShowMore] = useState(false);
     const muteAction = muted || (disabledControls.includes('mute') && !disabledControls.includes('unmute')) ? 'unmute' : 'mute';
     const unavailable = (action: Control) => disabled || disabledControls.includes(action);
@@ -42,9 +42,9 @@ export function PlayerBar({ paused, muted = false, onControl, disabledControls =
             <button type="button" className={`${subtleButton} btn-square ${disabledButton}`} aria-label="Previous" title="Previous" disabled={unavailable('previous')} onClick={() => onControl('previous')}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d="M6 5h2v14H6zm12 0L9 12l9 7z" /></svg>
             </button>
-            <button type="button" className="btn btn-primary btn-circle disabled:bg-neutral-content/20 disabled:text-neutral-content disabled:border-neutral-content/30 disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed" aria-label={controlLabels[toggle]} title={controlLabels[toggle]} disabled={unavailable(toggle)} onClick={() => onControl(toggle)}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d={paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zm6 0h4v14h-4z'} /></svg>
-            </button>
+            {transportActions.map((action) => <button key={action} type="button" className="btn btn-primary btn-circle disabled:bg-neutral-content/20 disabled:text-neutral-content disabled:border-neutral-content/30 disabled:opacity-40 disabled:pointer-events-auto disabled:cursor-not-allowed" aria-label={controlLabels[action]} title={controlLabels[action]} disabled={unavailable(action)} onClick={() => onControl(action)}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d={action === 'play' ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zm6 0h4v14h-4z'} /></svg>
+            </button>)}
             <button type="button" className={`${subtleButton} btn-square ${disabledButton}`} aria-label="Next" title="Next" disabled={unavailable('next')} onClick={() => onControl('next')}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z" /></svg>
             </button>

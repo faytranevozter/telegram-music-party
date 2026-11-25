@@ -82,6 +82,15 @@ slot. Reconnect for a fresh state. A disconnected player clears the current
 track rather than restoring historical playback. Revoked observer sessions
 are disconnected.
 
+The HTTP and live room snapshots include `playerState` from the connected
+extension: `{ state: 'playing' | 'paused' | 'standby', volume, muted }`.
+`volume` is a percentage (0–100) and `muted` is a boolean; either can be `null`
+before the media element is available. `playerState` is `null` when the player
+is offline or has not reported state yet (including older extensions).
+Older backends still receive the legacy Telegram command feedback from the
+extension. The web client accepts their snapshots, but cannot show confirmed
+playback state without this field.
+
 For automated verification, generate the matching Prisma client, apply
 migrations to a disposable PostgreSQL or SQLite database, and run
 `pnpm --filter=backend test:e2e --runInBand` with `WEB_ROOM_E2E=true`, web

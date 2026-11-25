@@ -26,6 +26,7 @@ import {
 } from "./playback";
 import { createJoinButton, createLeaveButton, getDeviceInfo } from "./browser";
 import {
+    getBridgeSession,
     publishStatus,
     setBridgeSession,
     startMainBridge,
@@ -35,6 +36,7 @@ import {
     noteSkipIntent,
     startPlaybackAnalytics,
 } from "./playback-analytics";
+import { createPlayerStateChannel, watchPlayerState } from "./player-state";
 
 Object.defineProperty(window, "onbeforeunload", {
     get: () => null,
@@ -354,6 +356,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     };
 
+    const playerState = watchPlayerState((state) => {
+        if (playerStateChannel.supported && socket.connected && getBridgeSession().joined) {
+            socket.emit("player-state", { ...state, roomId: ROOM_ID });
+        }
+    });
+    const playerStateChannel = createPlayerStateChannel(playerState.sync);
+    const legacyNotification = (notification: PlaybackNotification) =>
+        playerStateChannel.legacy(() => sendPlaybackNotification(notification));
+    window.addEventListener("pagehide", (event) => {
+        if (!event.persisted) playerState.stop();
+    });
+
     type AutoplayResponse =
         | {
               status: "ok";
@@ -481,7 +495,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     createLeaveButton(socket, config);
 
     // handle incoming messages
-    socket.on("joined", async (data: Array<Queue & { title?: string }>) => {
+    socket.on("joined", async (data: Array<Queue & { title?: string }>, capabilities?: { playerState?: boolean }) => {
         for (const item of data) {
             // Queue rows reuse the durable request ID.
             rememberRequest(item.url, item.id);
@@ -495,6 +509,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             requestId: item.id,
         }));
         setBridgeSession({ queues, joined: true, joinRejected: false });
+        playerStateChannel.join(capabilities);
         const playback = getPlaybackState();
         const isColdStart = !hasSynced && playback.state === "standby";
         const head = data[0];
@@ -589,25 +604,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         play();
         publishStatus();
-
-        sendPlaybackNotification({
-            type: "now-playing",
-            song: playback.song,
-            artist: playback.artist,
-        });
+        legacyNotification({ type: "now-playing", song: playback.song, artist: playback.artist });
     });
 
     socket.on("pause", () => {
         pause();
         publishStatus();
-
-        const playback = getPlaybackState();
-
-        sendPlaybackNotification({
-            type: "paused",
-            song: playback.song,
-            artist: playback.artist,
-        });
+        const { song, artist } = getPlaybackState();
+        legacyNotification({ type: "paused", song, artist });
     });
 
     socket.on("next", () => {
@@ -623,45 +627,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     socket.on("volumeUp", () => {
-        const currentVolume = volumeUp();
+        const volume = volumeUp();
         publishStatus();
-
-        sendPlaybackNotification({
-            type: "volume-changed",
-            direction: "increased",
-            volume: currentVolume,
-        });
+        legacyNotification({ type: "volume-changed", direction: "increased", volume });
     });
 
     socket.on("volumeDown", () => {
-        const currentVolume = volumeDown();
+        const volume = volumeDown();
         publishStatus();
-
-        sendPlaybackNotification({
-            type: "volume-changed",
-            direction: "decreased",
-            volume: currentVolume,
-        });
+        legacyNotification({ type: "volume-changed", direction: "decreased", volume });
     });
 
     socket.on("mute", () => {
         toggleMute();
         publishStatus();
-
-        sendPlaybackNotification({
-            type: "mute-changed",
-            muted: true,
-        });
+        legacyNotification({ type: "mute-changed", muted: true });
     });
 
     socket.on("unmute", () => {
         toggleMute();
         publishStatus();
-
-        sendPlaybackNotification({
-            type: "mute-changed",
-            muted: false,
-        });
+        legacyNotification({ type: "mute-changed", muted: false });
     });
 
     socket.on("lyrics", async () => {
