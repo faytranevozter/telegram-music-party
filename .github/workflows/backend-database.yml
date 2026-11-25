@@ -28,9 +28,9 @@ jobs:
       DATABASE_PROVIDER: ${{ matrix.provider }}
       DATABASE_URL: ${{ matrix.provider == 'sqlite' && 'file:/tmp/party-ci.db' || 'postgresql://party:party@localhost:5432/party_test?schema=public' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: pnpm

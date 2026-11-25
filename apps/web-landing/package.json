@@ -17,6 +17,6 @@
         "@tailwindcss/cli": "4.0.17",
         "daisyui": "5.8.2",
         "tailwindcss": "4.0.17",
-        "wrangler": "^4.0.0"
+        "wrangler": "4.168.0"
     }
 }
