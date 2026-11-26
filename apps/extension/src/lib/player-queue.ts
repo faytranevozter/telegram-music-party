@@ -90,17 +90,47 @@ function text(value: unknown): string {
         : "";
 }
 
+function queueVideoId(item: Record<string, unknown>, renderer: Record<string, unknown>) {
+    const endpoint = record(record(renderer.navigationEndpoint).watchEndpoint);
+    return renderer.videoId ?? item.videoId ??
+        record(item.playlistItemData).videoId ?? endpoint.videoId;
+}
+
+function isUnplayable(renderer: Record<string, unknown>) {
+    // A missing title can be transient. YouTube Music explicitly marks refused
+    // tracks with unplayableText, even though the placeholder still has an ID.
+    return text(renderer.unplayableText).trim().length > 0;
+}
+
+export function queueInsertableContent(queueDatas: unknown[]) {
+    const items: unknown[] = [];
+    const refusedIds = new Set<string>();
+    const acceptedIds = new Set<string>();
+    for (const data of queueDatas) {
+        const content = record(data).content;
+        if (!content) continue;
+        const renderer = queueRenderer(content);
+        const id = queueVideoId(record(content), renderer);
+        if (isUnplayable(renderer)) {
+            if (typeof id === "string" && id) refusedIds.add(id);
+            continue;
+        }
+        items.push(content);
+        if (typeof id === "string" && id) acceptedIds.add(id);
+    }
+    return { items, refusedIds: [...refusedIds].filter((id) => !acceptedIds.has(id)) };
+}
+
 export function parsePlayerQueue(items: unknown[]): QueueItem[] {
     return items.flatMap((value, index) => {
         const item = record(value);
         const renderer = queueRenderer(value);
-        const endpoint = record(record(renderer.navigationEndpoint).watchEndpoint);
+        if (isUnplayable(renderer)) return [];
         const length = text(renderer.lengthText).trim();
         const seconds = /^\d{1,6}(?::[0-5]\d){1,2}$/.test(length)
             ? length.split(":").reduce((total, part) => total * 60 + Number(part), 0)
             : 0;
-        const videoId = renderer.videoId ?? item.videoId ??
-            record(item.playlistItemData).videoId ?? endpoint.videoId;
+        const videoId = queueVideoId(item, renderer);
         if (typeof videoId !== "string" || !videoId) return [];
         return [{
             id: `${index}:${videoId}`,

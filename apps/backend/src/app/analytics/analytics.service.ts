@@ -162,6 +162,13 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         });
     }
 
+    findRequestOwner(roomId: string, videoId: string, requestId: string) {
+        return this.prisma.songRequest.findFirst({
+            where: { id: requestId, roomId, videoId },
+            select: { requesterId: true, title: true },
+        });
+    }
+
     /**
      * Upsert one observed playback interval. Reports are idempotent: retries
      * only raise the observed listening time, and an end report never

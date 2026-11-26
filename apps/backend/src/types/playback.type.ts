@@ -98,7 +98,7 @@ export type PlaybackNotification =
     | { type: 'mute-changed'; muted: boolean }
     | { type: 'lyrics'; text: string | null }
     /** The player refused a requested track, usually by region restriction. */
-    | { type: 'queue-unavailable'; song: string; videoId: string };
+    | { type: 'queue-unavailable'; song: string; videoId: string; requestId?: string };
 
 export type PlaybackNotificationPayload = PlaybackNotification & {
     roomId: string;

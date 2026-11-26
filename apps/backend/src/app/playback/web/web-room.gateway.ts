@@ -31,6 +31,7 @@ export class WebRoomGateway
     private readonly observers = new Map<Socket, Observer>();
     private unwatch?: () => void;
     private unwatchInvites?: () => void;
+    private unwatchRefusals?: () => void;
 
     constructor(
         private readonly access: WebRoomAccessService,
@@ -62,6 +63,16 @@ export class WebRoomGateway
         };
         this.unwatch = this.player.watchRoomChanges(refreshRoom);
         this.unwatchInvites = this.access.watchInvites(refreshRoom);
+        this.unwatchRefusals = this.player.watchQueueRefusals((roomId, userRef, title) => {
+            for (const [socket, observer] of this.observers) {
+                if (observer.roomId !== roomId) continue;
+                void this.access.authenticate(observer.token).then(({ room, actor }) => {
+                    if (socket.connected && room.id === roomId && actor.userRef === userRef) {
+                        socket.emit('room:request-unavailable', { title });
+                    }
+                }).catch(() => socket.disconnect());
+            }
+        });
     }
 
     async handleConnection(socket: Socket) {
@@ -145,6 +156,7 @@ export class WebRoomGateway
     onModuleDestroy() {
         this.unwatch?.();
         this.unwatchInvites?.();
+        this.unwatchRefusals?.();
         for (const [socket] of this.observers) this.handleDisconnect(socket);
     }
 }

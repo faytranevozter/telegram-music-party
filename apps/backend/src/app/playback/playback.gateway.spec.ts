@@ -720,9 +720,12 @@ describe('PlaybackGateway notifications', () => {
     const getRoom = jest.fn();
     const sendPlaybackNotification = jest.fn();
     const removeQueue = jest.fn();
+    const removeQueueRequest = jest.fn();
+    const findRequestOwner = jest.fn();
     const playbackService = {
         getRoom,
         removeQueue,
+        removeQueueRequest,
     } as unknown as PlaybackService;
     const notifier = {
         sendPlaybackNotification,
@@ -734,9 +737,11 @@ describe('PlaybackGateway notifications', () => {
         sendPlaybackNotification.mockReset();
         removeQueue.mockReset();
         removeQueue.mockResolvedValue(undefined);
+        removeQueueRequest.mockReset();
+        findRequestOwner.mockReset();
         gateway = new PlaybackGateway(
             playbackService,
-            {} as AnalyticsService,
+            { findRequestOwner } as unknown as AnalyticsService,
             notifier,
         );
     });
@@ -821,6 +826,22 @@ describe('PlaybackGateway notifications', () => {
         });
 
         expect(removeQueue).not.toHaveBeenCalled();
+    });
+
+    it('notifies the stored requester once and never removes a newer request by video ID', async () => {
+        getRoom.mockResolvedValue({ id: 'room-id', chatId: null });
+        removeQueueRequest.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+        findRequestOwner.mockResolvedValue({ requesterId: 'web:guest', title: 'Good Life' });
+        const refused = jest.fn();
+        gateway.watchQueueRefusals(refused);
+        const payload = { roomId: 'room-id', type: 'queue-unavailable' as const,
+            videoId: 'M2VSZYdDkKc', requestId: 'original-request', song: 'Untrusted label' };
+        await gateway.onPlaybackNotification(makeSocket() as never, payload);
+        await gateway.onPlaybackNotification(makeSocket() as never, payload);
+        expect(removeQueueRequest).toHaveBeenCalledWith('room-id', 'M2VSZYdDkKc', 'original-request');
+        expect(removeQueue).not.toHaveBeenCalled();
+        expect(refused).toHaveBeenCalledTimes(1);
+        expect(refused).toHaveBeenCalledWith('room-id', 'web:guest', 'Good Life');
     });
 
     it('ignores refused tracks from a socket that is not the admitted device', async () => {

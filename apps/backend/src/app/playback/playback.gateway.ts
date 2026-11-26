@@ -197,6 +197,13 @@ export class PlaybackGateway implements OnGatewayDisconnect {
         return this.trackEpochs.get(roomId);
     }
 
+    private readonly queueRefusals = new Set<(roomId: string, userRef: string, title: string) => void>();
+
+    watchQueueRefusals(listener: (roomId: string, userRef: string, title: string) => void) {
+        this.queueRefusals.add(listener);
+        return () => this.queueRefusals.delete(listener);
+    }
+
     watchRoomChanges(listener: (roomId: string) => void) {
         this.webChanges.add(listener);
         return () => this.webChanges.delete(listener);
@@ -623,8 +630,23 @@ export class PlaybackGateway implements OnGatewayDisconnect {
             const session = this.getSession(socket);
             if (!session || session.roomId !== data.roomId) return;
             if (!socket.rooms?.has(data.roomId)) return;
-            await this.playbackService.removeQueue(data.roomId, data.videoId);
-            this.roomChanged(data.roomId);
+            if (data.requestId !== undefined) {
+                if (typeof data.requestId !== 'string' || !/^[\w-]{1,128}$/.test(data.requestId) ||
+                    typeof data.videoId !== 'string' || !/^[\w-]{11}$/.test(data.videoId)) return;
+                if (!(await this.playbackService.removeQueueRequest(data.roomId, data.videoId, data.requestId))) return;
+                this.roomChanged(data.roomId);
+                try {
+                    const request = await this.analyticsService.findRequestOwner(data.roomId, data.videoId, data.requestId);
+                    if (request?.requesterId) {
+                        for (const listener of this.queueRefusals) listener(data.roomId, request.requesterId, request.title);
+                    }
+                } catch (error) {
+                    console.error('Could not identify refused queue requester', error);
+                }
+            } else {
+                await this.playbackService.removeQueue(data.roomId, data.videoId);
+                this.roomChanged(data.roomId);
+            }
         }
 
         // Rooms without a Telegram chat (web-only rooms) have nowhere to send

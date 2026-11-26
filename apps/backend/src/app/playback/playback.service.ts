@@ -60,6 +60,13 @@ export class PlaybackService {
         });
     }
 
+    async removeQueueRequest(roomId: string, videoId: string, requestId: string) {
+        const { count } = await this.prisma.queue.deleteMany({
+            where: { id: requestId, roomId, url: videoId },
+        });
+        return count > 0;
+    }
+
     /**
      * Drop the row of a track that left the player without playing. The cutoff
      * keeps a fresh request for the same video (queued while it was playing)

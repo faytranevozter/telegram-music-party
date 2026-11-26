@@ -2,6 +2,7 @@
 import { io } from "socket.io-client";
 import {
     queueInsertIndex,
+    queueInsertableContent,
     readAutoplayEnabled,
     readPlayerQueue,
     upcomingVideoIds,
@@ -85,7 +86,7 @@ type PlaybackNotification =
       }
     | { type: "mute-changed"; muted: boolean }
     | { type: "lyrics"; text: string | null }
-    | { type: "queue-unavailable"; videoId: string; song: string };
+    | { type: "queue-unavailable"; videoId: string; song: string; requestId?: string };
 
 function getYtQueueVideoIds(): Set<string> {
     const ids = new Set<string>();
@@ -207,7 +208,7 @@ async function waitForRefreshedQueue(
 }
 
 async function addQueue(videoIds: string, position: QueuePosition = "end") {
-    if (videoIds.length < 1) return;
+    if (videoIds.length < 1) return [];
     // setTimeout (not rAF): background tabs suspend rAF until focused again
     await new Promise((resolve) => setTimeout(resolve, 0));
     const app = getAppInstance();
@@ -221,7 +222,7 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
         videoIds: videoIds.split(","),
     };
 
-    await app.networkManager
+    return await app.networkManager
         .fetch("music/get_queue", payload)
         .then((result) => {
             if (
@@ -230,6 +231,8 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
                 "queueDatas" in result &&
                 Array.isArray(result.queueDatas)
             ) {
+                const { items, refusedIds } = queueInsertableContent(result.queueDatas);
+                if (!items.length) return refusedIds;
                 const currentState = store.getState().queue;
                 const queueItems = currentState.items;
                 // Read the selection again: the track may have changed while
@@ -244,18 +247,14 @@ async function addQueue(videoIds: string, position: QueuePosition = "end") {
                     payload: {
                         nextQueueItemId: currentState.nextQueueItemId,
                         index,
-                        items: result.queueDatas
-                            .map((it) =>
-                                typeof it === "object" && it && "content" in it
-                                    ? it.content
-                                    : null,
-                            )
-                            .filter(Boolean),
+                        items,
                         shuffleEnabled: false,
                         shouldAssignIds: true,
                     },
                 });
+                return refusedIds;
             }
+            return [];
         });
 }
 
@@ -399,12 +398,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             : null;
     };
 
-    // Both commands replace the player queue. Put songs requested through the
-    // bot back in front of the recommendations.
+    const reportRefusedRequests = (videoIds: string[], attempted: Queue[]) => {
+        const refused = new Set(videoIds);
+        const removed: Queue[] = [];
+        for (const item of attempted) {
+            if (!refused.has(item.url) || !queues.includes(item)) continue;
+            queues = queues.filter((entry) => entry !== item);
+            removed.push(item);
+        }
+        if (!removed.length) return;
+        setBridgeSession({ queues });
+        for (const item of removed) {
+            sendPlaybackNotification({
+                type: "queue-unavailable",
+                videoId: item.url,
+                song: item.title ?? item.url,
+                ...(item.requestId ? { requestId: item.requestId } : {}),
+            });
+        }
+    };
+
+    // Both commands replace the player queue. Put requests back in front of
+    // the recommendations.
     const restoreRequestedSongs = async () => {
         const missing = getMissingQueueIds(queues);
         if (missing.length > 0) {
-            await addQueue(missing.join(","), "next");
+            const attempted = queues;
+            reportRefusedRequests(await addQueue(missing.join(","), "next"), attempted);
         }
     };
 
@@ -536,7 +556,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         setTimeout(async () => {
             const missing = getMissingQueueIds(data);
             if (missing.length > 0) {
-                await addQueue(missing.join(","));
+                const attempted = queues;
+                reportRefusedRequests(await addQueue(missing.join(",")), attempted);
             }
             hasSynced = true;
             publishStatus();
@@ -702,6 +723,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 );
             }
             setBridgeSession({ queues });
+            const attempted = queues.filter((q) => q.url === videoId);
 
             const playback = getPlaybackState();
             if (playback.state == "standby") {
@@ -715,21 +737,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             let acceptance: Awaited<ReturnType<typeof waitForQueueItem>> =
                 "unknown";
             try {
-                await addQueue(videoId, position);
-                acceptance = await waitForQueueItem(videoId);
+                const refused = await addQueue(videoId, position);
+                acceptance = refused.includes(videoId) ? "missing" : await waitForQueueItem(videoId);
             } catch (error) {
                 console.error("addToQueue failed", error);
             }
             if (acceptance !== "missing") return;
 
-            queues = queues.filter((q) => q.url !== videoId);
-            setBridgeSession({ queues });
-            console.log("player refused track", videoId);
-            sendPlaybackNotification({
-                type: "queue-unavailable",
-                videoId,
-                song: title ?? videoId,
-            });
+            reportRefusedRequests([videoId], attempted);
         },
     );
 

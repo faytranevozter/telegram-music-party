@@ -7,14 +7,17 @@ import { createWebApi } from './api';
 
 const room = vi.hoisted(() => ({
     playerState: undefined as { state: 'playing' | 'paused'; volume: number; muted: boolean; adPlaying?: boolean } | undefined,
+    refusedRequest: null as { title: string } | null,
+    dismissRefusedRequest: vi.fn(),
 }));
 vi.mock('./use-room', () => ({ useRoom: () => ({
     state: {
         name: 'Room', role: 'guest', playerOnline: true, queue: [],
         nowPlaying: { title: 'Test track', artist: 'Artist', videoId: 'abcdefghijk' },
         capabilities: { controls: ['play', 'pause', 'mute', 'unmute'], playNext: false, playNextRemaining: null, videoSearch: false },
-        ...room,
+        playerState: room.playerState,
     }, live: true, error: '', refresh: vi.fn(),
+    refusedRequest: room.refusedRequest, dismissRefusedRequest: room.dismissRefusedRequest,
 }) }));
 
 it('reflects live player changes without a local control command', async () => {
@@ -54,6 +57,24 @@ it('reflects live player changes without a local control command', async () => {
     } finally {
         await act(async () => root.unmount());
         container.remove();
+        vi.unstubAllGlobals();
+    }
+});
+
+it('shows and dismisses a private refusal notice', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const api = createWebApi('https://example.test', vi.fn() as typeof fetch);
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    try {
+        room.refusedRequest = { title: 'Good Life' };
+        await act(async () => root.render(<Room api={api} token="token" onLeave={() => undefined} onRevoked={() => undefined} />));
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('“Good Life” couldn’t play on the host’s player and was removed from the queue.');
+        await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Dismiss message"]')?.click());
+        expect(room.dismissRefusedRequest).toHaveBeenCalledOnce();
+    } finally {
+        room.refusedRequest = null;
+        await act(async () => root.unmount());
         vi.unstubAllGlobals();
     }
 });

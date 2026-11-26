@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    queueInsertableContent,
     parsePlayerQueue,
     playerQueueIndex,
     queueInsertIndex,
@@ -19,12 +20,39 @@ const track = (id: string, selected = false) => ({
     },
 });
 
+const blockedGoodLife = {
+    playlistPanelVideoRenderer: {
+        videoId: "M2VSZYdDkKc",
+        navigationEndpoint: { watchEndpoint: { videoId: "M2VSZYdDkKc" } },
+        unplayableText: { runs: [{ text: "[Video blocked in country]" }] },
+    },
+};
+
 afterEach(() => {
     document.body.innerHTML = "";
     vi.useRealTimers();
 });
 
 describe("player queue", () => {
+    it("rejects an explicitly blocked response before inserting it, without rejecting a titleless track", () => {
+        const titleless = { playlistPanelVideoRenderer: { videoId: "titleless01" } };
+        const playable = track("oND0Huaw5Fc");
+        expect(queueInsertableContent([
+            { content: blockedGoodLife }, { content: playable }, { content: titleless }, {},
+        ])).toEqual({ items: [playable, titleless], refusedIds: ["M2VSZYdDkKc"] });
+    });
+
+    it("does not count a previously inserted blocked placeholder as an accepted track", async () => {
+        const queue = document.createElement("div");
+        queue.id = "queue";
+        Object.assign(queue, { queue: { store: { store: {
+            getState: () => ({ queue: { items: [track("current", true), blockedGoodLife] } }),
+        } } } });
+        document.body.append(queue);
+        expect(readPlayerQueue().items.map((item) => item.url)).toEqual(["current"]);
+        await expect(waitForQueueItem("M2VSZYdDkKc", 0)).resolves.toBe("missing");
+    });
+
     it("reads known track lengths without guessing missing or malformed ones", () => {
         const item = (lengthText: unknown) => ({ ...track("song").playlistPanelVideoRenderer, lengthText });
         expect(parsePlayerQueue([item({ simpleText: "4:52" }), item({ runs: [{ text: "1:02:03" }] }), item("1:99"), item(undefined)]).map((entry) => entry.durationSeconds)).toEqual([292, 3723, undefined, undefined]);

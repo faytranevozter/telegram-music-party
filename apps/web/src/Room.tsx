@@ -23,15 +23,21 @@ function watchDesktop(onChange: () => void) {
 const isDesktop = () => window.matchMedia?.(desktopQuery).matches ?? false;
 
 export function Room({ api, token, onLeave, onRevoked }: {api: WebApi; token: string; onLeave: () => void; onRevoked: () => void}) {
-    const { state, live, error, refresh } = useRoom(api, token, onRevoked);
+    const { state, live, error, refresh, refusedRequest, dismissRefusedRequest } = useRoom(api, token, onRevoked);
     const [query, setQuery] = useState('');
     const [type, setType] = useState<'song' | 'video'>('song');
     const [results, setResults] = useState<Selection[] | null>(null);
     const [selectionSearch, setSelectionSearch] = useState<SelectionSearch | null>(null);
     const [searching, setSearching] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [feedback, setFeedback] = useState<FlashMessage | null>(null);
-    const dismissFeedback = useCallback(() => setFeedback(null), []);
+    const [actionFeedback, setFeedback] = useState<FlashMessage | null>(null);
+    const feedback: FlashMessage | null = refusedRequest
+        ? { text: `“${refusedRequest.title}” couldn’t play on the host’s player and was removed from the queue. Try another version.`, tone: 'error' }
+        : actionFeedback;
+    const dismissFeedback = useCallback(() => {
+        if (refusedRequest) dismissRefusedRequest();
+        setFeedback(null);
+    }, [refusedRequest, dismissRefusedRequest]);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [panel, setPanel] = useState<'search' | 'queue'>('search');
     const [showAutoplay, setShowAutoplay] = useState(false);

@@ -7,6 +7,7 @@ export function useRoom(api: WebApi, token: string, onRevoked: () => void) {
     const [state, setState] = useState<RoomState>();
     const [live, setLive] = useState(false);
     const [error, setError] = useState('');
+    const [refusedRequest, setRefusedRequest] = useState<{ title: string } | null>(null);
     const handler = useRef(onRevoked);
     const reload = useRef<() => void>(() => undefined);
     useEffect(() => { handler.current = onRevoked; }, [onRevoked]);
@@ -35,6 +36,11 @@ export function useRoom(api: WebApi, token: string, onRevoked: () => void) {
             pending?.abort();
             setState(result); setLive(true); setError('');
         });
+        socket.on('room:request-unavailable', (result: { title: string }) => {
+            if (open && typeof result?.title === 'string' && result.title.trim()) {
+                setRefusedRequest({ title: result.title });
+            }
+        });
         const interrupted = () => { if (open) { setLive(false); void load(); } };
         socket.on('disconnect', interrupted);
         socket.on('connect_error', interrupted);
@@ -42,5 +48,6 @@ export function useRoom(api: WebApi, token: string, onRevoked: () => void) {
         return () => { open = false; pending?.abort(); socket.removeAllListeners(); socket.disconnect(); };
     }, [api, token]);
     const refresh = useCallback(() => reload.current(), []);
-    return { state, live, error, refresh };
+    const dismissRefusedRequest = useCallback(() => setRefusedRequest(null), []);
+    return { state, live, error, refresh, refusedRequest, dismissRefusedRequest };
 }
