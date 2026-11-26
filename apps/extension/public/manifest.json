@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "YouTube Music Party",
-    "version": "1.16.3",
+    "version": "1.16.4",
     "description": "Host a shared YouTube Music queue. Friends request songs from a web room or Telegram while music plays in your tab.",
     "host_permissions": ["https://music.youtube.com/*"],
     "icons": {
